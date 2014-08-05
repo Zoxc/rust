@@ -20,11 +20,9 @@ extern crate libc;
 extern { fn puts(s: *const u8); }
 extern "rust-intrinsic" { fn transmute<T, U>(t: T) -> U; }
 
-#[lang = "stack_exhausted"] extern fn stack_exhausted() {}
 #[lang = "eh_personality"] extern fn eh_personality() {}
 
 #[start]
-#[no_split_stack]
 fn main(_: int, _: *const *const u8) -> int {
     unsafe {
         let (ptr, _): (*const u8, uint) = transmute("Hello!\0");

@@ -14,8 +14,5 @@
 #[lang="fail_"]
 fn fail(_: &(&'static str, &'static str, uint)) -> ! { loop {} }
 
-#[lang = "stack_exhausted"]
-extern fn stack_exhausted() {}
-
 #[lang = "eh_personality"]
 extern fn eh_personality() {}

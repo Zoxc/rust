@@ -11,11 +11,7 @@
 // ignore-android: FIXME(#10381)
 
 // This test case checks if function arguments already have the correct value when breaking at the
-// beginning of a function. Functions with the #[no_split_stack] attribute have the same prologue as
-// regular C functions compiled with GCC or Clang and therefore are better handled by GDB. As a
-// consequence, and as opposed to regular Rust functions, we can set the breakpoints via the
-// function name (and don't have to fall back on using line numbers). For LLDB this shouldn't make
-// a difference because it can handle both cases.
+// beginning of a function.
 
 // compile-flags:-g
 
@@ -246,7 +242,6 @@
 
 #![allow(unused_variable)]
 
-#[no_split_stack]
 fn immediate_args(a: int, b: bool, c: f64) {
     ()
 }
@@ -262,42 +257,34 @@ struct BigStruct {
     h: u64
 }
 
-#[no_split_stack]
 fn non_immediate_args(a: BigStruct, b: BigStruct) {
     ()
 }
 
-#[no_split_stack]
 fn binding(a: i64, b: u64, c: f64) {
     let x = 0i;
 }
 
-#[no_split_stack]
 fn assignment(mut a: u64, b: u64, c: f64) {
     a = b;
 }
 
-#[no_split_stack]
 fn function_call(x: u64, y: u64, z: f64) {
     std::io::stdio::print("Hi!")
 }
 
-#[no_split_stack]
 fn identifier(x: u64, y: u64, z: f64) -> u64 {
     x
 }
 
-#[no_split_stack]
 fn return_expr(x: u64, y: u64, z: f64) -> u64 {
     return x;
 }
 
-#[no_split_stack]
 fn arithmetic_expr(x: u64, y: u64, z: f64) -> u64 {
     x + y
 }
 
-#[no_split_stack]
 fn if_expr(x: u64, y: u64, z: f64) -> u64 {
     if x + y < 1000 {
         x
@@ -306,7 +293,6 @@ fn if_expr(x: u64, y: u64, z: f64) -> u64 {
     }
 }
 
-#[no_split_stack]
 fn while_expr(mut x: u64, y: u64, z: u64) -> u64 {
     while x + y < 1000 {
         x += z
@@ -314,7 +300,6 @@ fn while_expr(mut x: u64, y: u64, z: u64) -> u64 {
     return x;
 }
 
-#[no_split_stack]
 fn loop_expr(mut x: u64, y: u64, z: u64) -> u64 {
     loop {
         x += z;

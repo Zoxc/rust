@@ -451,13 +451,6 @@ impl Task {
         self.imp.get_mut_ref().local_io()
     }
 
-    /// Returns the stack bounds for this task in (lo, hi) format. The stack
-    /// bounds may not be known for all tasks, so the return value may be
-    /// `None`.
-    pub fn stack_bounds(&self) -> (uint, uint) {
-        self.imp.get_ref().stack_bounds()
-    }
-
     /// Returns whether it is legal for this task to block the OS thread that it
     /// is running on.
     pub fn can_block(&self) -> bool {

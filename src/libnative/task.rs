@@ -30,10 +30,9 @@ use task;
 use std::task::{TaskBuilder, Spawner};
 
 /// Creates a new Task which is ready to execute as a 1:1 task.
-pub fn new(stack_bounds: (uint, uint)) -> Box<Task> {
+pub fn new() -> Box<Task> {
     let mut task = box Task::new();
     let mut ops = ops();
-    ops.stack_bounds = stack_bounds;
     task.put_runtime(ops);
     return task;
 }
@@ -43,8 +42,6 @@ fn ops() -> Box<Ops> {
         lock: unsafe { NativeMutex::new() },
         awoken: false,
         io: io::IoFactory::new(),
-        // these *should* get overwritten
-        stack_bounds: (0, 0),
     }
 }
 
@@ -73,22 +70,8 @@ pub fn spawn_opts(opts: TaskOpts, f: proc():Send) {
     // spawned task to exit.
     let token = bookkeeping::increment();
 
-    // Spawning a new OS thread guarantees that __morestack will never get
-    // triggered, but we must manually set up the actual stack bounds once this
-    // function starts executing. This raises the lower limit by a bit because
-    // by the time that this function is executing we've already consumed at
-    // least a little bit of stack (we don't know the exact byte address at
-    // which our stack started).
     Thread::spawn_stack(stack, proc() {
-        let something_around_the_top_of_the_stack = 1;
-        let addr = &something_around_the_top_of_the_stack as *const int;
-        let my_stack = addr as uint;
-        unsafe {
-            stack::record_stack_bounds(my_stack - stack + 1024, my_stack);
-        }
         let mut ops = ops;
-        ops.stack_bounds = (my_stack - stack + 1024, my_stack);
-
         let mut f = Some(f);
         let mut task = task;
         task.put_runtime(ops);
@@ -123,11 +106,6 @@ struct Ops {
     lock: NativeMutex,       // native synchronization
     awoken: bool,      // used to prevent spurious wakeups
     io: io::IoFactory, // local I/O factory
-
-    // This field holds the known bounds of the stack in (lo, hi) form. Not all
-    // native tasks necessarily know their precise bounds, hence this is
-    // optional.
-    stack_bounds: (uint, uint),
 }
 
 impl rt::Runtime for Ops {
@@ -148,8 +126,6 @@ impl rt::Runtime for Ops {
     fn wrap(self: Box<Ops>) -> Box<Any> {
         self as Box<Any>
     }
-
-    fn stack_bounds(&self) -> (uint, uint) { self.stack_bounds }
 
     fn can_block(&self) -> bool { true }
 

@@ -464,7 +464,6 @@ fn start(_argc: int, _argv: *const *const u8) -> int {
 // These functions are invoked by the compiler, but not
 // for a bare-bones hello world. These are normally
 // provided by libstd.
-#[lang = "stack_exhausted"] extern fn stack_exhausted() {}
 #[lang = "eh_personality"] extern fn eh_personality() {}
 # // fn main() {} tricked you, rustdoc!
 ```
@@ -486,7 +485,6 @@ pub extern fn main(argc: int, argv: *const *const u8) -> int {
     0
 }
 
-#[lang = "stack_exhausted"] extern fn stack_exhausted() {}
 #[lang = "eh_personality"] extern fn eh_personality() {}
 # // fn main() {} tricked you, rustdoc!
 ```
@@ -496,13 +494,7 @@ The compiler currently makes a few assumptions about symbols which are available
 in the executable to call. Normally these functions are provided by the standard
 library, but without it you must define your own.
 
-The first of these two functions, `stack_exhausted`, is invoked whenever stack
-overflow is detected.  This function has a number of restrictions about how it
-can be called and what it must do, but if the stack limit register is not being
-maintained then a task always has an "infinite stack" and this function
-shouldn't get triggered.
-
-The second of these two functions, `eh_personality`, is used by the failure
+The function, `eh_personality`, is used by the failure
 mechanisms of the compiler. This is often mapped to GCC's personality function
 (see the [libstd implementation](std/rt/unwind/index.html) for more
 information), but crates which do not trigger failure can be assured that this
@@ -571,7 +563,6 @@ extern fn begin_unwind(args: &core::fmt::Arguments,
     loop {}
 }
 
-#[lang = "stack_exhausted"] extern fn stack_exhausted() {}
 #[lang = "eh_personality"] extern fn eh_personality() {}
 # #[start] fn start(argc: int, argv: *const *const u8) -> int { 0 }
 # fn main() {}
@@ -683,7 +674,6 @@ fn main(argc: int, argv: *const *const u8) -> int {
     0
 }
 
-#[lang = "stack_exhausted"] extern fn stack_exhausted() {}
 #[lang = "eh_personality"] extern fn eh_personality() {}
 ```
 

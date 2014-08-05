@@ -20,10 +20,7 @@ use core::prelude::*;
 
 use alloc::boxed::Box;
 use core::mem;
-use core::uint;
 use libc;
-
-use stack;
 
 type StartFn = extern "C" fn(*mut libc::c_void) -> imp::rust_thread_return;
 
@@ -37,14 +34,10 @@ pub struct Thread<T> {
 
 static DEFAULT_STACK_SIZE: uint = 1024 * 1024;
 
-// This is the starting point of rust os threads. The first thing we do
-// is make sure that we don't trigger __morestack (also why this has a
-// no_split_stack annotation), and then we extract the main function
-// and invoke it.
-#[no_split_stack]
+// This is the starting point of rust os threads. The thing we do
+// is to extract the main function and invoke it.
 extern fn thread_start(main: *mut libc::c_void) -> imp::rust_thread_return {
     unsafe {
-        stack::record_stack_bounds(0, uint::MAX);
         let f: Box<proc()> = mem::transmute(main);
         (*f)();
         mem::transmute(0 as imp::rust_thread_return)
@@ -154,7 +147,6 @@ mod imp {
     use libc;
     use libc::types::os::arch::extra::{LPSECURITY_ATTRIBUTES, SIZE_T, BOOL,
                                        LPVOID, DWORD, LPDWORD, HANDLE};
-    use stack::RED_ZONE;
 
     pub type rust_thread = HANDLE;
     pub type rust_thread_return = DWORD;
@@ -170,7 +162,7 @@ mod imp {
         // red zone.  Round up to the next 64 kB because that's what the NT
         // kernel does, might as well make it explicit.  With the current
         // 20 kB red zone, that makes for a 64 kB minimum stack.
-        let stack_size = (cmp::max(stack, RED_ZONE) + 0xfffe) & (-0xfffe - 1);
+        let stack_size = (stack + 0xfffe) & (-0xfffe - 1);
         let ret = CreateThread(ptr::mut_null(), stack_size as libc::size_t,
                                super::thread_start, arg, 0, ptr::mut_null());
 
@@ -222,8 +214,6 @@ mod imp {
     use libc::consts::os::posix01::{PTHREAD_CREATE_JOINABLE, PTHREAD_STACK_MIN};
     use libc;
 
-    use stack::RED_ZONE;
-
     pub type rust_thread = libc::pthread_t;
     pub type rust_thread_return = *mut u8;
 
@@ -235,7 +225,7 @@ mod imp {
                                                PTHREAD_CREATE_JOINABLE), 0);
 
         // Reserve room for the red zone, the runtime's stack of last resort.
-        let stack_size = cmp::max(stack, RED_ZONE + min_stack_size(&attr) as uint);
+        let stack_size = cmp::max(stack, min_stack_size(&attr) as uint);
         match pthread_attr_setstacksize(&mut attr, stack_size as libc::size_t) {
             0 => {
             },

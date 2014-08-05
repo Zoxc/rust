@@ -77,12 +77,6 @@ pub use task::NativeTaskBuilder;
 pub mod io;
 pub mod task;
 
-#[cfg(windows)]
-#[cfg(android)]
-static OS_DEFAULT_STACK_ESTIMATE: uint = 1 << 20;
-#[cfg(unix, not(android))]
-static OS_DEFAULT_STACK_ESTIMATE: uint = 2 * (1 << 20);
-
 #[lang = "start"]
 #[cfg(not(test))]
 pub fn lang_start(main: *const u8, argc: int, argv: *const *const u8) -> int {
@@ -103,15 +97,6 @@ pub fn lang_start(main: *const u8, argc: int, argv: *const *const u8) -> int {
 /// This function will only return once *all* native threads in the system have
 /// exited.
 pub fn start(argc: int, argv: *const *const u8, main: proc()) -> int {
-    let something_around_the_top_of_the_stack = 1;
-    let addr = &something_around_the_top_of_the_stack as *const int;
-    let my_stack_top = addr as uint;
-
-    // FIXME #11359 we just assume that this thread has a stack of a
-    // certain size, and estimate that there's at most 20KB of stack
-    // frames above our current position.
-    let my_stack_bottom = my_stack_top + 20000 - OS_DEFAULT_STACK_ESTIMATE;
-
     // When using libgreen, one of the first things that we do is to turn off
     // the SIGPIPE signal (set it to ignore). By default, some platforms will
     // send a *signal* when a EPIPE error would otherwise be delivered. This
@@ -133,12 +118,9 @@ pub fn start(argc: int, argv: *const *const u8, main: proc()) -> int {
     rt::init(argc, argv);
     let mut exit_code = None;
     let mut main = Some(main);
-    let mut task = task::new((my_stack_bottom, my_stack_top));
+    let mut task = task::new();
     task.name = Some(str::Slice("<main>"));
     drop(task.run(|| {
-        unsafe {
-            rt::stack::record_stack_bounds(my_stack_bottom, my_stack_top);
-        }
         exit_code = Some(run(main.take_unwrap()));
     }).destroy());
     unsafe { rt::cleanup(); }

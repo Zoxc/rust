@@ -22,9 +22,7 @@ use std::raw;
 // then misalign the regs again.
 pub struct Context {
     /// Hold the registers while the task or scheduler is suspended
-    regs: Box<Registers>,
-    /// Lower bound and upper bound for the stack
-    stack_bounds: Option<(uint, uint)>,
+    regs: Box<Registers>
 }
 
 pub type InitFn = extern "C" fn(uint, *mut (), *mut ()) -> !;
@@ -32,8 +30,7 @@ pub type InitFn = extern "C" fn(uint, *mut (), *mut ()) -> !;
 impl Context {
     pub fn empty() -> Context {
         Context {
-            regs: new_regs(),
-            stack_bounds: None,
+            regs: new_regs()
         }
     }
 
@@ -73,8 +70,7 @@ impl Context {
             Some((stack_base as uint, sp as uint))
         };
         return Context {
-            regs: regs,
-            stack_bounds: bounds,
+            regs: regs
         }
     }
 
@@ -96,19 +92,6 @@ impl Context {
         rtdebug!("noting the stack limit and doing raw swap");
 
         unsafe {
-            // Right before we switch to the new context, set the new context's
-            // stack limit in the OS-specified TLS slot. This also  means that
-            // we cannot call any more rust functions after record_stack_bounds
-            // returns because they would all likely fail due to the limit being
-            // invalid for the current task. Lucky for us `rust_swap_registers`
-            // is a C function so we don't have to worry about that!
-            match in_context.stack_bounds {
-                Some((lo, hi)) => stack::record_stack_bounds(lo, hi),
-                // If we're going back to one of the original contexts or
-                // something that's possibly not a "normal task", then reset
-                // the stack limit to 0 to make morestack never fail
-                None => stack::record_stack_bounds(0, uint::MAX),
-            }
             rust_swap_registers(out_regs, in_regs)
         }
     }

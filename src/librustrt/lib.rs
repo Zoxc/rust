@@ -59,7 +59,6 @@ pub mod local_data;
 pub mod local_heap;
 pub mod mutex;
 pub mod rtio;
-pub mod stack;
 pub mod task;
 pub mod thread;
 pub mod unwind;
@@ -89,8 +88,6 @@ pub trait Runtime {
                      opts: TaskOpts,
                      f: proc():Send);
     fn local_io<'a>(&'a mut self) -> Option<rtio::LocalIo<'a>>;
-    /// The (low, high) edges of the current stack.
-    fn stack_bounds(&self) -> (uint, uint); // (lo, hi)
     fn can_block(&self) -> bool;
 
     // FIXME: This is a serious code smell and this should not exist at all.

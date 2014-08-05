@@ -58,7 +58,6 @@ NATIVE_DEPS_rustrt_native_$(1) := \
 			rust_try.ll \
 			arch/$$(HOST_$(1))/record_sp.S
 NATIVE_DEPS_rust_test_helpers_$(1) := rust_test_helpers.c
-NATIVE_DEPS_morestack_$(1) := arch/$$(HOST_$(1))/morestack.S
 NATIVE_DEPS_context_switch_$(1) := \
 			arch/$$(HOST_$(1))/_context.S
 

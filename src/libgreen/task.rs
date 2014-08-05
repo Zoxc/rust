@@ -476,16 +476,6 @@ impl Runtime for GreenTask {
         }
     }
 
-    fn stack_bounds(&self) -> (uint, uint) {
-        let c = self.coroutine.as_ref()
-            .expect("GreenTask.stack_bounds called without a coroutine");
-
-        // Don't return the red zone as part of the usable stack of this task,
-        // it's essentially an implementation detail.
-        (c.current_stack_segment.start() as uint + stack::RED_ZONE,
-         c.current_stack_segment.end() as uint)
-    }
-
     fn can_block(&self) -> bool { false }
 
     fn wrap(self: Box<GreenTask>) -> Box<Any> { self as Box<Any> }
