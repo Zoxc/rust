@@ -16,13 +16,10 @@
 
 #if defined(__APPLE__)
 #define MORESTACK ___morestack
-#define STACK_EXHAUSTED _rust_stack_exhausted
 #else
 #define MORESTACK __morestack
-#define STACK_EXHAUSTED rust_stack_exhausted
 #endif
 
-.global STACK_EXHAUSTED
 .global MORESTACK
 
 // Unfortunately LLVM yet doesn't support emitting correct debug
@@ -48,23 +45,5 @@
 // ARMFrameLowering::adjustForSegmentedStacks() implementation.
 MORESTACK:
     UNWIND .fnstart
-
-    // Save frame pointer and return address
-    UNWIND .save {r4, r5}
-    UNWIND .save {lr}
-    UNWIND .save {r6, fp, lr}
-    push {r6, fp, lr}
-
-    UNWIND .movsp r6
-    mov r6, sp
-    UNWIND .setfp fp, sp, #4
-    add fp, sp, #4
-
-    // Save argument registers of the original function
-    push {r0, r1, r2, r3, lr}
-
-    // Create new stack
-    bl STACK_EXHAUSTED@plt
-
-    // the above function ensures that it never returns
+    b   MORESTACK
     UNWIND  .fnend

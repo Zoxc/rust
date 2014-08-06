@@ -32,7 +32,6 @@ use std::c_str::ToCStr;
 use std::ptr;
 use std::rc::Rc;
 use std::collections::{HashMap, HashSet};
-use syntax::abi;
 use syntax::ast;
 use syntax::parse::token::InternedString;
 
@@ -275,16 +274,8 @@ impl CrateContext {
         }
     }
 
-    // Although there is an experimental implementation of LLVM which
-    // supports SS on armv7 it wasn't approved by Apple, see:
-    // http://lists.cs.uiuc.edu/pipermail/llvm-commits/Week-of-Mon-20140505/216350.html
-    // It looks like it might be never accepted to upstream LLVM.
-    //
-    // So far the decision was to disable them in default builds
-    // but it could be enabled (with patched LLVM)
-    pub fn is_split_stack_supported(&self) -> bool {
-        let ref cfg = self.sess().targ_cfg;
-        cfg.os != abi::OsiOS || cfg.arch != abi::Arm
+    pub fn is_probe_stack_supported(&self) -> bool {
+        true
     }
 }
 

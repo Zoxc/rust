@@ -204,8 +204,8 @@ fn decl_fn(ccx: &CrateContext, name: &str, cc: llvm::CallConv,
     // Function addresses in Rust are never significant, allowing functions to be merged.
     llvm::SetUnnamedAddr(llfn, true);
 
-    if ccx.is_split_stack_supported() {
-        set_split_stack(llfn);
+    if ccx.is_probe_stack_supported() {
+        set_probe_stack(llfn);
     }
 
     llfn
@@ -429,11 +429,6 @@ pub fn set_llvm_fn_attrs(attrs: &[ast::Attribute], llfn: ValueRef) {
         InlineNone   => { /* fallthrough */ }
     }
 
-    // Add the no-split-stack attribute if requested
-    if contains_name(attrs, "no_split_stack") {
-        unset_split_stack(llfn);
-    }
-
     if contains_name(attrs, "cold") {
         unsafe {
             llvm::LLVMAddFunctionAttribute(llfn,
@@ -447,14 +442,14 @@ pub fn set_always_inline(f: ValueRef) {
     llvm::SetFunctionAttribute(f, llvm::AlwaysInlineAttribute)
 }
 
-pub fn set_split_stack(f: ValueRef) {
-    "split-stack".with_c_str(|buf| {
+pub fn set_probe_stack(f: ValueRef) {
+    "probe-stack".with_c_str(|buf| {
         unsafe { llvm::LLVMAddFunctionAttrString(f, llvm::FunctionIndex as c_uint, buf); }
     })
 }
 
-pub fn unset_split_stack(f: ValueRef) {
-    "split-stack".with_c_str(|buf| {
+pub fn unset_probe_stack(f: ValueRef) {
+    "probe-stack".with_c_str(|buf| {
         unsafe { llvm::LLVMRemoveFunctionAttrString(f, llvm::FunctionIndex as c_uint, buf); }
     })
 }
@@ -2009,14 +2004,8 @@ fn finish_register_fn(ccx: &CrateContext, sp: Span, sym: String, node_id: ast::N
         llvm::SetLinkage(llfn, llvm::InternalLinkage);
     }
 
-    // The stack exhaustion lang item shouldn't have a split stack because
-    // otherwise it would continue to be exhausted (bad), and both it and the
-    // eh_personality functions need to be externally linkable.
+    // The eh_personality function need to be externally linkable.
     let def = ast_util::local_def(node_id);
-    if ccx.tcx.lang_items.stack_exhausted() == Some(def) {
-        unset_split_stack(llfn);
-        llvm::SetLinkage(llfn, llvm::ExternalLinkage);
-    }
     if ccx.tcx.lang_items.eh_personality() == Some(def) {
         llvm::SetLinkage(llfn, llvm::ExternalLinkage);
     }
@@ -2729,13 +2718,9 @@ pub fn trans_crate(krate: ast::Crate,
     });
 
     // Make sure that some other crucial symbols are not eliminated from the
-    // module. This includes the main function, the crate map (used for debug
-    // log settings and I/O), and finally the curious rust_stack_exhausted
-    // symbol. This symbol is required for use by the libmorestack library that
-    // we link in, so we must ensure that this symbol is not internalized (if
-    // defined in the crate).
+    // module. This includes the main function and the crate map (used for debug
+    // log settings and I/O)
     reachable.push("main".to_string());
-    reachable.push("rust_stack_exhausted".to_string());
 
     // referenced from .eh_frame section on some platforms
     reachable.push("rust_eh_personality".to_string());

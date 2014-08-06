@@ -300,6 +300,4 @@ lets_do_this! {
     ManagedItem,                     "managed_bound",           managed_bound;
 
     IteratorItem,                    "iterator",                iterator;
-
-    StackExhaustedLangItem,          "stack_exhausted",         stack_exhausted;
 }

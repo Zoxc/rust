@@ -71,14 +71,11 @@
 
 #if defined(__APPLE__)
 #define MORESTACK               ___morestack
-#define EXHAUSTED               _rust_stack_exhausted
 #else
 #if defined(__linux__) || defined(__FreeBSD__)
 #define MORESTACK               __morestack
-#define EXHAUSTED               rust_stack_exhausted
 #else
 #define MORESTACK               ___morestack
-#define EXHAUSTED               _rust_stack_exhausted
 #endif
 #endif
 
@@ -100,45 +97,5 @@
 
 MORESTACK:
 	.cfi_startproc
-
-	// This base pointer setup differs from most in that we are
-	// telling the unwinder to consider the Canonical Frame
-	// Address (CFA) for this frame to be the value of the stack
-	// pointer prior to entry to the original function, whereas
-	// the CFA would typically be the value of the stack
-	// pointer prior to entry to this function. This will allow
-	// the unwinder to understand how to skip the tiny partial
-	// frame that the original function created by calling
-	// __morestack.
-
-	// In practical terms, our CFA is 12 bytes greater than it
-	// would normally be, accounting for the two arguments to
-	// __morestack, and an extra return address.
-
-        // FIXME(#9854) these cfi directives don't work on windows.
-
-	pushl %ebp
-
-#if defined(__APPLE__)
-	// The pattern of the return address being saved twice to the same location
-	// tells the OS X linker that it should not attempt to convert the DWARF
-	// unwind information to the compact format.
-	.cfi_offset %eip, -4
-	.cfi_offset %eip, -4
-#endif
-
-	// The CFA is 20 bytes above the register that it is
-	// associated with for this frame (which will be %ebp)
-	.cfi_def_cfa_offset 20
-	// %ebp is -20 bytes from the CFA
-	.cfi_offset %ebp, -20
-	movl %esp, %ebp
-	// Calculate the CFA as an offset from %ebp
-	.cfi_def_cfa_register %ebp
-
-        // re-align the stack
-        subl $12,%esp
-        calll EXHAUSTED
-        // the exhaustion function guarantees that it can't return
-
+	jmp MORESTACK
 	.cfi_endproc
