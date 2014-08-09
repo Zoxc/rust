@@ -286,6 +286,13 @@ impl CrateContext {
         let ref cfg = self.sess().targ_cfg;
         cfg.os != abi::OsiOS || cfg.arch != abi::Arm
     }
+
+    pub fn is_probe_stack_supported(&self) -> bool {
+        match self.sess().targ_cfg.arch {
+            abi::X86 | abi::X86_64 => true,
+            _ => false
+        }
+    }
 }
 
 fn declare_intrinsic(ccx: &CrateContext, key: & &'static str) -> Option<ValueRef> {

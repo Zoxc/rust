@@ -210,7 +210,9 @@ pub fn decl_fn(ccx: &CrateContext, name: &str, cc: llvm::CallConv,
     // Function addresses in Rust are never significant, allowing functions to be merged.
     llvm::SetUnnamedAddr(llfn, true);
 
-    if ccx.is_split_stack_supported() {
+    if ccx.is_probe_stack_supported() {
+        set_probe_stack(llfn);
+    } else if ccx.is_split_stack_supported() {
         set_split_stack(llfn);
     }
 
@@ -476,6 +478,12 @@ pub fn set_llvm_fn_attrs(attrs: &[ast::Attribute], llfn: ValueRef) {
 
 pub fn set_always_inline(f: ValueRef) {
     llvm::SetFunctionAttribute(f, llvm::AlwaysInlineAttribute)
+}
+
+pub fn set_probe_stack(f: ValueRef) {
+    "probe-stack".with_c_str(|buf| {
+        unsafe { llvm::LLVMAddFunctionAttrString(f, llvm::FunctionIndex as c_uint, buf); }
+    })
 }
 
 pub fn set_split_stack(f: ValueRef) {
