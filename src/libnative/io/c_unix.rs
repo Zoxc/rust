@@ -240,7 +240,6 @@ mod signal {
         pub status: libc::c_int,
     }
 
-    #[cfg(target_os = "macos")]
     #[cfg(target_os = "ios")]
     pub struct sigaction {
         pub sa_handler: extern fn(libc::c_int),
@@ -249,6 +248,7 @@ mod signal {
         pub sa_flags: libc::c_int,
     }
 
+    #[cfg(target_os = "macos")]
     #[cfg(target_os = "freebsd")]
     #[cfg(target_os = "dragonfly")]
     pub struct sigaction {
