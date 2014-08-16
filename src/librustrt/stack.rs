@@ -7,7 +7,8 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
+#![allow(unused_variable)]
+#![allow(unreachable_code)]
 //! Rust stack-limit management
 //!
 //! Currently Rust uses a segmented-stack-like scheme in order to detect stack
@@ -186,6 +187,7 @@ pub unsafe fn record_rust_managed_stack_bounds(stack_lo: uint, stack_hi: uint) {
 /// invocation (if they were an actual function call).
 #[inline(always)]
 pub unsafe fn record_sp_limit(limit: uint) {
+    return;
     return target_record_sp_limit(limit);
 
     // x86-64
@@ -265,6 +267,7 @@ pub unsafe fn record_sp_limit(limit: uint) {
 /// therefore be called in a "we're out of stack" situation.
 #[inline(always)]
 pub unsafe fn get_sp_limit() -> uint {
+    return RED_ZONE;
     return target_get_sp_limit();
 
     // x86-64
