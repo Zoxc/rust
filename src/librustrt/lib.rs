@@ -53,6 +53,7 @@ mod local_ptr;
 mod thread_local_storage;
 mod util;
 mod libunwind;
+mod stack_overflow;
 
 pub mod args;
 pub mod bookkeeping;
@@ -95,6 +96,8 @@ pub trait Runtime {
     fn local_io<'a>(&'a mut self) -> Option<rtio::LocalIo<'a>>;
     /// The (low, high) edges of the current stack.
     fn stack_bounds(&self) -> (uint, uint); // (lo, hi)
+    /// The last writable byte of the stack next to the guard page
+    fn stack_guard(&self) -> Option<uint>;
     fn can_block(&self) -> bool;
 
     // FIXME: This is a serious code smell and this should not exist at all.
@@ -117,6 +120,7 @@ pub fn init(argc: int, argv: *const *const u8) {
         args::init(argc, argv);
         local_ptr::init();
         at_exit_imp::init();
+        thread::init();
     }
 
     // FIXME(#14344) this shouldn't be necessary

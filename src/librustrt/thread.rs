@@ -24,7 +24,17 @@ use core::uint;
 use libc;
 
 use stack;
+use stack_overflow;
 
+pub unsafe fn init() {
+    imp::guard::init();
+    stack_overflow::init();
+}
+
+#[cfg(target_os = "windows")]
+type StartFn = extern "system" fn(*mut libc::c_void) -> imp::rust_thread_return;
+
+#[cfg(not(target_os = "windows"))]
 type StartFn = extern "C" fn(*mut libc::c_void) -> imp::rust_thread_return;
 
 /// This struct represents a native thread's state. This is used to join on an
@@ -42,12 +52,38 @@ static DEFAULT_STACK_SIZE: uint = 1024 * 1024;
 // no_split_stack annotation), and then we extract the main function
 // and invoke it.
 #[no_split_stack]
-extern fn thread_start(main: *mut libc::c_void) -> imp::rust_thread_return {
+fn start_thread(main: *mut libc::c_void) -> imp::rust_thread_return {
     unsafe {
         stack::record_os_managed_stack_bounds(0, uint::MAX);
+        let handler = stack_overflow::Handler::new();
         let f: Box<proc()> = mem::transmute(main);
         (*f)();
+        drop(handler);
         mem::transmute(0 as imp::rust_thread_return)
+    }
+}
+
+#[no_split_stack]
+#[cfg(target_os = "windows")]
+extern "system" fn thread_start(main: *mut libc::c_void) -> imp::rust_thread_return {
+    return start_thread(main);
+}
+
+#[no_split_stack]
+#[cfg(not(target_os = "windows"))]
+extern fn thread_start(main: *mut libc::c_void) -> imp::rust_thread_return {
+    return start_thread(main);
+}
+
+pub fn main_guard_page() -> uint {
+    unsafe {
+        imp::guard::main()
+    }
+}
+
+pub fn current_guard_page() -> uint {
+    unsafe {
+        imp::guard::current()
     }
 }
 
@@ -144,6 +180,7 @@ impl<T: Send> Drop for Thread<T> {
 }
 
 #[cfg(windows)]
+#[allow(uppercase_variables)]
 mod imp {
     use core::prelude::*;
 
@@ -153,11 +190,26 @@ mod imp {
     use core::ptr;
     use libc;
     use libc::types::os::arch::extra::{LPSECURITY_ATTRIBUTES, SIZE_T, BOOL,
-                                       LPVOID, DWORD, LPDWORD, HANDLE};
+                                       LPVOID, DWORD, LPDWORD, HANDLE,
+                                       LONG};
     use stack::RED_ZONE;
+    use stack;
 
     pub type rust_thread = HANDLE;
     pub type rust_thread_return = DWORD;
+
+    pub mod guard {
+        pub unsafe fn main() -> uint {
+            0
+        }
+
+        pub unsafe fn current() -> uint {
+            0
+        }
+
+        pub unsafe fn init() {
+        }
+    }
 
     pub unsafe fn create(stack: uint, p: Box<proc():Send>) -> rust_thread {
         let arg: *mut libc::c_void = mem::transmute(p);
@@ -226,6 +278,130 @@ mod imp {
 
     pub type rust_thread = libc::pthread_t;
     pub type rust_thread_return = *mut u8;
+
+    #[cfg(not(target_os = "linux"), not(target_os = "macos"))]
+    pub mod guard {
+        pub unsafe fn current() -> uint {
+            0
+        }
+
+        pub unsafe fn main() -> uint {
+            0
+        }
+
+        pub unsafe fn init() {
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[cfg(target_os = "macos")]
+    pub mod guard {
+        use super::*;
+        #[cfg(target_os = "linux")]
+        use core::mem;
+        #[cfg(target_os = "linux")]
+        use core::ptr;
+        use libc;
+        use libc::funcs::posix88::mman::{mmap};
+        use libc::consts::os::posix88::{PROT_NONE,
+                                        MAP_PRIVATE,
+                                        MAP_ANON,
+                                        MAP_FAILED,
+                                        MAP_FIXED};
+
+        static mut PAGE_SIZE: uint = 0;
+        static mut GUARD_PAGE: uint = 0;
+
+        #[cfg(target_os = "macos")]
+        unsafe fn get_stack_start() -> *mut libc::c_void {
+            current() as *mut libc::c_void
+        }
+
+        #[cfg(target_os = "linux")]
+        unsafe fn get_stack_start() -> *mut libc::c_void {
+            let mut attr: libc::pthread_attr_t = mem::zeroed();
+            if pthread_getattr_np(pthread_self(), &mut attr) != 0 {
+                fail!("Failed to get thread attributes");
+            }
+            let mut stackaddr = ptr::mut_null();
+            let mut stacksize = 0;
+            if pthread_attr_getstack(&attr, &mut stackaddr, &mut stacksize) != 0 {
+                fail!("Failed to get stack information");
+            }
+            if pthread_attr_destroy(&mut attr) != 0 {
+                fail!("Failed to destroy thread attributes");
+            }
+            stackaddr
+        }
+
+        pub unsafe fn init() {
+            let psize = libc::sysconf(libc::consts::os::sysconf::_SC_PAGESIZE);
+            if psize == -1 {
+                fail!("Failed to get page size");
+            }
+
+            PAGE_SIZE = psize as uint;
+
+            let stackaddr = get_stack_start();
+
+            // Rellocate the last page of the stack.
+            // This ensures SIGBUS will be raised on
+            // stack overflow.
+            let result = mmap(stackaddr,
+                              PAGE_SIZE as libc::size_t,
+                              PROT_NONE,
+                              MAP_PRIVATE | MAP_ANON | MAP_FIXED,
+                              -1,
+                              0);
+
+            if result != stackaddr || result == MAP_FAILED {
+                fail!("Failed to allocate a guard page");
+            }
+
+            let offset = if cfg!(target_os = "linux") {
+                2
+            } else {
+                1
+            };
+
+            GUARD_PAGE = stackaddr as uint + offset * PAGE_SIZE;
+        }
+
+        pub unsafe fn main() -> uint {
+            GUARD_PAGE
+        }
+
+        #[cfg(target_os = "macos")]
+        pub unsafe fn current() -> uint {
+            (pthread_get_stackaddr_np(pthread_self()) as libc::size_t -
+             pthread_get_stacksize_np(pthread_self())) as uint
+        }
+
+        #[cfg(target_os = "linux")]
+        pub unsafe fn current() -> uint {
+            let mut attr: libc::pthread_attr_t = mem::zeroed();
+            if pthread_getattr_np(pthread_self(), &mut attr) != 0 {
+                fail!("Failed to get thread attributes");
+            }
+            let mut guardsize = 0;
+            if pthread_attr_getguardsize(&attr, &mut guardsize) != 0 {
+                fail!("Failed to get stack guard page");
+            }
+            if guardsize == 0 {
+                fail!("There is no guard page");
+            }
+            let mut stackaddr = ptr::mut_null();
+            let mut stacksize = 0;
+            if pthread_attr_getstack(&attr, &mut stackaddr, &mut stacksize) != 0 {
+                fail!("Failed to get stack information");
+            }
+            if pthread_attr_destroy(&mut attr) != 0 {
+                fail!("Failed to destroy thread attributes");
+            }
+
+            stackaddr as uint + guardsize as uint
+        }
+    }
 
     pub unsafe fn create(stack: uint, p: Box<proc():Send>) -> rust_thread {
         let mut native: libc::pthread_t = mem::zeroed();
@@ -307,6 +483,25 @@ mod imp {
         PTHREAD_STACK_MIN
     }
 
+    #[cfg(target_os = "linux")]
+    extern {
+        pub fn pthread_self() -> libc::pthread_t;
+        pub fn pthread_getattr_np(native: libc::pthread_t,
+                                  attr: *mut libc::pthread_attr_t) -> libc::c_int;
+        pub fn pthread_attr_getguardsize(attr: *const libc::pthread_attr_t,
+                                         guardsize: *mut libc::size_t) -> libc::c_int;
+        pub fn pthread_attr_getstack(attr: *const libc::pthread_attr_t,
+                                     stackaddr: *mut *mut libc::c_void,
+                                     stacksize: *mut libc::size_t) -> libc::c_int;
+    }
+
+    #[cfg(target_os = "macos")]
+    extern {
+        pub fn pthread_self() -> libc::pthread_t;
+        pub fn pthread_get_stackaddr_np(thread: libc::pthread_t) -> *mut libc::c_void;
+        pub fn pthread_get_stacksize_np(thread: libc::pthread_t) -> libc::size_t;
+    }
+
     extern {
         fn pthread_create(native: *mut libc::pthread_t,
                           attr: *const libc::pthread_attr_t,
@@ -315,7 +510,7 @@ mod imp {
         fn pthread_join(native: libc::pthread_t,
                         value: *mut *mut libc::c_void) -> libc::c_int;
         fn pthread_attr_init(attr: *mut libc::pthread_attr_t) -> libc::c_int;
-        fn pthread_attr_destroy(attr: *mut libc::pthread_attr_t) -> libc::c_int;
+        pub fn pthread_attr_destroy(attr: *mut libc::pthread_attr_t) -> libc::c_int;
         fn pthread_attr_setstacksize(attr: *mut libc::pthread_attr_t,
                                      stack_size: libc::size_t) -> libc::c_int;
         fn pthread_attr_setdetachstate(attr: *mut libc::pthread_attr_t,
