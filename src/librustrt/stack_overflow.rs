@@ -68,7 +68,7 @@ unsafe fn get_task_info() -> Option<(uint, SendStr)> {
 #[allow(uppercase_variables)]
 mod imp {
     use core::prelude::*;
-
+    use core::ptr;
     use core::mem;
     use libc;
     use libc::types::os::arch::extra::{LPVOID, DWORD, LONG};
