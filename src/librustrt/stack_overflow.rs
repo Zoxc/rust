@@ -36,8 +36,11 @@ impl Drop for Handler {
     }
 }
 
-#[no_split_stack]
-pub unsafe fn get_task_info() -> Option<(uint, SendStr)> {
+// get_task_info is called from an exception / signal handler.
+// It steals the current task from local_ptr and neither returns it nor
+// properly destroys it leaving the runtime in a broken state.
+// This is fine since we'll exit the process soon after this is called.
+unsafe fn get_task_info() -> Option<(uint, SendStr)> {
     use core::mem;
     use core::prelude::*;
     use alloc::boxed::Box;
@@ -72,6 +75,7 @@ mod imp {
     use stack;
     use super::{Handler, get_task_info};
 
+    // This is initialized in init() and only read from after
     static mut PAGE_SIZE: uint = 0;
 
     #[no_split_stack]
@@ -124,7 +128,9 @@ mod imp {
         libc::GetSystemInfo(&mut info);
         PAGE_SIZE = info.dwPageSize as uint;
 
-        AddVectoredExceptionHandler(0, vectored_handler);
+        if AddVectoredExceptionHandler(0, vectored_handler) == ptr::mut_null() {
+            fail!("Failed to install exception handler");
+        }
     }
 
     pub unsafe fn make_handler() -> Handler {
@@ -189,6 +195,7 @@ mod imp {
                                     MAP_FAILED};
 
 
+    // This is initialized in init() and only read from after
     static mut PAGE_SIZE: uint = 0;
 
     #[no_split_stack]

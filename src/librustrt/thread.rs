@@ -75,12 +75,16 @@ extern fn thread_start(main: *mut libc::c_void) -> imp::rust_thread_return {
     return start_thread(main);
 }
 
+/// Returns the last writable byte of the main thread's stack next to the guard
+/// page. Must be called from the main thread.
 pub fn main_guard_page() -> uint {
     unsafe {
         imp::guard::main()
     }
 }
 
+/// Returns the last writable byte of the current thread's stack next to the
+/// guard page. Must not be called from the main thread.
 pub fn current_guard_page() -> uint {
     unsafe {
         imp::guard::current()
@@ -309,6 +313,7 @@ mod imp {
                                         MAP_FAILED,
                                         MAP_FIXED};
 
+        // These are initialized in init() and only read from after
         static mut PAGE_SIZE: uint = 0;
         static mut GUARD_PAGE: uint = 0;
 
