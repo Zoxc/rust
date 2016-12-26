@@ -25,7 +25,7 @@ use middle::lang_items::{FnTraitLangItem, FnMutTraitLangItem, FnOnceTraitLangIte
 use middle::privacy::AccessLevels;
 use middle::region::{CodeExtent, ROOT_CODE_EXTENT};
 use middle::resolve_lifetime::ObjectLifetimeDefault;
-use mir::Mir;
+use mir::{Mir, GeneratorLayout};
 use traits;
 use ty;
 use ty::subst::{Subst, Substs};
@@ -59,7 +59,7 @@ use hir;
 use hir::itemlikevisit::ItemLikeVisitor;
 
 pub use self::sty::{Binder, DebruijnIndex};
-pub use self::sty::{FnSig, PolyFnSig};
+pub use self::sty::{FnSig, GenSig, PolyFnSig, PolyGenSig};
 pub use self::sty::{InferTy, ParamTy, ProjectionTy, ExistentialPredicate};
 pub use self::sty::{ClosureSubsts, TypeAndMut};
 pub use self::sty::{TraitRef, TypeVariants, PolyTraitRef};
@@ -1794,7 +1794,7 @@ impl<'a, 'gcx, 'tcx> AdtDef {
         let result = match ty.sty {
             TyBool | TyChar | TyInt(..) | TyUint(..) | TyFloat(..) |
             TyRawPtr(..) | TyRef(..) | TyFnDef(..) | TyFnPtr(_) |
-            TyArray(..) | TyClosure(..) | TyNever => {
+            TyArray(..) | TyClosure(..) | TyGenerator(..) | TyNever => {
                 vec![]
             }
 
@@ -2069,6 +2069,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                     },
                 }
             },
+            Some(hir_map::NodeImplArg(_)) => Symbol::intern("impl arg").as_str(),
             r => bug!("Variable id {} maps to {:?}, not local", id, r),
         }
     }
@@ -2089,6 +2090,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             hir::ExprUnary(hir::UnDeref, _) |
             hir::ExprField(..) |
             hir::ExprTupField(..) |
+            hir::ExprImplArg(_) |
             hir::ExprIndex(..) => {
                 true
             }
@@ -2120,6 +2122,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             hir::ExprBox(..) |
             hir::ExprAddrOf(..) |
             hir::ExprBinary(..) |
+            hir::ExprSuspend(..) |
             hir::ExprCast(..) => {
                 false
             }
@@ -2307,7 +2310,17 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                         -> Ref<'gcx, Mir<'gcx>>
     {
         match instance {
-            ty::InstanceDef::Item(did) if true => self.item_mir(did),
+            ty::InstanceDef::Item(did) => {
+                if self.is_generator(did) {
+                    // The body is a generator, generate a shim which constructs a TyGenerator
+                    self.mir_shims(instance).borrow()
+                } else {
+                    self.item_mir(did)
+                }
+            }
+            ty::InstanceDef::Generator(did) => {
+                self.item_mir(did)
+            }
             _ => self.mir_shims(instance).borrow(),
         }
     }
@@ -2372,6 +2385,13 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         }
 
         def.flags.set(def.flags.get() | TraitFlags::HAS_REMOTE_IMPLS);
+    }
+
+    pub fn generator_layout(self, def_id: DefId) -> GeneratorLayout<'tcx> {
+        if def_id.krate != LOCAL_CRATE {
+            return self.sess.cstore.maybe_get_generator_layout(self.global_tcx(), def_id).unwrap();
+        }
+        self.generator_layout.borrow()[&def_id].clone()
     }
 
     /// Given the def_id of an impl, return the def_id of the trait it implements.

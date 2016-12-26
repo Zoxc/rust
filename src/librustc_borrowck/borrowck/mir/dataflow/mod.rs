@@ -443,6 +443,7 @@ impl<'a, 'tcx: 'a, D> DataflowAnalysis<'a, 'tcx, D>
             mir::TerminatorKind::Unreachable => {}
             mir::TerminatorKind::Goto { ref target } |
             mir::TerminatorKind::Assert { ref target, cleanup: None, .. } |
+            mir::TerminatorKind::Suspend { resume: ref target, drop: None, .. } |
             mir::TerminatorKind::Drop { ref target, location: _, unwind: None } |
             mir::TerminatorKind::DropAndReplace {
                 ref target, value: _, location: _, unwind: None
@@ -450,6 +451,7 @@ impl<'a, 'tcx: 'a, D> DataflowAnalysis<'a, 'tcx, D>
                 self.propagate_bits_into_entry_set_for(in_out, changed, target);
             }
             mir::TerminatorKind::Assert { ref target, cleanup: Some(ref unwind), .. } |
+            mir::TerminatorKind::Suspend { resume: ref target, drop: Some(ref unwind), .. } |
             mir::TerminatorKind::Drop { ref target, location: _, unwind: Some(ref unwind) } |
             mir::TerminatorKind::DropAndReplace {
                 ref target, value: _, location: _, unwind: Some(ref unwind)

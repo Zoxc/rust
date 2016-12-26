@@ -9,11 +9,13 @@
 // except according to those terms.
 
 use dep_graph::DepNode;
+use hir;
 use hir::def_id::DefId;
 use ty::{self, Ty, TypeFoldable, Substs};
 use util::ppaux;
 
 use std::fmt;
+use syntax::abi;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Instance<'tcx> {
@@ -24,6 +26,7 @@ pub struct Instance<'tcx> {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum InstanceDef<'tcx> {
     Item(DefId),
+    Generator(DefId),
     Intrinsic(DefId),
     // <fn() as FnTrait>::call_*
     // def-id is FnTrait::call_*
@@ -41,6 +44,7 @@ impl<'tcx> InstanceDef<'tcx> {
     pub fn def_id(&self) -> DefId {
         match *self {
             InstanceDef::Item(def_id) |
+            InstanceDef::Generator(def_id) |
             InstanceDef::FnPtrShim(def_id, _) |
             InstanceDef::Virtual(def_id, _) |
             InstanceDef::Intrinsic(def_id, ) |
@@ -52,7 +56,20 @@ impl<'tcx> InstanceDef<'tcx> {
 
     #[inline]
     pub fn def_ty<'a>(&self, tcx: ty::TyCtxt<'a, 'tcx, 'tcx>) -> Ty<'tcx> {
-        tcx.type_of(self.def_id())
+        match *self {
+            InstanceDef::Generator(def_id) => {
+                let mir = tcx.item_mir(def_id);
+                let sig = ty::Binder(tcx.mk_fn_sig(
+                    mir.args_iter().map(|a| mir.local_decls[a].ty),
+                    mir.return_ty,
+                    false,
+                    hir::Unsafety::Normal,
+                    abi::Abi::Rust
+                ));
+                tcx.mk_fn_ptr(sig)
+            }
+            _ => tcx.type_of(self.def_id()),
+        }
     }
 
     #[inline]
@@ -86,6 +103,9 @@ impl<'tcx> fmt::Display for Instance<'tcx> {
         ppaux::parameterized(f, self.substs, self.def_id(), &[])?;
         match self.def {
             InstanceDef::Item(_) => Ok(()),
+            InstanceDef::Generator(_) => {
+                write!(f, " - generator")
+            }
             InstanceDef::Intrinsic(_) => {
                 write!(f, " - intrinsic")
             }

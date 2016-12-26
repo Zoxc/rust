@@ -1119,4 +1119,5 @@ fn main() {
 register_diagnostics! {
 //    E0385, // {} in an aliasable location
     E0524, // two closures require unique access to `..` at the same time
+    E0805, // borrow of the implicit argument of a generator
 }

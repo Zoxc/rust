@@ -331,6 +331,9 @@ declare_features! (
     // rustc internal
     (active, sanitizer_runtime, "1.17.0", None),
 
+    // Generators
+    (active, generators, "1.17.0", None),
+
     // `extern "x86-interrupt" fn()`
     (active, abi_x86_interrupt, "1.17.0", Some(40180)),
 
@@ -1290,6 +1293,16 @@ impl<'a> Visitor<'a> for PostExpansionVisitor<'a> {
             }
             ast::ExprKind::InPlace(..) => {
                 gate_feature_post!(&self, placement_in_syntax, e.span, EXPLAIN_PLACEMENT_IN);
+            }
+            ast::ExprKind::Yield(..) => {
+                gate_feature_post!(&self, generators,
+                                  e.span,
+                                  "yield syntax is experimental");
+            }
+            ast::ExprKind::ImplArg => {
+                gate_feature_post!(&self, generators,
+                                  e.span,
+                                  "impl arg syntax is experimental");
             }
             ast::ExprKind::Struct(_, ref fields, _) => {
                 for field in fields {

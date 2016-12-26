@@ -583,6 +583,14 @@ pub fn type_metadata<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
                                    unique_type_id,
                                    usage_site_span).finalize(cx)
         }
+        ty::TyGenerator(def_id, substs) => {
+            let upvar_tys : Vec<_> = substs.field_tys(def_id, cx.tcx()).collect();
+            prepare_tuple_metadata(cx,
+                                   t,
+                                   &upvar_tys,
+                                   unique_type_id,
+                                   usage_site_span).finalize(cx)
+        }
         ty::TyAdt(def, ..) => match def.adt_kind() {
             AdtKind::Struct => {
                 prepare_struct_metadata(cx,

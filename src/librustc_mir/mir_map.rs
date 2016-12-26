@@ -160,7 +160,15 @@ fn build_mir<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId)
                     });
 
             let arguments = implicit_argument.into_iter().chain(explicit_arguments);
-            build::construct_fn(cx, id, arguments, abi, fn_sig.output(), body)
+            
+            let (suspend_ty, impl_arg_ty, return_ty) = if body.is_generator() {
+                let gen_sig = cx.tables().liberated_gen_sigs[&id].clone().unwrap();
+                (Some(gen_sig.suspend_ty), Some(gen_sig.impl_arg_ty), gen_sig.return_ty)
+            } else {
+                (None, None, fn_sig.output())
+            };
+            
+            build::construct_fn(cx, id, arguments, abi, return_ty, suspend_ty, impl_arg_ty, body)
         } else {
             build::construct_const(cx, body_id)
         };
@@ -246,7 +254,7 @@ fn create_constructor_shim<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
 ///////////////////////////////////////////////////////////////////////////
 // BuildMir -- walks a crate, looking for fn items and methods to build MIR from
 
-fn closure_self_ty<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
+pub fn closure_self_ty<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                              closure_expr_id: ast::NodeId,
                              body_id: hir::BodyId)
                              -> Ty<'tcx> {

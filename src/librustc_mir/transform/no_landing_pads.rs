@@ -33,6 +33,7 @@ impl<'tcx> MutVisitor<'tcx> for NoLandingPads {
             },
             TerminatorKind::Call { cleanup: ref mut unwind, .. } |
             TerminatorKind::Assert { cleanup: ref mut unwind, .. } |
+            TerminatorKind::Suspend { drop: ref mut unwind, .. } |
             TerminatorKind::DropAndReplace { ref mut unwind, .. } |
             TerminatorKind::Drop { ref mut unwind, .. } => {
                 unwind.take();
@@ -43,6 +44,11 @@ impl<'tcx> MutVisitor<'tcx> for NoLandingPads {
 }
 
 pub fn no_landing_pads<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, mir: &mut Mir<'tcx>) {
+    // We cannot remove landing pads from generator code
+    if mir.suspend_ty.is_some() {
+        return;
+    }
+
     if tcx.sess.no_landing_pads() {
         NoLandingPads.visit_mir(mir);
     }

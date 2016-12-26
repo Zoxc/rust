@@ -31,6 +31,9 @@ pub struct Builder<'a, 'gcx: 'a+'tcx, 'tcx: 'a> {
 
     fn_span: Span,
     arg_count: usize,
+    arg_offset: usize,
+
+    impl_arg_ty: Option<Ty<'tcx>>,
 
     /// the current set of scopes, updated as we traverse;
     /// see the `scope` module for more details
@@ -126,6 +129,8 @@ pub fn construct_fn<'a, 'gcx, 'tcx, A>(hir: Cx<'a, 'gcx, 'tcx>,
                                        arguments: A,
                                        abi: Abi,
                                        return_ty: Ty<'gcx>,
+                                       suspend_ty: Option<Ty<'gcx>>,
+                                       impl_arg_ty: Option<Ty<'gcx>>,
                                        body: &'gcx hir::Body)
                                        -> Mir<'tcx>
     where A: Iterator<Item=(Ty<'gcx>, Option<&'gcx hir::Pat>)>
@@ -134,7 +139,13 @@ pub fn construct_fn<'a, 'gcx, 'tcx, A>(hir: Cx<'a, 'gcx, 'tcx>,
 
     let tcx = hir.tcx();
     let span = tcx.hir.span(fn_id);
-    let mut builder = Builder::new(hir, span, arguments.len(), return_ty);
+    let arg_offset = if impl_arg_ty.is_some() { 1 } else { 0 };
+    let mut builder = Builder::new(hir,
+        span,
+        arguments.len() + arg_offset,
+        arg_offset,
+        impl_arg_ty,
+        return_ty);
 
     let call_site_extent =
         tcx.region_maps.lookup_code_extent(
@@ -145,7 +156,7 @@ pub fn construct_fn<'a, 'gcx, 'tcx, A>(hir: Cx<'a, 'gcx, 'tcx>,
     let mut block = START_BLOCK;
     unpack!(block = builder.in_scope(call_site_extent, block, |builder| {
         unpack!(block = builder.in_scope(arg_extent, block, |builder| {
-            builder.args_and_body(block, &arguments, arg_extent, &body.value)
+            builder.args_and_body(block, &arguments, arg_extent, impl_arg_ty, &body.value)
         }));
         // Attribute epilogue to function's closing brace
         let fn_end = Span { lo: span.hi, ..span };
@@ -189,7 +200,7 @@ pub fn construct_fn<'a, 'gcx, 'tcx, A>(hir: Cx<'a, 'gcx, 'tcx>,
         }).collect()
     });
 
-    let mut mir = builder.finish(upvar_decls, return_ty);
+    let mut mir = builder.finish(upvar_decls, return_ty, suspend_ty);
     mir.spread_arg = spread_arg;
     mir
 }
@@ -201,7 +212,7 @@ pub fn construct_const<'a, 'gcx, 'tcx>(hir: Cx<'a, 'gcx, 'tcx>,
     let ast_expr = &tcx.hir.body(body_id).value;
     let ty = hir.tables().expr_ty_adjusted(ast_expr);
     let span = tcx.hir.span(tcx.hir.body_owner(body_id));
-    let mut builder = Builder::new(hir, span, 0, ty);
+    let mut builder = Builder::new(hir, span, 0, 0, None, ty);
 
     let extent = tcx.region_maps.temporary_scope(ast_expr.id)
                     .unwrap_or(ROOT_CODE_EXTENT);
@@ -220,7 +231,7 @@ pub fn construct_const<'a, 'gcx, 'tcx>(hir: Cx<'a, 'gcx, 'tcx>,
         return_block.unit()
     });
 
-    builder.finish(vec![], ty)
+    builder.finish(vec![], ty, None)
 }
 
 pub fn construct_error<'a, 'gcx, 'tcx>(hir: Cx<'a, 'gcx, 'tcx>,
@@ -228,16 +239,18 @@ pub fn construct_error<'a, 'gcx, 'tcx>(hir: Cx<'a, 'gcx, 'tcx>,
                                        -> Mir<'tcx> {
     let span = hir.tcx().hir.span(hir.tcx().hir.body_owner(body_id));
     let ty = hir.tcx().types.err;
-    let mut builder = Builder::new(hir, span, 0, ty);
+    let mut builder = Builder::new(hir, span, 0, 0, None, ty);
     let source_info = builder.source_info(span);
     builder.cfg.terminate(START_BLOCK, source_info, TerminatorKind::Unreachable);
-    builder.finish(vec![], ty)
+    builder.finish(vec![], ty, None)
 }
 
 impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
     fn new(hir: Cx<'a, 'gcx, 'tcx>,
            span: Span,
            arg_count: usize,
+           arg_offset: usize,
+           impl_arg_ty: Option<Ty<'tcx>>,
            return_ty: Ty<'tcx>)
            -> Builder<'a, 'gcx, 'tcx> {
         let mut builder = Builder {
@@ -245,6 +258,8 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
             cfg: CFG { basic_blocks: IndexVec::new() },
             fn_span: span,
             arg_count: arg_count,
+            arg_offset,
+            impl_arg_ty,
             scopes: vec![],
             visibility_scopes: IndexVec::new(),
             visibility_scope: ARGUMENT_VISIBILITY_SCOPE,
@@ -266,7 +281,8 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
 
     fn finish(self,
               upvar_decls: Vec<UpvarDecl>,
-              return_ty: Ty<'tcx>)
+              return_ty: Ty<'tcx>,
+              suspend_ty: Option<Ty<'tcx>>)
               -> Mir<'tcx> {
         for (index, block) in self.cfg.basic_blocks.iter().enumerate() {
             if block.terminator.is_none() {
@@ -278,6 +294,7 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
                  self.visibility_scopes,
                  IndexVec::new(),
                  return_ty,
+                 suspend_ty,
                  self.local_decls,
                  self.arg_count,
                  upvar_decls,
@@ -289,9 +306,26 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
                      mut block: BasicBlock,
                      arguments: &[(Ty<'gcx>, Option<&'gcx hir::Pat>)],
                      argument_extent: CodeExtent,
+                     impl_arg_ty: Option<Ty<'gcx>>,
                      ast_body: &'gcx hir::Expr)
                      -> BlockAnd<()>
     {
+        if let Some(impl_arg_ty) = impl_arg_ty {
+            self.local_decls.push(LocalDecl {
+                mutability: Mutability::Mut,
+                ty: impl_arg_ty,
+                is_user_variable: false,
+                source_info:  SourceInfo {
+                    scope: ARGUMENT_VISIBILITY_SCOPE,
+                    span: self.fn_span,
+                },
+                name: None,
+            });
+            let lvalue = Lvalue::Local(Local::new(1));
+            // Make sure we drop the argument on completion
+            self.schedule_drop(ast_body.span, argument_extent, &lvalue, impl_arg_ty);
+        };
+
         // Allocate locals for the function arguments
         for &(ty, pattern) in arguments.iter() {
             // If this is a simple binding pattern, give the local a nice name for debuginfo.
@@ -318,7 +352,7 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
         // Bind the argument patterns
         for (index, &(ty, pattern)) in arguments.iter().enumerate() {
             // Function arguments always get the first Local indices after the return pointer
-            let lvalue = Lvalue::Local(Local::new(index + 1));
+            let lvalue = Lvalue::Local(Local::new(self.arg_offset + index + 1));
 
             if let Some(pattern) = pattern {
                 let pattern = Pattern::from_hir(self.hir.tcx(), self.hir.tables(), pattern);

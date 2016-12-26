@@ -34,8 +34,12 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
         let item_def_id = self.tcx.hir.local_def_id(item_id);
 
         let mut wbcx = WritebackCx::new(self, body);
+
         for arg in &body.arguments {
             wbcx.visit_node_id(arg.pat.span, arg.id);
+        }
+        if let Some(ref impl_arg) = body.impl_arg {
+            wbcx.visit_node_id(impl_arg.span, impl_arg.id);
         }
         wbcx.visit_body(body);
         wbcx.visit_upvar_borrow_map();
@@ -47,6 +51,7 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
         wbcx.visit_cast_types();
         wbcx.visit_lints();
         wbcx.visit_free_region_map();
+        wbcx.visit_liberated_gen_sigs();
 
         let used_trait_imports = mem::replace(&mut self.tables.borrow_mut().used_trait_imports,
                                               DefIdSet());
@@ -423,6 +428,17 @@ impl<'cx, 'gcx, 'tcx> WritebackCx<'cx, 'gcx, 'tcx> {
         //NB(jroesch): We need to match twice to avoid a double borrow which would cause an ICE
         if let Some(method) = new_method {
             self.tables.method_map.insert(method_call, method);
+        }
+    }
+
+    fn visit_liberated_gen_sigs(&mut self) {
+        for (&node_id, gen_sig) in self.fcx.tables.borrow().liberated_gen_sigs.iter() {
+            let gen_sig = gen_sig.map(|s| ty::GenSig {
+                impl_arg_ty: self.resolve(&s.impl_arg_ty, &node_id),
+                suspend_ty: self.resolve(&s.suspend_ty, &node_id),
+                return_ty: self.resolve(&s.return_ty, &node_id),
+            });
+            self.tables.liberated_gen_sigs.insert(node_id, gen_sig);
         }
     }
 

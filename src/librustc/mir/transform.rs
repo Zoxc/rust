@@ -32,7 +32,10 @@ pub enum MirSource {
     Static(NodeId, hir::Mutability),
 
     /// Promoted rvalues within a function.
-    Promoted(NodeId, Promoted)
+    Promoted(NodeId, Promoted),
+
+    /// Drop glue for a generator.
+    GeneratorDrop(NodeId),
 }
 
 impl<'a, 'tcx> MirSource {
@@ -64,6 +67,7 @@ impl<'a, 'tcx> MirSource {
         match *self {
             MirSource::Fn(id) |
             MirSource::Const(id) |
+            MirSource::GeneratorDrop(id) |
             MirSource::Static(id, _) |
             MirSource::Promoted(id, _) => id
         }
@@ -137,6 +141,17 @@ impl<'tcx, T: MirPass<'tcx>> MirMapPass<'tcx> for T {
 
             for (i, mir) in mir.promoted.iter_enumerated_mut() {
                 let src = MirSource::Promoted(id, i);
+                for hook in &mut *hooks {
+                    hook.on_mir_pass(tcx, src, mir, self, false);
+                }
+                MirPass::run_pass(self, tcx, src, mir);
+                for hook in &mut *hooks {
+                    hook.on_mir_pass(tcx, src, mir, self, true);
+                }
+            }
+
+            if let Some(box ref mut mir) = mir.generator_drop {
+                let src = MirSource::GeneratorDrop(id);
                 for hook in &mut *hooks {
                     hook.on_mir_pass(tcx, src, mir, self, false);
                 }

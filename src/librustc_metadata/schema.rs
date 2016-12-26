@@ -273,15 +273,15 @@ pub enum EntryKind<'tcx> {
     Variant(Lazy<VariantData>),
     Struct(Lazy<VariantData>, ReprOptions),
     Union(Lazy<VariantData>, ReprOptions),
-    Fn(Lazy<FnData>),
-    ForeignFn(Lazy<FnData>),
+    Fn(Lazy<FnData<'tcx>>),
+    ForeignFn(Lazy<FnData<'tcx>>),
     Mod(Lazy<ModData>),
     MacroDef(Lazy<MacroDef>),
     Closure(Lazy<ClosureData<'tcx>>),
     Trait(Lazy<TraitData<'tcx>>),
     Impl(Lazy<ImplData<'tcx>>),
     DefaultImpl(Lazy<ImplData<'tcx>>),
-    Method(Lazy<MethodData>),
+    Method(Lazy<MethodData<'tcx>>),
     AssociatedType(AssociatedContainer),
     AssociatedConst(AssociatedContainer, u8),
 }
@@ -365,12 +365,13 @@ pub struct MacroDef {
 impl_stable_hash_for!(struct MacroDef { body });
 
 #[derive(RustcEncodable, RustcDecodable)]
-pub struct FnData {
+pub struct FnData<'tcx> {
     pub constness: hir::Constness,
     pub arg_names: LazySeq<ast::Name>,
+    pub gen: Option<Lazy<GeneratorData<'tcx>>>,
 }
 
-impl_stable_hash_for!(struct FnData { constness, arg_names });
+impl_stable_hash_for!(struct FnData<'tcx> { constness, arg_names, gen });
 
 #[derive(RustcEncodable, RustcDecodable)]
 pub struct VariantData {
@@ -467,16 +468,24 @@ impl AssociatedContainer {
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-pub struct MethodData {
-    pub fn_data: FnData,
+pub struct MethodData<'tcx> {
+    pub fn_data: FnData<'tcx>,
     pub container: AssociatedContainer,
     pub has_self: bool,
 }
-impl_stable_hash_for!(struct MethodData { fn_data, container, has_self });
+impl_stable_hash_for!(struct MethodData<'tcx> { fn_data, container, has_self });
 
 #[derive(RustcEncodable, RustcDecodable)]
 pub struct ClosureData<'tcx> {
     pub kind: ty::ClosureKind,
     pub ty: Lazy<ty::PolyFnSig<'tcx>>,
+    pub gen: Option<Lazy<GeneratorData<'tcx>>>,
 }
-impl_stable_hash_for!(struct ClosureData<'tcx> { kind, ty });
+impl_stable_hash_for!(struct ClosureData<'tcx> { kind, ty, gen });
+
+#[derive(RustcEncodable, RustcDecodable)]
+pub struct GeneratorData<'tcx> {
+    pub sig: ty::PolyGenSig<'tcx>,
+    pub layout: mir::GeneratorLayout<'tcx>,
+}
+impl_stable_hash_for!(struct GeneratorData<'tcx> { sig, layout });

@@ -354,6 +354,21 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
                          vec![msg_file_line],
                          Some(ErrKind::Math(err.clone())))
                     }
+                    mir::AssertMessage::GeneratorResumedAfterReturn => {
+                        let msg_str = Symbol::intern("generator resumed after completion").as_str();
+                        let msg_str = C_str_slice(bcx.ccx, msg_str);
+                        let msg_file_line = C_struct(bcx.ccx,
+                                                     &[msg_str, filename, line],
+                                                     false);
+                        let align = llalign_of_min(bcx.ccx, common::val_ty(msg_file_line));
+                        let msg_file_line = consts::addr_of(bcx.ccx,
+                                                            msg_file_line,
+                                                            align,
+                                                            "panic_loc");
+                        (lang_items::PanicFnLangItem,
+                         vec![msg_file_line],
+                         None)
+                    }
                 };
 
                 // If we know we always panic, and the error message
@@ -581,6 +596,7 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
                     }
                 }
             }
+            mir::TerminatorKind::Suspend { .. } => bug!("suspend terminator in trans"),
         }
     }
 

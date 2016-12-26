@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2017 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,17 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub mod simplify_branches;
-pub mod simplify;
-pub mod erase_regions;
-pub mod no_landing_pads;
-pub mod type_check;
-pub mod add_call_guards;
-pub mod promote_consts;
-pub mod qualify_consts;
-pub mod dump_mir;
-pub mod deaggregator;
-pub mod instcombine;
-pub mod copy_prop;
-pub mod generator;
-pub mod inline;
+fn main() {
+    yield true; //~ ERROR yield syntax is experimental
+    impl arg;  //~ ERROR impl arg syntax is experimental
+}

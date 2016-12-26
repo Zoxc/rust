@@ -19,6 +19,7 @@ use rustc::middle::cstore::{CrateStore, CrateSource, LibSource, DepKind,
                             LinkagePreference, LoadedMacro, EncodedMetadata};
 use rustc::hir::def::{self, Def};
 use rustc::middle::lang_items;
+use rustc::mir::GeneratorLayout;
 use rustc::session::Session;
 use rustc::ty::{self, TyCtxt};
 use rustc::ty::maps::Providers;
@@ -107,6 +108,8 @@ provide! { <'tcx> tcx, def_id, cdata
 
         mir
     }
+    generator_sig => { cdata.generator_sig(def_id.index, tcx) }
+    is_generator => { cdata.is_generator(def_id.index, tcx) }
     mir_const_qualif => { cdata.mir_const_qualif(def_id.index) }
     typeck_tables_of => { cdata.item_body_tables(def_id.index, tcx) }
     closure_kind => { cdata.closure_kind(def_id.index) }
@@ -418,6 +421,12 @@ impl CrateStore for cstore::CStore {
             node: ast::ItemKind::MacroDef(body.into()),
             vis: ast::Visibility::Inherited,
         })
+    }
+
+    fn maybe_get_generator_layout<'a, 'tcx>(&self, tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId)
+                                     -> Option<GeneratorLayout<'tcx>> {
+        self.dep_graph.read(DepNode::MetaData(def_id));
+        self.get_crate_data(def_id.krate).maybe_get_generator_layout(def_id.index, tcx)
     }
 
     fn item_body<'a, 'tcx>(&self,

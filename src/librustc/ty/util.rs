@@ -513,7 +513,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                 }).collect()
             }
 
-            ty::TyClosure(def_id, substs) => {
+            ty::TyClosure(def_id, substs) | ty::TyGenerator(def_id, substs) => {
                 substs.upvar_tys(def_id, self).map(|ty| {
                     self.dtorck_constraint_for_ty(span, for_ty, depth+1, ty)
                 }).collect()
@@ -631,6 +631,7 @@ impl<'a, 'gcx, 'tcx, W> TypeVisitor<'tcx> for TypeIdHasher<'a, 'gcx, 'tcx, W>
             TyRawPtr(m) |
             TyRef(_, m) => self.hash(m.mutbl),
             TyClosure(def_id, _) |
+            TyGenerator(def_id, _) |
             TyAnon(def_id, _) |
             TyFnDef(def_id, ..) => self.def_id(def_id),
             TyAdt(d, _) => self.def_id(d.did),
@@ -753,7 +754,7 @@ impl<'a, 'tcx> ty::TyS<'tcx> {
             }) => Some(true),
 
             TyArray(..) | TySlice(..) | TyDynamic(..) | TyTuple(..) |
-            TyClosure(..) | TyAdt(..) | TyAnon(..) |
+            TyClosure(..) | TyGenerator(..) | TyAdt(..) | TyAnon(..) |
             TyProjection(..) | TyParam(..) | TyInfer(..) | TyError => None
         }.unwrap_or_else(|| {
             !self.impls_bound(tcx, param_env,
@@ -792,7 +793,7 @@ impl<'a, 'tcx> ty::TyS<'tcx> {
         let result = match self.sty {
             TyBool | TyChar | TyInt(..) | TyUint(..) | TyFloat(..) |
             TyRawPtr(..) | TyRef(..) | TyFnDef(..) | TyFnPtr(_) |
-            TyArray(..) | TyTuple(..) | TyClosure(..) | TyNever => Some(true),
+            TyArray(..) | TyTuple(..) | TyClosure(..) | TyGenerator(..) | TyNever => Some(true),
 
             TyStr | TyDynamic(..) | TySlice(_) => Some(false),
 
@@ -838,7 +839,7 @@ impl<'a, 'tcx> ty::TyS<'tcx> {
             TyRawPtr(..) | TyRef(..) | TyFnDef(..) | TyFnPtr(_) |
             TyStr | TyNever => Some(true),
 
-            TyArray(..) | TySlice(_) |
+            TyArray(..) | TySlice(_) | TyGenerator(..) |
             TyTuple(..) | TyClosure(..) | TyAdt(..) |
             TyDynamic(..) | TyProjection(..) | TyParam(..) |
             TyInfer(..) | TyAnon(..) | TyError => None
@@ -944,6 +945,8 @@ impl<'a, 'tcx> ty::TyS<'tcx> {
                 substs.upvar_tys(def_id, tcx)
                     .any(|ty| ty.needs_drop_inner(tcx, param_env, stack))
             }
+
+            ty::TyGenerator(..) => true,
 
             ty::TyTuple(ref tys, _) => {
                 tys.iter().any(|ty| ty.needs_drop_inner(tcx, param_env, stack))

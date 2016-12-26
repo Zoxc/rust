@@ -280,6 +280,10 @@ impl<'a, 'tcx> Inliner<'a, 'tcx> {
             return false;
         }
 
+        // Cannot inline generators which haven't been transformed yet
+        if callee_mir.suspend_ty.is_some() {
+            return false;
+        }
 
         let attrs = tcx.get_attrs(callsite.callee);
         let hint = attr::find_inline_attr(None, &attrs[..]);
@@ -781,6 +785,16 @@ impl<'a, 'tcx> MutVisitor<'tcx> for Integrator<'a, 'tcx> {
                     // Unless this drop is in a cleanup block, add an unwind edge to
                     // the orignal call's cleanup block
                     *unwind = self.cleanup_block;
+                }
+            }
+            TerminatorKind::Suspend { ref mut resume, ref mut drop, .. } => {
+                *resume = self.update_target(*resume);
+                if let Some(tgt) = *drop {
+                    *drop = Some(self.update_target(tgt));
+                } else if !self.in_cleanup_block {
+                    // Unless this drop is in a cleanup block, add an unwind edge to
+                    // the orignal call's cleanup block
+                    *drop = self.cleanup_block;
                 }
             }
             TerminatorKind::Call { ref mut destination, ref mut cleanup, .. } => {

@@ -1457,6 +1457,15 @@ impl<'a> State<'a> {
 
                 self.pclose()?;
             }
+            hir::ExprSuspend(ref expr) => {
+                word(&mut self.s, "suspend ")?;
+                self.print_expr(&expr)?;
+            }
+            hir::ExprImplArg(_) => {
+                word(&mut self.s, "impl")?;
+                space(&mut self.s)?;
+                word(&mut self.s, "arg")?;
+            }
         }
         self.ann.post(self, NodeExpr(expr))?;
         self.end()

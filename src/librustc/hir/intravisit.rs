@@ -399,6 +399,9 @@ pub fn walk_body<'v, V: Visitor<'v>>(visitor: &mut V, body: &'v Body) {
         visitor.visit_id(argument.id);
         visitor.visit_pat(&argument.pat);
     }
+    if let Some(ref impl_arg) = body.impl_arg {
+        visitor.visit_id(impl_arg.id);
+    }
     visitor.visit_expr(&body.value);
 }
 
@@ -1043,6 +1046,12 @@ pub fn walk_expr<'v, V: Visitor<'v>>(visitor: &mut V, expression: &'v Expr) {
                 visitor.visit_expr(input)
             }
         }
+        ExprSuspend(ref subexpression) => {
+            visitor.visit_expr(subexpression);
+        }
+        ExprImplArg(id) => {
+            visitor.visit_id(id);
+        },
     }
 }
 

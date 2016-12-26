@@ -24,7 +24,7 @@ use rustc::session::Session;
 use rustc::ty::{self, Ty, TyCtxt};
 use rustc::ty::subst::Substs;
 
-use rustc::mir::Mir;
+use rustc::mir::{Mir, GeneratorLayout};
 
 use std::borrow::Cow;
 use std::cell::Ref;
@@ -1050,6 +1050,40 @@ impl<'a, 'tcx> CrateMetadata {
             EntryKind::Closure(data) => data.decode(self).ty.decode((self, tcx)),
             _ => bug!(),
         }
+    }
+
+    fn get_generator_data(&self,
+                      id: DefIndex,
+                      tcx: TyCtxt<'a, 'tcx, 'tcx>)
+                      -> Option<Option<GeneratorData<'tcx>>> {
+        let gen = match self.entry(id).kind {
+            EntryKind::Closure(data) => data.decode(self).gen,
+            EntryKind::Fn(data) => data.decode(self).gen,
+            EntryKind::Method(data) => data.decode(self).fn_data.gen,
+            _ => return None,
+        };
+        Some(gen.map(|s| s.decode((self, tcx))))
+    }
+
+    pub fn generator_sig(&self,
+                      id: DefIndex,
+                      tcx: TyCtxt<'a, 'tcx, 'tcx>)
+                      -> Option<ty::PolyGenSig<'tcx>> {
+        self.get_generator_data(id, tcx).unwrap_or_else(|| bug!()).map(|d| d.sig)
+    }
+
+    pub fn maybe_get_generator_layout(&self,
+                      id: DefIndex,
+                      tcx: TyCtxt<'a, 'tcx, 'tcx>)
+                      -> Option<GeneratorLayout<'tcx>> {
+        self.get_generator_data(id, tcx).unwrap_or(None).map(|d| d.layout)
+    }
+
+    pub fn is_generator(&self,
+                      id: DefIndex,
+                      tcx: TyCtxt<'a, 'tcx, 'tcx>)
+                      -> bool {
+        self.get_generator_data(id, tcx).unwrap_or(None).is_some()
     }
 
     #[inline]

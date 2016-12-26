@@ -24,7 +24,7 @@ use middle::lang_items;
 use middle::region::RegionMaps;
 use middle::resolve_lifetime;
 use middle::stability;
-use mir::Mir;
+use mir::{Mir, GeneratorLayout};
 use ty::subst::{Kind, Substs};
 use ty::ReprOptions;
 use traits;
@@ -225,6 +225,8 @@ pub struct TypeckTables<'tcx> {
     /// Records the kind of each closure.
     pub closure_kinds: NodeMap<ty::ClosureKind>,
 
+    pub liberated_gen_sigs: NodeMap<Option<ty::GenSig<'tcx>>>,
+
     /// For each fn, records the "liberated" types of its arguments
     /// and return type. Liberated means that all bound regions
     /// (including late-bound regions) are replaced with free
@@ -268,6 +270,7 @@ impl<'tcx> TypeckTables<'tcx> {
             adjustments: NodeMap(),
             method_map: FxHashMap(),
             upvar_capture_map: FxHashMap(),
+            liberated_gen_sigs: NodeMap(),
             closure_tys: NodeMap(),
             closure_kinds: NodeMap(),
             liberated_fn_sigs: NodeMap(),
@@ -542,6 +545,9 @@ pub struct GlobalCtxt<'tcx> {
     /// Used to prevent layout from recursing too deeply.
     pub layout_depth: Cell<usize>,
 
+    /// Layout for generators. Populated by MIR generation
+    pub generator_layout: RefCell<DefIdMap<GeneratorLayout<'tcx>>>,
+
     /// Map from function to the `#[derive]` mode that it's defining. Only used
     /// by `proc-macro` crates.
     pub derive_macros: RefCell<NodeMap<Symbol>>,
@@ -741,6 +747,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             layout_cache: RefCell::new(FxHashMap()),
             layout_interner: RefCell::new(FxHashSet()),
             layout_depth: Cell::new(0),
+            generator_layout: RefCell::new(FxHashMap()),
             derive_macros: RefCell::new(NodeMap()),
             stability_interner: RefCell::new(FxHashSet()),
             all_traits: RefCell::new(None),
@@ -1020,7 +1027,7 @@ impl<'a, 'tcx> TyCtxt<'a, 'tcx, 'tcx> {
     pub fn print_debug_stats(self) {
         sty_debug_print!(
             self,
-            TyAdt, TyArray, TySlice, TyRawPtr, TyRef, TyFnDef, TyFnPtr,
+            TyAdt, TyArray, TySlice, TyRawPtr, TyRef, TyFnDef, TyFnPtr, TyGenerator,
             TyDynamic, TyClosure, TyTuple, TyParam, TyInfer, TyProjection, TyAnon);
 
         println!("Substs interner: #{}", self.interners.substs.borrow().len());
@@ -1365,6 +1372,13 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                                           closure_substs: ClosureSubsts<'tcx>)
                                           -> Ty<'tcx> {
         self.mk_ty(TyClosure(closure_id, closure_substs))
+    }
+
+    pub fn mk_generator_from_closure_substs(self,
+                                          id: DefId,
+                                          closure_substs: ClosureSubsts<'tcx>)
+                                          -> Ty<'tcx> {
+        self.mk_ty(TyGenerator(id, closure_substs))
     }
 
     pub fn mk_var(self, v: TyVid) -> Ty<'tcx> {

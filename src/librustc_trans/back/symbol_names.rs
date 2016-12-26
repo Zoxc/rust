@@ -102,7 +102,7 @@ use monomorphize::Instance;
 use rustc::middle::weak_lang_items;
 use rustc::hir::def_id::DefId;
 use rustc::hir::map as hir_map;
-use rustc::ty::{self, Ty, TyCtxt, TypeFoldable};
+use rustc::ty::{self, Ty, TyCtxt, TypeFoldable, InstanceDef};
 use rustc::ty::fold::TypeVisitor;
 use rustc::ty::item_path::{self, ItemPathBuffer, RootMode};
 use rustc::ty::subst::Substs;
@@ -199,6 +199,12 @@ pub fn symbol_name<'a, 'tcx>(instance: Instance<'tcx>,
         tcx.sess.cstore.is_foreign_item(def_id)
     };
 
+    let is_gen = match instance.def {
+        InstanceDef::Generator(..) => true,
+        _ => false,
+    };
+
+    if !is_gen {
     if let Some(name) = weak_lang_items::link_name(&attrs) {
         return name.to_string();
     }
@@ -219,6 +225,7 @@ pub fn symbol_name<'a, 'tcx>(instance: Instance<'tcx>,
     if attr::contains_name(&attrs, "no_mangle") {
         // Don't mangle
         return tcx.item_name(def_id).as_str().to_string();
+    }
     }
 
     // We want to compute the "type" of this item. Unfortunately, some
@@ -257,6 +264,11 @@ pub fn symbol_name<'a, 'tcx>(instance: Instance<'tcx>,
     item_path::with_forced_absolute_paths(|| {
         tcx.push_item_path(&mut buffer, def_id);
     });
+
+    if is_gen {
+        buffer.push("{{generator}}");
+    }
+
     buffer.finish(&hash)
 }
 

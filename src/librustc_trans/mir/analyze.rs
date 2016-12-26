@@ -212,6 +212,7 @@ pub fn cleanup_kinds<'a, 'tcx>(mir: &mir::Mir<'tcx>) -> IndexVec<mir::BasicBlock
                 TerminatorKind::Call { cleanup: unwind, .. } |
                 TerminatorKind::Assert { cleanup: unwind, .. } |
                 TerminatorKind::DropAndReplace { unwind, .. } |
+                TerminatorKind::Suspend { drop: unwind, .. } |
                 TerminatorKind::Drop { unwind, .. } => {
                     if let Some(unwind) = unwind {
                         debug!("cleanup_kinds: {:?}/{:?} registering {:?} as funclet",

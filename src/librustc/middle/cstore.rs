@@ -29,6 +29,7 @@ use hir::map::definitions::{Definitions, DefKey, DisambiguatedDefPathData};
 use hir::svh::Svh;
 use ich;
 use middle::lang_items;
+use mir::GeneratorLayout;
 use ty::{self, TyCtxt};
 use session::Session;
 use session::search_paths::PathKind;
@@ -251,6 +252,8 @@ pub trait CrateStore {
     // misc. metadata
     fn item_body<'a, 'tcx>(&self, tcx: TyCtxt<'a, 'tcx, 'tcx>, def: DefId)
                            -> &'tcx hir::Body;
+    fn maybe_get_generator_layout<'a, 'tcx>(&self, tcx: TyCtxt<'a, 'tcx, 'tcx>, def: DefId)
+                                     -> Option<GeneratorLayout<'tcx>>;
     fn item_body_nested_bodies(&self, def: DefId) -> BTreeMap<hir::BodyId, hir::Body>;
     fn const_is_rvalue_promotable_to_static(&self, def: DefId) -> bool;
 
@@ -402,6 +405,10 @@ impl CrateStore for DummyCrateStore {
     fn item_body<'a, 'tcx>(&self, tcx: TyCtxt<'a, 'tcx, 'tcx>, def: DefId)
                            -> &'tcx hir::Body {
         bug!("item_body")
+    }
+    fn maybe_get_generator_layout<'a, 'tcx>(&self, tcx: TyCtxt<'a, 'tcx, 'tcx>, def: DefId)
+                                     -> Option<GeneratorLayout<'tcx>> {
+        bug!("maybe_get_generator_layout")
     }
     fn item_body_nested_bodies(&self, def: DefId) -> BTreeMap<hir::BodyId, hir::Body> {
         bug!("item_body_nested_bodies")

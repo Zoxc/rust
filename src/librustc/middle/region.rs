@@ -32,7 +32,7 @@ use syntax_pos::Span;
 
 use hir;
 use hir::intravisit::{self, Visitor, FnKind, NestedVisitorMap};
-use hir::{Block, Item, FnDecl, Arm, Pat, PatKind, Stmt, Expr, Local};
+use hir::{Body, Block, Item, FnDecl, Arm, Pat, PatKind, Stmt, Expr, Local};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Hash, RustcEncodable,
            RustcDecodable, Copy)]
@@ -1126,6 +1126,14 @@ fn resolve_item_like<'a, 'tcx, F>(visitor: &mut RegionResolutionVisitor<'tcx, 'a
     visitor.terminating_scopes = prev_ts;
 }
 
+fn resolve_body<'a, 'tcx>(visitor: &mut RegionResolutionVisitor<'tcx, 'a>,
+                        body: &'tcx hir::Body) {
+    if let Some(ref impl_arg) = body.impl_arg {
+        record_var_lifetime(visitor, impl_arg.id, impl_arg.span);
+    }
+    intravisit::walk_body(visitor, body);
+}
+
 fn resolve_fn<'a, 'tcx>(visitor: &mut RegionResolutionVisitor<'tcx, 'a>,
                         kind: FnKind<'tcx>,
                         decl: &'tcx hir::FnDecl,
@@ -1233,6 +1241,10 @@ impl<'hir, 'a> Visitor<'hir> for RegionResolutionVisitor<'hir, 'a> {
 
     fn visit_trait_item(&mut self, ti: &'hir hir::TraitItem) {
         resolve_item_like(self, ti.id, |this| intravisit::walk_trait_item(this, ti));
+    }
+
+    fn visit_body(&mut self, p: &'hir Body) {
+        resolve_body(self, p);
     }
 
     fn visit_fn(&mut self, fk: FnKind<'hir>, fd: &'hir FnDecl,
