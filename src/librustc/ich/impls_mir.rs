@@ -17,7 +17,7 @@ use rustc_data_structures::stable_hasher::{HashStable, StableHasher,
                                            StableHasherResult};
 use std::mem;
 
-
+impl_stable_hash_for!(struct mir::GeneratorLayout<'tcx> { fields });
 impl_stable_hash_for!(struct mir::SourceInfo { span, scope });
 impl_stable_hash_for!(enum mir::Mutability { Mut, Not });
 impl_stable_hash_for!(enum mir::BorrowKind { Shared, Unique, Mut });
@@ -53,9 +53,11 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for mir::Terminator<'t
             mir::TerminatorKind::SwitchInt { .. } |
             mir::TerminatorKind::Resume |
             mir::TerminatorKind::Return |
+            mir::TerminatorKind::GeneratorDrop |
             mir::TerminatorKind::Unreachable |
             mir::TerminatorKind::Drop { .. } |
             mir::TerminatorKind::DropAndReplace { .. } |
+            mir::TerminatorKind::Suspend { .. } |
             mir::TerminatorKind::Call { .. } => false,
         };
 
@@ -143,6 +145,7 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for mir::TerminatorKin
             }
             mir::TerminatorKind::Resume |
             mir::TerminatorKind::Return |
+            mir::TerminatorKind::GeneratorDrop |
             mir::TerminatorKind::Unreachable => {}
             mir::TerminatorKind::Drop { ref location, target, unwind } => {
                 location.hash_stable(hcx, hasher);
@@ -157,6 +160,13 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for mir::TerminatorKin
                 value.hash_stable(hcx, hasher);
                 target.hash_stable(hcx, hasher);
                 unwind.hash_stable(hcx, hasher);
+            }
+            mir::TerminatorKind::Suspend { ref value,
+                                        resume,
+                                        drop } => {
+                value.hash_stable(hcx, hasher);
+                resume.hash_stable(hcx, hasher);
+                drop.hash_stable(hcx, hasher);
             }
             mir::TerminatorKind::Call { ref func,
                                         ref args,
@@ -196,6 +206,8 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for mir::AssertMessage
             mir::AssertMessage::Math(ref const_math_err) => {
                 const_math_err.hash_stable(hcx, hasher);
             }
+            mir::AssertMessage::GeneratorResumedAfterReturn => (),
+            mir::AssertMessage::GeneratorResumedAfterPanic => (),
         }
     }
 }
@@ -395,7 +407,8 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for mir::AggregateKind
                 substs.hash_stable(hcx, hasher);
                 active_field.hash_stable(hcx, hasher);
             }
-            mir::AggregateKind::Closure(def_id, ref substs) => {
+            mir::AggregateKind::Closure(def_id, ref substs) |
+            mir::AggregateKind::Generator(def_id, ref substs) => {
                 def_id.hash_stable(hcx, hasher);
                 substs.hash_stable(hcx, hasher);
             }

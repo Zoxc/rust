@@ -144,6 +144,7 @@ mod cast;
 mod closure;
 mod callee;
 mod compare_method;
+mod generator_interior;
 mod intrinsic;
 mod op;
 
@@ -173,6 +174,8 @@ pub struct Inherited<'a, 'gcx: 'a+'tcx, 'tcx: 'a> {
     deferred_call_resolutions: RefCell<DefIdMap<Vec<DeferredCallResolution<'gcx, 'tcx>>>>,
 
     deferred_cast_checks: RefCell<Vec<cast::CastCheck<'tcx>>>,
+
+    deferred_generator_interiors: RefCell<Vec<(hir::BodyId, Ty<'tcx>)>>,
 
     // Anonymized types found in explicit return types and their
     // associated fresh inference variable. Writeback resolves these
@@ -466,6 +469,9 @@ pub struct FnCtxt<'a, 'gcx: 'a+'tcx, 'tcx: 'a> {
 
     ret_coercion: Option<RefCell<DynamicCoerceMany<'gcx, 'tcx>>>,
 
+    suspend_ty: Option<Ty<'tcx>>,
+    impl_arg_ty: Option<Ty<'tcx>>,
+
     ps: RefCell<UnsafetyState>,
 
     /// Whether the last checked node generates a divergence (e.g.,
@@ -567,6 +573,7 @@ impl<'a, 'gcx, 'tcx> Inherited<'a, 'gcx, 'tcx> {
             locals: RefCell::new(NodeMap()),
             deferred_call_resolutions: RefCell::new(DefIdMap()),
             deferred_cast_checks: RefCell::new(Vec::new()),
+            deferred_generator_interiors: RefCell::new(Vec::new()),
             anon_types: RefCell::new(NodeMap()),
             implicit_region_bound,
         }
@@ -684,9 +691,65 @@ pub fn provide(providers: &mut Providers) {
         has_typeck_tables,
         closure_type,
         closure_kind,
+        generator_sig,
+        is_generator,
         adt_destructor,
         ..*providers
     };
+}
+
+fn is_generator<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
+                          def_id: DefId)
+                          -> bool {
+    let id = tcx.hir.as_local_node_id(def_id).unwrap();
+
+    // Figure out what primary body this item has.
+    let body_id = match tcx.hir.get(id) {
+        hir::map::NodeItem(item) => {
+            match item.node {
+                hir::ItemConst(_, body) |
+                hir::ItemStatic(_, _, body) => body,
+                hir::ItemFn(.., body) => body,
+                _ => return false,
+            }
+        }
+        hir::map::NodeTraitItem(item) => {
+            match item.node {
+                hir::TraitItemKind::Const(_, Some(body)) => body,
+                hir::TraitItemKind::Method(_,
+                    hir::TraitMethod::Provided(body)) => body,
+                _ => return false,
+            }
+        }
+        hir::map::NodeImplItem(item) => {
+            match item.node {
+                hir::ImplItemKind::Const(_, body) => body,
+                hir::ImplItemKind::Method(_, body) => body,
+                _ => return false,
+            }
+        }
+        hir::map::NodeExpr(expr) => {
+            // FIXME(eddyb) Closures should have separate
+            // function definition IDs and expression IDs.
+            // Type-checking should not let closures get
+            // this far in a constant position.
+            // Assume that everything other than closures
+            // is a constant "initializer" expression.
+            match expr.node {
+                hir::ExprClosure(_, _, body, _) => body,
+                _ => return false,
+            }
+        }
+        _ => return false,
+    };
+    tcx.hir.body(body_id).is_generator()
+}
+
+fn generator_sig<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
+                          def_id: DefId)
+                          -> Option<ty::PolyGenSig<'tcx>> {
+    let node_id = tcx.hir.as_local_node_id(def_id).unwrap();
+    tcx.typeck_tables_of(def_id).liberated_gen_sigs[&node_id].map(|s| ty::Binder(s))
 }
 
 fn closure_type<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
@@ -821,7 +884,7 @@ fn typeck_tables_of<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                                                   param_env,
                                                   &fn_sig);
 
-            check_fn(&inh, param_env, fn_sig, decl, id, body)
+            check_fn(&inh, param_env, fn_sig, decl, id, Substs::identity_for_item(tcx, def_id), body)
         } else {
             let fcx = FnCtxt::new(&inh, param_env, body.value.id);
             let expected_type = tcx.type_of(def_id);
@@ -843,6 +906,7 @@ fn typeck_tables_of<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
         fcx.closure_analyze(body);
         fcx.select_obligations_where_possible();
         fcx.check_casts();
+        fcx.find_generator_interiors(def_id);
         fcx.select_all_obligations_or_error();
 
         if fn_decl.is_some() {
@@ -936,6 +1000,7 @@ fn check_fn<'a, 'gcx, 'tcx>(inherited: &'a Inherited<'a, 'gcx, 'tcx>,
                             fn_sig: ty::FnSig<'tcx>,
                             decl: &'gcx hir::FnDecl,
                             fn_id: ast::NodeId,
+                            substs: &'tcx Substs<'tcx>,
                             body: &'gcx hir::Body)
                             -> FnCtxt<'a, 'gcx, 'tcx>
 {
@@ -951,7 +1016,6 @@ fn check_fn<'a, 'gcx, 'tcx>(inherited: &'a Inherited<'a, 'gcx, 'tcx>,
     let ret_ty = fn_sig.output();
     fcx.require_type_is_sized(ret_ty, decl.output.span(), traits::ReturnType);
     let ret_ty = fcx.instantiate_anon_types(&ret_ty);
-    fcx.ret_coercion = Some(RefCell::new(CoerceMany::new(ret_ty)));
     fn_sig = fcx.tcx.mk_fn_sig(
         fn_sig.inputs().iter().cloned(),
         ret_ty,
@@ -959,6 +1023,21 @@ fn check_fn<'a, 'gcx, 'tcx>(inherited: &'a Inherited<'a, 'gcx, 'tcx>,
         fn_sig.unsafety,
         fn_sig.abi
     );
+
+    let def_id = fcx.tcx.hir.local_def_id(fn_id);
+    let span = body.value.span;
+
+    let real_ret_ty = if let Some(ref impl_arg) = body.impl_arg {
+        //fcx.impl_arg_ty = Some(fcx.infcx.type_var_for_impl_arg(span, def_id));
+        fcx.impl_arg_ty = Some(fcx.next_ty_var(TypeVariableOrigin::TypeInference(span)));
+        fcx.write_ty(impl_arg.id, fcx.impl_arg_ty.unwrap());
+        fcx.suspend_ty = Some(fcx.next_ty_var(TypeVariableOrigin::TypeInference(span)));
+        fcx.next_ty_var(TypeVariableOrigin::TypeInference(span))
+    } else {
+        ret_ty
+    };
+
+    fcx.ret_coercion = Some(RefCell::new(CoerceMany::new(real_ret_ty)));
 
     GatherLocalsVisitor { fcx: &fcx, }.visit_body(body);
 
@@ -977,6 +1056,37 @@ fn check_fn<'a, 'gcx, 'tcx>(inherited: &'a Inherited<'a, 'gcx, 'tcx>,
         fcx.write_ty(arg.id, arg_ty);
     }
 
+    if body.is_generator() {
+        let gen_sig = ty::GenSig {
+            impl_arg_ty: fcx.impl_arg_ty.unwrap(),
+            suspend_ty: fcx.suspend_ty.unwrap(),
+            return_ty: real_ret_ty,
+        };
+        inherited.tables.borrow_mut().liberated_gen_sigs.insert(fn_id, Some(gen_sig));
+
+        let closure_substs = ty::ClosureSubsts {
+            substs: substs,
+        };
+        let witness = fcx.next_ty_var(TypeVariableOrigin::MiscVariable(span));
+        fcx.deferred_generator_interiors.borrow_mut().push((body.id(), witness));
+        let interior = ty::GeneratorInterior::new(witness);
+        let gen_ty = fcx.tcx.mk_generator(def_id, closure_substs, interior);
+
+        inherited.tables.borrow_mut().generator_interiors.insert(fn_id, interior);
+
+
+
+        match fcx.at(&fcx.misc(span), fcx.param_env).eq(gen_ty, ret_ty) {
+            Ok(ok) => fcx.register_infer_ok_obligations(ok),
+            Err(_) => {
+                struct_span_err!(fcx.tcx.sess, span, E0801,
+                                 "body is a generator, but the return type is not a generator")
+                                 .emit();
+            }
+        }
+    } else {
+        inherited.tables.borrow_mut().liberated_gen_sigs.insert(fn_id, None);
+    }
     inherited.tables.borrow_mut().liberated_fn_sigs.insert(fn_id, fn_sig);
 
     fcx.check_return_expr(&body.value);
@@ -1008,9 +1118,9 @@ fn check_fn<'a, 'gcx, 'tcx>(inherited: &'a Inherited<'a, 'gcx, 'tcx>,
     let mut actual_return_ty = coercion.complete(&fcx);
     if actual_return_ty.is_never() {
         actual_return_ty = fcx.next_diverging_ty_var(
-            TypeVariableOrigin::DivergingFn(body.value.span));
+            TypeVariableOrigin::DivergingFn(span));
     }
-    fcx.demand_suptype(body.value.span, ret_ty, actual_return_ty);
+    fcx.demand_suptype(span, real_ret_ty, actual_return_ty);
 
     fcx
 }
@@ -1642,6 +1752,8 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
             param_env,
             err_count_on_creation: inh.tcx.sess.err_count(),
             ret_coercion: None,
+            suspend_ty: None,
+            impl_arg_ty: None,
             ps: RefCell::new(UnsafetyState::function(hir::Unsafety::Normal,
                                                      ast::CRATE_NODE_ID)),
             diverges: Cell::new(Diverges::Maybe),
@@ -2054,6 +2166,13 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
         let mut deferred_cast_checks = self.deferred_cast_checks.borrow_mut();
         for cast in deferred_cast_checks.drain(..) {
             cast.check(self);
+        }
+    }
+
+    fn find_generator_interiors(&self, def_id: DefId) {
+        let mut deferred_generator_interiors = self.deferred_generator_interiors.borrow_mut();
+        for (body_id, witness) in deferred_generator_interiors.drain(..) {
+            generator_interior::find_interior(self, def_id, body_id, witness);
         }
     }
 
@@ -3901,6 +4020,30 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
                   }
               }
            }
+          hir::ExprImplArg(_) => {
+            match self.impl_arg_ty {
+                Some(ty) => {
+                    ty
+                }
+                None => {
+                    struct_span_err!(self.tcx.sess, expr.span, E0803,
+                                 "impl arg expression outside of function body").emit();
+                    tcx.types.err
+                }
+            }
+          }
+          hir::ExprSuspend(ref value) => {
+            match self.suspend_ty {
+                Some(ty) => {
+                    self.check_expr_coercable_to_type(&value, ty);
+                }
+                None => {
+                    struct_span_err!(self.tcx.sess, expr.span, E0802,
+                                 "yield statement outside of function body").emit();
+                }
+            }
+            tcx.mk_nil()
+          }
         }
     }
 

@@ -478,11 +478,18 @@ impl<'a, 'gcx, 'tcx> AdjustBorrowKind<'a, 'gcx, 'tcx> {
 
     fn adjust_closure_kind(&mut self,
                            closure_id: ast::NodeId,
-                           new_kind: ty::ClosureKind,
+                           mut new_kind: ty::ClosureKind,
                            upvar_span: Span,
                            var_name: ast::Name) {
         debug!("adjust_closure_kind(closure_id={}, new_kind={:?}, upvar_span={:?}, var_name={})",
                closure_id, new_kind, upvar_span, var_name);
+
+        // Generators cannot be FnMut, use FnOnce instead
+        let tcx = self.fcx.tcx;
+        if new_kind == ty::ClosureKind::FnMut &&
+                tcx.is_generator(tcx.hir.local_def_id(closure_id)) {
+            new_kind = ty::ClosureKind::FnOnce;
+        }
 
         if let Some(&(existing_kind, _)) = self.temp_closure_kinds.get(&closure_id) {
             debug!("adjust_closure_kind: closure_id={}, existing_kind={:?}, new_kind={:?}",

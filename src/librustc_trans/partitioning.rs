@@ -433,7 +433,13 @@ fn characteristic_def_id_of_trans_item<'a, 'tcx>(scx: &SharedCrateContext<'a, 't
     match trans_item {
         TransItem::Fn(instance) => {
             let def_id = match instance.def {
-                ty::InstanceDef::Item(def_id) => def_id,
+                ty::InstanceDef::Item(def_id) => {
+                    if tcx.is_generator(def_id) {
+                        return None;
+                    }
+                    def_id
+                },
+                ty::InstanceDef::Generator(def_id) => def_id,
                 ty::InstanceDef::FnPtrShim(..) |
                 ty::InstanceDef::ClosureOnceShim { .. } |
                 ty::InstanceDef::Intrinsic(..) |

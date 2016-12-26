@@ -136,6 +136,12 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for ty::UpvarCapture<'
     }
 }
 
+impl_stable_hash_for!(struct ty::GenSig<'tcx> {
+    impl_arg_ty,
+    suspend_ty,
+    return_ty
+});
+
 impl_stable_hash_for!(struct ty::FnSig<'tcx> {
     inputs_and_output,
     variadic,
@@ -307,6 +313,8 @@ for ::middle::const_val::ConstVal<'tcx> {
 }
 
 impl_stable_hash_for!(struct ty::ClosureSubsts<'tcx> { substs });
+
+impl_stable_hash_for!(tuple_struct ty::GeneratorInterior<'tcx> { ty });
 
 impl_stable_hash_for!(struct ty::GenericPredicates<'tcx> {
     parent,
@@ -526,9 +534,16 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for ty::TypeVariants<'
                 existential_predicates.hash_stable(hcx, hasher);
                 region.hash_stable(hcx, hasher);
             }
-            TyClosure(def_id, closure_substs) => {
+            TyClosure(def_id, closure_substs)
+             => {
                 def_id.hash_stable(hcx, hasher);
                 closure_substs.hash_stable(hcx, hasher);
+            }
+            TyGenerator(def_id, closure_substs, interior)
+             => {
+                def_id.hash_stable(hcx, hasher);
+                closure_substs.hash_stable(hcx, hasher);
+                interior.hash_stable(hcx, hasher);
             }
             TyTuple(inner_tys, from_diverging_type_var) => {
                 inner_tys.hash_stable(hcx, hasher);
@@ -607,6 +622,8 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for ty::TypeckTables<'
             ref upvar_capture_map,
             ref closure_tys,
             ref closure_kinds,
+            ref generator_interiors,
+            ref liberated_gen_sigs,
             ref liberated_fn_sigs,
             ref fru_field_types,
 
@@ -637,6 +654,8 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for ty::TypeckTables<'
 
             ich::hash_stable_nodemap(hcx, hasher, closure_tys);
             ich::hash_stable_nodemap(hcx, hasher, closure_kinds);
+            ich::hash_stable_nodemap(hcx, hasher, generator_interiors);
+            ich::hash_stable_nodemap(hcx, hasher, liberated_gen_sigs);
             ich::hash_stable_nodemap(hcx, hasher, liberated_fn_sigs);
             ich::hash_stable_nodemap(hcx, hasher, fru_field_types);
             ich::hash_stable_nodemap(hcx, hasher, cast_kinds);

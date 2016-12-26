@@ -70,12 +70,11 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
         // inference phase (`upvar.rs`).
         let base_substs = Substs::identity_for_item(self.tcx,
             self.tcx.closure_base_def_id(expr_def_id));
-        let closure_type = self.tcx.mk_closure(expr_def_id,
-            base_substs.extend_to(self.tcx, expr_def_id,
+        let substs = base_substs.extend_to(self.tcx, expr_def_id,
                 |_, _| span_bug!(expr.span, "closure has region param"),
                 |_, _| self.infcx.next_ty_var(TypeVariableOrigin::TransformedUpvar(expr.span))
-            )
         );
+        let closure_type = self.tcx.mk_closure(expr_def_id, substs.clone());
 
         debug!("check_closure: expr.id={:?} closure_type={:?}", expr.id, closure_type);
 
@@ -85,7 +84,7 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
                                                             self.param_env,
                                                             &fn_sig);
 
-        check_fn(self, self.param_env, fn_sig, decl, expr.id, body);
+        check_fn(self, self.param_env, fn_sig, decl, expr.id, substs, body);
 
         // Tuple up the arguments and insert the resulting function type into
         // the `closures` table.

@@ -91,6 +91,16 @@ pub fn type_pair_fields<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, ty: Ty<'tcx>)
                 }
             }))
         }
+        ty::TyGenerator(def_id, substs, _) => {
+            let mut tys = substs.field_tys(def_id, ccx.tcx());
+            tys.next().and_then(|first_ty| tys.next().and_then(|second_ty| {
+                if tys.next().is_some() {
+                    None
+                } else {
+                    Some([first_ty, second_ty])
+                }
+            }))
+        }
         ty::TyTuple(tys, _) => {
             if tys.len() != 2 {
                 return None;
