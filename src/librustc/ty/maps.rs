@@ -504,8 +504,13 @@ macro_rules! define_maps {
 
         impl<$tcx> Query<$tcx> {
             pub fn describe(&self, tcx: TyCtxt) -> String {
-                match *self {
-                    $(Query::$name(key) => queries::$name::describe(tcx, key)),*
+                let (r, name) = match *self {
+                    $(Query::$name(key) => (queries::$name::describe(tcx, key), stringify!($name))),*
+                };
+                if tcx.sess.verbose() {
+                    format!("{} [{}]", r, name)
+                } else {
+                    r
                 }
             }
         }
@@ -848,6 +853,10 @@ define_maps! { <'tcx>
     /// Records the type of each closure. The def ID is the ID of the
     /// expression defining the closure.
     [] closure_type: ItemSignature(DefId) -> ty::PolyFnSig<'tcx>,
+
+    /// Records the signature of each generator. The def ID is the ID of the
+    /// expression defining the closure or function.
+    [] generator_sig: TypeckTables(DefId) -> Option<ty::PolyGenSig<'tcx>>,
 
     /// Caches CoerceUnsized kinds for impls on custom types.
     [] coerce_unsized_info: ItemSignature(DefId)

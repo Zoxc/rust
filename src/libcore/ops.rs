@@ -3019,3 +3019,32 @@ pub trait Try {
     #[unstable(feature = "try_trait", issue = "42327")]
     fn from_ok(v: Self::Ok) -> Self;
 }
+
+/// The result of a generator resumption.
+#[derive(Debug)]
+#[cfg(not(stage0))]
+#[lang = "generator_state"]
+#[unstable(feature = "generator_trait", issue = "0")]
+pub enum State<Y, R> {
+    /// The generator suspended with a value.
+    Yielded(Y),
+
+    /// The generator completed with a return value.
+    Complete(R),
+}
+
+/// The trait implemented by builtin generator types.
+#[cfg(not(stage0))]
+#[lang = "generator"]
+#[unstable(feature = "generator_trait", issue = "0")]
+#[fundamental]
+pub trait Generator<Arg = ()> {
+    /// The type of value this generator yields.
+    type Yield;
+
+    /// The type of value this generator returns.
+    type Return;
+
+    /// This resumes the execution of the generator. 
+    fn resume(&mut self, arg: Arg) -> State<Self::Yield, Self::Return>;
+}

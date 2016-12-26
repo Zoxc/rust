@@ -237,6 +237,7 @@ pub enum ExprKind<'tcx> {
         closure_id: DefId,
         substs: ClosureSubsts<'tcx>,
         upvars: Vec<ExprRef<'tcx>>,
+        generator: bool,
     },
     Literal {
         literal: Literal<'tcx>,
@@ -245,6 +246,10 @@ pub enum ExprKind<'tcx> {
         asm: &'tcx hir::InlineAsm,
         outputs: Vec<ExprRef<'tcx>>,
         inputs: Vec<ExprRef<'tcx>>
+    },
+    ImplArg,
+    Suspend {
+        value: ExprRef<'tcx>,
     },
 }
 

@@ -1173,13 +1173,23 @@ impl<'a, 'b: 'a, 'tcx: 'b> IsolatedEncoder<'a, 'b, 'tcx> {
         debug!("IsolatedEncoder::encode_info_for_closure({:?})", def_id);
         let tcx = self.tcx;
 
-        let data = ClosureData {
-            kind: tcx.closure_kind(def_id),
-            ty: self.lazy(&tcx.closure_type(def_id)),
+        let kind = if let Some(sig) = self.tcx.generator_sig(def_id) {
+            let layout = self.tcx.generator_layout(def_id);
+            let data = GeneratorData {
+                sig,
+                layout: layout.clone(),
+            };
+            EntryKind::Generator(self.lazy(&data))
+        } else {
+            let data = ClosureData {
+                kind: tcx.closure_kind(def_id),
+                ty: self.lazy(&tcx.closure_type(def_id)),
+            };
+            EntryKind::Closure(self.lazy(&data))
         };
 
         Entry {
-            kind: EntryKind::Closure(self.lazy(&data)),
+            kind,
             visibility: self.lazy(&ty::Visibility::Public),
             span: self.lazy(&tcx.def_span(def_id)),
             attributes: self.encode_attributes(&tcx.get_attrs(def_id)),

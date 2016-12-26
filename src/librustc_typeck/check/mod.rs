@@ -144,6 +144,7 @@ mod cast;
 mod closure;
 mod callee;
 mod compare_method;
+mod generator_interior;
 mod intrinsic;
 mod op;
 
@@ -202,6 +203,8 @@ pub struct Inherited<'a, 'gcx: 'a+'tcx, 'tcx: 'a> {
     deferred_call_resolutions: RefCell<DefIdMap<Vec<DeferredCallResolution<'gcx, 'tcx>>>>,
 
     deferred_cast_checks: RefCell<Vec<cast::CastCheck<'tcx>>>,
+
+    deferred_generator_interiors: RefCell<Vec<(hir::BodyId, Ty<'tcx>)>>,
 
     // Anonymized types found in explicit return types and their
     // associated fresh inference variable. Writeback resolves these
@@ -495,6 +498,9 @@ pub struct FnCtxt<'a, 'gcx: 'a+'tcx, 'tcx: 'a> {
 
     ret_coercion: Option<RefCell<DynamicCoerceMany<'gcx, 'tcx>>>,
 
+    suspend_ty: Option<Ty<'tcx>>,
+    impl_arg_ty: Option<Ty<'tcx>>,
+
     ps: RefCell<UnsafetyState>,
 
     /// Whether the last checked node generates a divergence (e.g.,
@@ -598,6 +604,7 @@ impl<'a, 'gcx, 'tcx> Inherited<'a, 'gcx, 'tcx> {
             locals: RefCell::new(NodeMap()),
             deferred_call_resolutions: RefCell::new(DefIdMap()),
             deferred_cast_checks: RefCell::new(Vec::new()),
+            deferred_generator_interiors: RefCell::new(Vec::new()),
             anon_types: RefCell::new(NodeMap()),
             implicit_region_bound,
         }
@@ -715,9 +722,17 @@ pub fn provide(providers: &mut Providers) {
         has_typeck_tables,
         closure_type,
         closure_kind,
+        generator_sig,
         adt_destructor,
         ..*providers
     };
+}
+
+fn generator_sig<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
+                          def_id: DefId)
+                          -> Option<ty::PolyGenSig<'tcx>> {
+    let node_id = tcx.hir.as_local_node_id(def_id).unwrap();
+    tcx.typeck_tables_of(def_id).generator_sigs[&node_id].map(|s| ty::Binder(s))
 }
 
 fn closure_type<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
@@ -852,7 +867,7 @@ fn typeck_tables_of<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                                                   param_env,
                                                   &fn_sig);
 
-            check_fn(&inh, param_env, fn_sig, decl, id, body)
+            check_fn(&inh, param_env, fn_sig, decl, id, body).0
         } else {
             let fcx = FnCtxt::new(&inh, param_env, body.value.id);
             let expected_type = tcx.type_of(def_id);
@@ -874,6 +889,7 @@ fn typeck_tables_of<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
         fcx.closure_analyze(body);
         fcx.select_obligations_where_possible();
         fcx.check_casts();
+        fcx.find_generator_interiors(def_id);
         fcx.select_all_obligations_or_error();
 
         if fn_decl.is_some() {
@@ -968,7 +984,7 @@ fn check_fn<'a, 'gcx, 'tcx>(inherited: &'a Inherited<'a, 'gcx, 'tcx>,
                             decl: &'gcx hir::FnDecl,
                             fn_id: ast::NodeId,
                             body: &'gcx hir::Body)
-                            -> FnCtxt<'a, 'gcx, 'tcx>
+                            -> (FnCtxt<'a, 'gcx, 'tcx>, Option<ty::GeneratorInterior<'tcx>>)
 {
     let mut fn_sig = fn_sig.clone();
 
@@ -991,6 +1007,24 @@ fn check_fn<'a, 'gcx, 'tcx>(inherited: &'a Inherited<'a, 'gcx, 'tcx>,
         fn_sig.abi
     );
 
+    let def_id = fcx.tcx.hir.local_def_id(fn_id);
+    let span = body.value.span;
+
+    if let Some(ref impl_arg) = body.impl_arg {
+        let impl_arg_ty = fcx.infcx.type_var_for_impl_arg(span, def_id);
+
+        // Require impl_arg: 'static
+        let cause = traits::ObligationCause::new(span, body.value.id, traits::MiscObligation);;
+        fcx.register_region_obligation(impl_arg_ty, fcx.tcx.types.re_static, cause);
+
+        fcx.impl_arg_ty = Some(impl_arg_ty);
+
+        // Write the type to the impl arg id
+        fcx.write_ty(impl_arg.id, impl_arg_ty);
+
+        fcx.suspend_ty = Some(fcx.next_ty_var(TypeVariableOrigin::TypeInference(span)));
+    }
+
     GatherLocalsVisitor { fcx: &fcx, }.visit_body(body);
 
     // Add formal parameters.
@@ -1008,6 +1042,25 @@ fn check_fn<'a, 'gcx, 'tcx>(inherited: &'a Inherited<'a, 'gcx, 'tcx>,
         fcx.write_ty(arg.id, arg_ty);
     }
 
+    let gen_ty = if body.is_generator() {
+        let gen_sig = ty::GenSig {
+            impl_arg_ty: fcx.impl_arg_ty.unwrap(),
+            suspend_ty: fcx.suspend_ty.unwrap(),
+            return_ty: ret_ty,
+        };
+        inherited.tables.borrow_mut().generator_sigs.insert(fn_id, Some(gen_sig));
+
+        let witness = fcx.next_ty_var(TypeVariableOrigin::MiscVariable(span));
+        fcx.deferred_generator_interiors.borrow_mut().push((body.id(), witness));
+        let interior = ty::GeneratorInterior::new(witness);
+
+        inherited.tables.borrow_mut().generator_interiors.insert(fn_id, interior);
+
+        Some(interior)
+    } else {
+        inherited.tables.borrow_mut().generator_sigs.insert(fn_id, None);
+        None
+    };
     inherited.tables.borrow_mut().liberated_fn_sigs.insert(fn_id, fn_sig);
 
     fcx.check_return_expr(&body.value);
@@ -1039,11 +1092,11 @@ fn check_fn<'a, 'gcx, 'tcx>(inherited: &'a Inherited<'a, 'gcx, 'tcx>,
     let mut actual_return_ty = coercion.complete(&fcx);
     if actual_return_ty.is_never() {
         actual_return_ty = fcx.next_diverging_ty_var(
-            TypeVariableOrigin::DivergingFn(body.value.span));
+            TypeVariableOrigin::DivergingFn(span));
     }
-    fcx.demand_suptype(body.value.span, ret_ty, actual_return_ty);
+    fcx.demand_suptype(span, ret_ty, actual_return_ty);
 
-    fcx
+    (fcx, gen_ty)
 }
 
 fn check_struct<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
@@ -1673,6 +1726,8 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
             param_env,
             err_count_on_creation: inh.tcx.sess.err_count(),
             ret_coercion: None,
+            suspend_ty: None,
+            impl_arg_ty: None,
             ps: RefCell::new(UnsafetyState::function(hir::Unsafety::Normal,
                                                      ast::CRATE_NODE_ID)),
             diverges: Cell::new(Diverges::Maybe),
@@ -2077,6 +2132,13 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
         let mut deferred_cast_checks = self.deferred_cast_checks.borrow_mut();
         for cast in deferred_cast_checks.drain(..) {
             cast.check(self);
+        }
+    }
+
+    fn find_generator_interiors(&self, def_id: DefId) {
+        let mut deferred_generator_interiors = self.deferred_generator_interiors.borrow_mut();
+        for (body_id, witness) in deferred_generator_interiors.drain(..) {
+            generator_interior::find_interior(self, def_id, body_id, witness);
         }
     }
 
@@ -2517,7 +2579,8 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
                 }
 
                 let is_closure = match arg.node {
-                    hir::ExprClosure(..) => true,
+                    // TODO: Should this be applied for generators?
+                    hir::ExprClosure(.., None) => true,
                     _ => false
                 };
 
@@ -3730,7 +3793,7 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
           hir::ExprMatch(ref discrim, ref arms, match_src) => {
             self.check_match(expr, &discrim, arms, expected, match_src)
           }
-          hir::ExprClosure(capture, ref decl, body_id, _) => {
+          hir::ExprClosure(capture, ref decl, body_id, _, _) => {
               self.check_expr_closure(expr, capture, &decl, body_id, expected)
           }
           hir::ExprBlock(ref body) => {
@@ -3924,6 +3987,30 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
                   }
               }
            }
+          hir::ExprImplArg(_) => {
+            match self.impl_arg_ty {
+                Some(ty) => {
+                    ty
+                }
+                None => {
+                    struct_span_err!(self.tcx.sess, expr.span, E0803,
+                                 "impl arg expression outside of function body").emit();
+                    tcx.types.err
+                }
+            }
+          }
+          hir::ExprSuspend(ref value) => {
+            match self.suspend_ty {
+                Some(ty) => {
+                    self.check_expr_coercable_to_type(&value, ty);
+                }
+                None => {
+                    struct_span_err!(self.tcx.sess, expr.span, E0802,
+                                 "yield statement outside of function body").emit();
+                }
+            }
+            tcx.mk_nil()
+          }
         }
     }
 
