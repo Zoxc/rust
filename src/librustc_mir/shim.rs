@@ -15,14 +15,21 @@ use rustc::middle::region::ROOT_CODE_EXTENT;
 use rustc::middle::const_val::ConstVal;
 use rustc::mir::*;
 use rustc::mir::transform::MirSource;
+use rustc::traits::Reveal;
 use rustc::ty::{self, Ty};
 use rustc::ty::subst::{Kind, Subst};
 use rustc::ty::maps::Providers;
 
+use hair::cx::Cx;
+
+use mir_map;
+
+use rustc_const_math::ConstInt;
 use rustc_data_structures::indexed_vec::{IndexVec, Idx};
 
 use syntax::abi::Abi;
 use syntax::ast;
+use syntax::symbol::keywords;
 use syntax_pos::Span;
 
 use std::cell::RefCell;
@@ -49,8 +56,14 @@ fn make_shim<'a, 'tcx>(tcx: ty::TyCtxt<'a, 'tcx, 'tcx>,
         tcx.construct_parameter_environment(span, did, ROOT_CODE_EXTENT);
 
     let mut result = match instance {
-        ty::InstanceDef::Item(..) =>
-            bug!("item {:?} passed to make_shim", instance),
+        ty::InstanceDef::Item(did) =>
+            if tcx.item_generator(did) {
+                build_generator_shim(tcx, &param_env, did)
+            } else {
+                bug!("item {:?} passed to make_shim", instance)
+            },
+        ty::InstanceDef::Generator(..) =>
+            bug!("generator {:?} passed to make_shim", instance),
         ty::InstanceDef::FnPtrShim(def_id, ty) => {
             let trait_ = tcx.trait_of_item(def_id).unwrap();
             let adjustment = match tcx.lang_items.fn_trait_kind(trait_) {
@@ -188,6 +201,7 @@ fn build_drop_shim<'a, 'tcx>(tcx: ty::TyCtxt<'a, 'tcx, 'tcx>,
         ),
         IndexVec::new(),
         sig.output(),
+        None,
         local_decls_for_sig(&sig),
         sig.inputs().len(),
         vec![],
@@ -409,6 +423,7 @@ fn build_call_shim<'a, 'tcx>(tcx: ty::TyCtxt<'a, 'tcx, 'tcx>,
         ),
         IndexVec::new(),
         sig.output(),
+        None,
         local_decls,
         sig.inputs().len(),
         vec![],
@@ -417,6 +432,188 @@ fn build_call_shim<'a, 'tcx>(tcx: ty::TyCtxt<'a, 'tcx, 'tcx>,
     if let Abi::RustCall = sig.abi {
         mir.spread_arg = Some(Local::new(sig.inputs().len()));
     }
+    mir
+}
+
+/// Build a "generator" shim for `def_id`. The shim constructs the generator
+fn build_generator_shim<'a, 'tcx>(tcx: ty::TyCtxt<'a, 'tcx, 'tcx>,
+                             param_env: &ty::ParameterEnvironment<'tcx>,
+                             def_id: DefId)
+                             -> Mir<'tcx>
+{
+    debug!("build_generator_shim(def_id={:?})",
+           def_id);
+
+    let node_id = tcx.hir.as_local_node_id(def_id).unwrap();
+
+    let sig = tcx.item_tables(def_id).liberated_fn_sigs[&node_id].clone();
+    let span = tcx.def_span(def_id);
+
+    debug!("build_generator_shim: sig={:?}", sig);
+
+    let ty = tcx.item_type(def_id);
+    let mut abi = sig.abi;
+    let is_closure = if let ty::TyClosure(..) = ty.sty {
+        // HACK(eddyb) Avoid having RustCall on closures,
+        // as it adds unnecessary (and wrong) auto-tupling.
+        abi = Abi::Rust;
+        true
+    } else {
+        false
+    };
+    
+    let mut local_decls = local_decls_for_sig(&sig);
+    let source_info = SourceInfo { span, scope: ARGUMENT_VISIBILITY_SCOPE };
+
+    let mut blocks = IndexVec::new();
+
+    let mut statements = vec![];
+
+    let substs = ty::ClosureSubsts {
+        substs:param_env.free_substs
+    };
+
+    let mut args = vec![];
+
+    let upvars = if is_closure {
+        let body_id = match tcx.hir.get(node_id) {
+            hir::map::NodeExpr(expr) => {
+                // FIXME(eddyb) Closures should have separate
+                // function definition IDs and expression IDs.
+                // Type-checking should not let closures get
+                // this far in a constant position.
+                // Assume that everything other than closures
+                // is a constant "initializer" expression.
+                match expr.node {
+                    hir::ExprClosure(_, _, body, _) => body,
+                    _ => bug!()
+                }
+            }
+            _ => bug!()
+        };
+
+        let by_val = tcx.closure_kind(def_id) == ty::ClosureKind::FnOnce;
+
+        let closure_by_val_ty = tcx.body_tables(body_id).node_id_to_type(node_id);
+
+        let closure_ty = mir_map::closure_self_ty(tcx, node_id, body_id);
+
+        local_decls.raw.insert(1, LocalDecl {
+            mutability: Mutability::Not,
+            ty: closure_ty,
+            name: None,
+            source_info: None
+        });
+
+        let src = MirSource::from_node(tcx, node_id);
+        let upvar_decls = tcx.infer_ctxt(body_id, Reveal::UserFacing).enter(|infcx| {
+            let cx = Cx::new(&infcx, src);
+            
+            // Gather the upvars of a closure, if any.
+            let upvar_decls: Vec<_> = tcx.with_freevars(node_id, |freevars| {
+                freevars.iter().map(|fv| {
+                    let var_id = tcx.hir.as_local_node_id(fv.def.def_id()).unwrap();
+                    let by_ref = cx.tables().upvar_capture(ty::UpvarId {
+                        var_id: var_id,
+                        closure_expr_id: node_id
+                    }).map_or(false, |capture| match capture {
+                        ty::UpvarCapture::ByValue => false,
+                        ty::UpvarCapture::ByRef(..) => true
+                    });
+                    let mut decl = UpvarDecl {
+                        debug_name: keywords::Invalid.name(),
+                        by_ref: by_ref
+                    };
+                    if let Some(hir::map::NodeLocal(pat)) = tcx.hir.find(var_id) {
+                        if let hir::PatKind::Binding(_, _, ref ident, _) = pat.node {
+                            decl.debug_name = ident.node;
+                        }
+                    }
+                    decl
+                }).collect()
+            });
+
+            upvar_decls
+        });
+
+        let upvar_tys = match closure_by_val_ty.sty {
+                ty::TyClosure(def_id, substs) => substs.upvar_tys(def_id, tcx),
+                 _ => bug!(),
+        };
+
+        for (i, ty) in upvar_tys.enumerate() {
+            let mut base = Lvalue::Local(Local::new(1));
+            if !by_val {
+                base = Lvalue::Projection(Box::new(Projection {
+                    base: base,
+                    elem: ProjectionElem::Deref,
+                }));
+            }
+            let field = Projection {
+                base: base,
+                elem: ProjectionElem::Field(Field::new(i), ty),
+            };
+            let arg = Lvalue::Projection(Box::new(field));
+            args.push(Operand::Consume(arg));
+        }
+
+        upvar_decls
+    } else {
+        vec![]
+    };
+
+    args.push(Operand::Constant(Constant {
+        span: span,
+        ty: tcx.types.u32,
+        literal: Literal::Value {
+            value: ConstVal::Integral(ConstInt::U32(0)),
+        },
+    }));
+
+    let offset = if is_closure { 1 } else { 0 };
+    for i in 0..sig.inputs().len() {
+        let arg = Local::new(offset + i + 1);
+        args.push(Operand::Consume(Lvalue::Local(arg)));
+    }
+
+    statements.push(Statement {
+        source_info: source_info,
+        kind: StatementKind::Assign(
+            Lvalue::Local(RETURN_POINTER),
+            Rvalue::Aggregate(AggregateKind::Generator(def_id, substs), args),
+        )
+    });
+
+    blocks.push(BasicBlockData {
+            statements,
+            terminator: Some(Terminator { source_info, kind: TerminatorKind::Return }),
+            is_cleanup:false
+    });
+
+    let mut mir = Mir::new(
+        blocks,
+        IndexVec::from_elem_n(
+            VisibilityScopeData { span: span, parent_scope: None }, 1
+        ),
+        IndexVec::new(),
+        sig.output(),
+        None,
+        local_decls,
+        sig.inputs().len() + offset,
+        upvars,
+        span
+    );
+    if let Abi::RustCall = abi {
+        mir.spread_arg = Some(Local::new(sig.inputs().len() + offset));
+    }
+    use util;
+    util::dump_mir(
+        tcx,
+        "gen_shim",
+        &true,
+        MirSource::Fn(node_id),
+        &mir
+    );
     mir
 }
 
@@ -483,6 +680,7 @@ pub fn build_adt_ctor<'a, 'gcx, 'tcx>(infcx: &infer::InferCtxt<'a, 'gcx, 'tcx>,
         ),
         IndexVec::new(),
         sig.output(),
+        None,
         local_decls,
         sig.inputs().len(),
         vec![],

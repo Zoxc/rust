@@ -324,6 +324,8 @@ impl<'a, 'tcx> MirConstContext<'a, 'tcx> {
                             mir::AssertMessage::Math(ref err) => {
                                 ErrKind::Math(err.clone())
                             }
+                            mir::AssertMessage::GeneratorResumedAfterReturn => 
+                                span_bug!(span, "{:?} should not appear in constants?", msg),
                         };
 
                         let err = ConstEvalErr{ span: span, kind: err };
@@ -547,6 +549,7 @@ impl<'a, 'tcx> MirConstContext<'a, 'tcx> {
                     }
                     mir::AggregateKind::Adt(..) |
                     mir::AggregateKind::Closure(..) |
+                    mir::AggregateKind::Generator(..) |
                     mir::AggregateKind::Tuple => {
                         Const::new(trans_const(self.ccx, dest_ty, kind, &fields), dest_ty)
                     }

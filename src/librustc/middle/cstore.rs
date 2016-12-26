@@ -28,6 +28,7 @@ use hir::map as hir_map;
 use hir::map::definitions::{Definitions, DefKey, DisambiguatedDefPathData};
 use hir::svh::Svh;
 use middle::lang_items;
+use mir::GeneratorLayout;
 use ty::{self, TyCtxt};
 use session::Session;
 use session::search_paths::PathKind;
@@ -236,6 +237,8 @@ pub trait CrateStore {
     fn load_macro(&self, did: DefId, sess: &Session) -> LoadedMacro;
 
     // misc. metadata
+    fn maybe_get_generator_layout<'a, 'tcx>(&self, tcx: TyCtxt<'a, 'tcx, 'tcx>, def: DefId)
+                                     -> Option<GeneratorLayout<'tcx>>;
     fn maybe_get_item_body<'a, 'tcx>(&self, tcx: TyCtxt<'a, 'tcx, 'tcx>, def: DefId)
                                      -> Option<&'tcx hir::Body>;
     fn item_body_nested_bodies(&self, def: DefId) -> BTreeMap<hir::BodyId, hir::Body>;
@@ -386,6 +389,10 @@ impl CrateStore for DummyCrateStore {
     fn load_macro(&self, did: DefId, sess: &Session) -> LoadedMacro { bug!("load_macro") }
 
     // misc. metadata
+    fn maybe_get_generator_layout<'a, 'tcx>(&self, tcx: TyCtxt<'a, 'tcx, 'tcx>, def: DefId)
+                                     -> Option<GeneratorLayout<'tcx>> {
+        bug!("maybe_get_generator_layout")
+    }
     fn maybe_get_item_body<'a, 'tcx>(&self, tcx: TyCtxt<'a, 'tcx, 'tcx>, def: DefId)
                                      -> Option<&'tcx hir::Body> {
         bug!("maybe_get_item_body")

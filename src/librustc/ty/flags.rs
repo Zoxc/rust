@@ -85,6 +85,11 @@ impl FlagComputation {
                 }
             }
 
+            &ty::TyGenerator(_, ref substs) => {
+                self.add_flags(TypeFlags::HAS_LOCAL_NAMES);
+                self.add_substs(&substs.substs);
+            }
+
             &ty::TyClosure(_, ref substs) => {
                 self.add_flags(TypeFlags::HAS_TY_CLOSURE);
                 self.add_flags(TypeFlags::HAS_LOCAL_NAMES);

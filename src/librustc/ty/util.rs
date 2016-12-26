@@ -464,6 +464,7 @@ impl<'a, 'gcx, 'tcx, W> TypeVisitor<'tcx> for TypeIdHasher<'a, 'gcx, 'tcx, W>
             TyRawPtr(m) |
             TyRef(_, m) => self.hash(m.mutbl),
             TyClosure(def_id, _) |
+            TyGenerator(def_id, _) |
             TyAnon(def_id, _) |
             TyFnDef(def_id, ..) => self.def_id(def_id),
             TyAdt(d, _) => self.def_id(d.did),
@@ -586,7 +587,7 @@ impl<'a, 'tcx> ty::TyS<'tcx> {
             }) => Some(true),
 
             TyArray(..) | TySlice(..) | TyDynamic(..) | TyTuple(..) |
-            TyClosure(..) | TyAdt(..) | TyAnon(..) |
+            TyClosure(..) | TyGenerator(..) | TyAdt(..) | TyAnon(..) |
             TyProjection(..) | TyParam(..) | TyInfer(..) | TyError => None
         }.unwrap_or_else(|| {
             !self.impls_bound(tcx, param_env,
@@ -625,7 +626,7 @@ impl<'a, 'tcx> ty::TyS<'tcx> {
         let result = match self.sty {
             TyBool | TyChar | TyInt(..) | TyUint(..) | TyFloat(..) |
             TyRawPtr(..) | TyRef(..) | TyFnDef(..) | TyFnPtr(_) |
-            TyArray(..) | TyTuple(..) | TyClosure(..) | TyNever => Some(true),
+            TyArray(..) | TyTuple(..) | TyClosure(..) | TyGenerator(..) | TyNever => Some(true),
 
             TyStr | TyDynamic(..) | TySlice(_) => Some(false),
 

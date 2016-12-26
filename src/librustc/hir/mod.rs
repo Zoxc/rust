@@ -931,7 +931,8 @@ pub struct BodyId {
 #[derive(Clone, PartialEq, Eq, RustcEncodable, RustcDecodable, Hash, Debug)]
 pub struct Body {
     pub arguments: HirVec<Arg>,
-    pub value: Expr
+    pub value: Expr,
+    pub generator: bool,
 }
 
 impl Body {
@@ -1056,6 +1057,9 @@ pub enum Expr_ {
     /// For example, `[1; 5]`. The first expression is the element
     /// to be repeated; the second is the number of times to repeat it.
     ExprRepeat(P<Expr>, BodyId),
+
+    /// A suspension point for generators
+    ExprSuspend(P<Expr>),
 }
 
 /// Optionally `Self`-qualified value/type path or associated extension.

@@ -393,6 +393,17 @@ pub fn super_relate_tys<'a, 'gcx, 'tcx, R>(relation: &mut R,
             Ok(tcx.mk_dynamic(relation.relate(a_obj, b_obj)?, region_bound))
         }
 
+        (&ty::TyGenerator(a_id, a_substs),
+         &ty::TyGenerator(b_id, b_substs))
+            if a_id == b_id =>
+        {
+            // All TyGenerator types with the same id represent
+            // the (anonymous) type of the same generator expression. So
+            // all of their regions should be equated.
+            let substs = relation.relate(&a_substs, &b_substs)?;
+            Ok(tcx.mk_generator_from_closure_substs(a_id, substs))
+        }
+
         (&ty::TyClosure(a_id, a_substs),
          &ty::TyClosure(b_id, b_substs))
             if a_id == b_id =>

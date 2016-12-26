@@ -568,6 +568,7 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
             mir::TerminatorKind::Return |
             mir::TerminatorKind::Unreachable |
             mir::TerminatorKind::Assert { .. } => {}
+            mir::TerminatorKind::Suspend { .. } => bug!(),
         }
 
         self.super_terminator_kind(block, kind, location);
@@ -632,6 +633,7 @@ fn visit_instance_use<'a, 'tcx>(scx: &SharedCrateContext<'a, 'tcx>,
         }
         ty::InstanceDef::ClosureOnceShim { .. } |
         ty::InstanceDef::Item(..) |
+        ty::InstanceDef::Generator(..) |
         ty::InstanceDef::FnPtrShim(..) => {
             output.push(create_fn_trans_item(instance));
         }
@@ -644,7 +646,13 @@ fn visit_instance_use<'a, 'tcx>(scx: &SharedCrateContext<'a, 'tcx>,
 fn should_trans_locally<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, instance: &Instance<'tcx>)
                                   -> bool {
     let def_id = match instance.def {
-        ty::InstanceDef::Item(def_id) => def_id,
+        ty::InstanceDef::Item(def_id) => {
+            if tcx.item_generator(def_id) {
+                return true;
+            }
+            def_id
+        },
+        ty::InstanceDef::Generator(def_id) => def_id,
         ty::InstanceDef::ClosureOnceShim { .. } |
         ty::InstanceDef::Virtual(..) |
         ty::InstanceDef::FnPtrShim(..) |

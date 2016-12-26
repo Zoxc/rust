@@ -291,6 +291,19 @@ impl<'a, 'b, 'gcx, 'tcx> TypeVerifier<'a, 'b, 'gcx, 'tcx> {
                         })
                     }
                 }
+                ty::TyGenerator(def_id, substs) => {
+                    // First check if it's an upvar, these do not need a generator layout
+                    return match substs.upvar_tys(def_id, tcx).nth(field.index()) {
+                        Some(ty) => Ok(ty),
+                        // Otherwise look at all fields, which requires a generator layout
+                        None => match substs.field_tys(def_id, tcx).nth(field.index()) {
+                            Some(ty) => Ok(ty),
+                            None => Err(FieldAccessError::OutOfRange {
+                                field_count: substs.field_tys(def_id, tcx).count() + 1
+                            })
+                        }
+                    }
+                }
                 ty::TyTuple(tys, _) => {
                     return match tys.get(field.index()) {
                         Some(&ty) => Ok(ty),
@@ -477,6 +490,20 @@ impl<'a, 'gcx, 'tcx> TypeChecker<'a, 'gcx, 'tcx> {
                     }
                 }
             }
+            TerminatorKind::Suspend { ref value, .. } => {
+                let value_ty = value.ty(mir, tcx);
+                match mir.suspend_ty {
+                    None => span_mirbug!(self, term, "suspend in non-generator"),
+                    Some(ty) if ty != value_ty => {
+                        span_mirbug!(self,
+                            term,
+                            "type of suspend value is ({:?}, but the suspend type is ({:?}",
+                            value_ty,
+                            ty);
+                    }
+                    _ => (),
+                }
+            }
         }
     }
 
@@ -601,6 +628,11 @@ impl<'a, 'gcx, 'tcx> TypeChecker<'a, 'gcx, 'tcx> {
             TerminatorKind::Return => {
                 if is_cleanup {
                     span_mirbug!(self, block, "return on cleanup block")
+                }
+            }
+            TerminatorKind::Suspend { .. } => {
+                if is_cleanup {
+                    span_mirbug!(self, block, "suspend in cleanup block")
                 }
             }
             TerminatorKind::Unreachable => {}

@@ -4213,4 +4213,5 @@ register_diagnostics! {
     E0567, // auto traits can not have type parameters
     E0568, // auto-traits can not have predicates,
     E0592, // duplicate definitions with name `{}`
+    E0801, // unexpected generator return
 }

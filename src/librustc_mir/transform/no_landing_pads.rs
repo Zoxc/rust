@@ -33,6 +33,7 @@ impl<'tcx> MutVisitor<'tcx> for NoLandingPads {
             },
             TerminatorKind::Call { cleanup: ref mut unwind, .. } |
             TerminatorKind::Assert { cleanup: ref mut unwind, .. } |
+            TerminatorKind::Suspend { drop: ref mut unwind, .. } |
             TerminatorKind::DropAndReplace { ref mut unwind, .. } |
             TerminatorKind::Drop { ref mut unwind, .. } => {
                 unwind.take();

@@ -555,6 +555,7 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for hir::Expr {
                 hir::ExprBreak(..)      |
                 hir::ExprAgain(..)      |
                 hir::ExprRet(..)        |
+                hir::ExprSuspend(..)        |
                 hir::ExprInlineAsm(..)  |
                 hir::ExprRepeat(..)     |
                 hir::ExprTup(..)        => {
@@ -633,7 +634,8 @@ impl_stable_hash_for!(enum hir::Expr_ {
     ExprRet(val),
     ExprInlineAsm(asm, inputs, outputs),
     ExprStruct(path, fields, base),
-    ExprRepeat(val, times)
+    ExprRepeat(val, times),
+    ExprSuspend(val)
 });
 
 impl_stable_hash_for!(enum hir::LoopSource {
@@ -993,7 +995,8 @@ impl_stable_hash_for!(struct hir::Arg {
 
 impl_stable_hash_for!(struct hir::Body {
     arguments,
-    value
+    value,
+    generator
 });
 
 impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for hir::BodyId {

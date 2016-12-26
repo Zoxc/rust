@@ -249,6 +249,9 @@ pub enum ExprKind<'tcx> {
         outputs: Vec<ExprRef<'tcx>>,
         inputs: Vec<ExprRef<'tcx>>
     },
+    Suspend {
+        value: ExprRef<'tcx>,
+    },
 }
 
 #[derive(Clone, Debug)]

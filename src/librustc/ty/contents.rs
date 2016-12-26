@@ -195,7 +195,7 @@ impl<'a, 'tcx> ty::TyS<'tcx> {
                 }
                 ty::TyStr => TC::None,
 
-                ty::TyClosure(def_id, ref substs) => {
+                ty::TyClosure(def_id, ref substs) | ty::TyGenerator(def_id, ref substs) => {
                     TypeContents::union(
                         substs.upvar_tys(def_id, tcx),
                         |ty| tc_ty(tcx, &ty, cache))

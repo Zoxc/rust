@@ -419,6 +419,13 @@ define_maps! { <'tcx>
     /// expression defining the closure.
     pub closure_type: ItemSignature(DefId) -> ty::PolyFnSig<'tcx>,
 
+    /// Records the signature of each generator. The def ID is the ID of the
+    /// expression defining the closure or function.
+    pub generator_sig: TypeckTables(DefId) -> Option<ty::PolyGenSig<'tcx>>,
+
+    /// Is the body of this item a generator?
+    pub is_generator: TypeckTables(DefId) -> bool,
+
     /// Caches CoerceUnsized kinds for impls on custom types.
     pub coerce_unsized_info: ItemSignature(DefId)
         -> ty::adjustment::CoerceUnsizedInfo,

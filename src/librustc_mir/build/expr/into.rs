@@ -259,6 +259,7 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
             ExprKind::Index { .. } |
             ExprKind::Deref { .. } |
             ExprKind::Literal { .. } |
+            ExprKind::Suspend { .. } |
             ExprKind::Field { .. } => {
                 debug_assert!(match Category::of(&expr.kind).unwrap() {
                     Category::Rvalue(RvalueFunc::Into) => false,

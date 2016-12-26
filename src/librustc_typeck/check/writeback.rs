@@ -38,6 +38,7 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
         let item_def_id = self.tcx.hir.local_def_id(item_id);
 
         let mut wbcx = WritebackCx::new(self);
+
         for arg in &body.arguments {
             wbcx.visit_node_id(ResolvingPattern(arg.pat.span), arg.id);
         }
@@ -51,6 +52,7 @@ impl<'a, 'gcx, 'tcx> FnCtxt<'a, 'gcx, 'tcx> {
         wbcx.visit_cast_types();
         wbcx.visit_lints();
         wbcx.visit_free_region_map();
+        wbcx.visit_liberated_gen_sigs();
 
         let used_trait_imports = mem::replace(&mut self.tables.borrow_mut().used_trait_imports,
                                               DefIdSet());
@@ -428,6 +430,13 @@ impl<'cx, 'gcx, 'tcx> WritebackCx<'cx, 'gcx, 'tcx> {
         }
     }
 
+    fn visit_liberated_gen_sigs(&mut self) {
+        for (&node_id, gen_sig) in self.fcx.tables.borrow().liberated_gen_sigs.iter() {
+            let gen_sig = self.resolve(gen_sig, ResolvingGenSig(node_id));
+            self.tables.liberated_gen_sigs.insert(node_id, gen_sig);
+        }
+    }
+
     fn visit_liberated_fn_sigs(&mut self) {
         for (&node_id, fn_sig) in self.fcx.tables.borrow().liberated_fn_sigs.iter() {
             let fn_sig = self.resolve(fn_sig, ResolvingFnSig(node_id));
@@ -470,6 +479,7 @@ enum ResolveReason {
     ResolvingExpr(Span),
     ResolvingLocal(Span),
     ResolvingPattern(Span),
+    ResolvingGenSig(ast::NodeId),
     ResolvingUpvar(ty::UpvarId),
     ResolvingClosure(ast::NodeId),
     ResolvingFnSig(ast::NodeId),
@@ -491,6 +501,7 @@ impl<'a, 'gcx, 'tcx> ResolveReason {
             ResolvingFnSig(id) |
             ResolvingFieldTypes(id) |
             ResolvingTyNode(id) |
+            ResolvingGenSig(id) |
             ResolvingAnonTy(id) => {
                 tcx.hir.span(id)
             }
@@ -562,6 +573,7 @@ impl<'cx, 'gcx, 'tcx> Resolver<'cx, 'gcx, 'tcx> {
                               "cannot determine a type for this closure")
                 }
 
+                ResolvingGenSig(_) |
                 ResolvingFnSig(_) |
                 ResolvingFieldTypes(_) |
                 ResolvingTyNode(_) => {
