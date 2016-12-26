@@ -232,6 +232,8 @@ pub struct TypeckTables<'tcx> {
     /// Records the kind of each closure.
     pub closure_kinds: NodeMap<ty::ClosureKind>,
 
+    pub liberated_gen_sigs: NodeMap<Option<ty::GenSig<'tcx>>>,
+
     /// For each fn, records the "liberated" types of its arguments
     /// and return type. Liberated means that all bound regions
     /// (including late-bound regions) are replaced with free
@@ -275,6 +277,7 @@ impl<'tcx> TypeckTables<'tcx> {
             adjustments: NodeMap(),
             method_map: FxHashMap(),
             upvar_capture_map: FxHashMap(),
+            liberated_gen_sigs: NodeMap(),
             closure_tys: NodeMap(),
             closure_kinds: NodeMap(),
             liberated_fn_sigs: NodeMap(),
@@ -1014,7 +1017,7 @@ impl<'a, 'tcx> TyCtxt<'a, 'tcx, 'tcx> {
     pub fn print_debug_stats(self) {
         sty_debug_print!(
             self,
-            TyAdt, TyArray, TySlice, TyRawPtr, TyRef, TyFnDef, TyFnPtr,
+            TyAdt, TyArray, TySlice, TyRawPtr, TyRef, TyFnDef, TyFnPtr, TyGenerator,
             TyDynamic, TyClosure, TyTuple, TyParam, TyInfer, TyProjection, TyAnon);
 
         println!("Substs interner: #{}", self.interners.substs.borrow().len());
@@ -1367,6 +1370,13 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                                           closure_substs: ClosureSubsts<'tcx>)
                                           -> Ty<'tcx> {
         self.mk_ty(TyClosure(closure_id, closure_substs))
+    }
+
+    pub fn mk_generator_from_closure_substs(self,
+                                          id: DefId,
+                                          closure_substs: ClosureSubsts<'tcx>)
+                                          -> Ty<'tcx> {
+        self.mk_ty(TyGenerator(id, closure_substs))
     }
 
     pub fn mk_var(self, v: TyVid) -> Ty<'tcx> {

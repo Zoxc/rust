@@ -550,6 +550,12 @@ impl<'a, 'gcx, 'tcx> ExprUseVisitor<'a, 'gcx, 'tcx> {
             hir::ExprBox(ref base) => {
                 self.consume_expr(&base);
             }
+
+            hir::ExprSuspend(ref value) => {
+                self.consume_expr(&value);
+            }
+
+            hir::ExprImplArg(_) => { }
         }
     }
 

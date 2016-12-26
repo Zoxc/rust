@@ -102,7 +102,7 @@ use monomorphize::Instance;
 use rustc::middle::weak_lang_items;
 use rustc::hir::def_id::DefId;
 use rustc::hir::map as hir_map;
-use rustc::ty::{self, Ty, TyCtxt, TypeFoldable};
+use rustc::ty::{self, Ty, TyCtxt, TypeFoldable, InstanceDef};
 use rustc::ty::fold::TypeVisitor;
 use rustc::ty::item_path::{self, ItemPathBuffer, RootMode};
 use rustc::ty::maps::Providers;
@@ -226,6 +226,12 @@ fn compute_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, instance: Instance
         tcx.is_foreign_item(def_id)
     };
 
+    let is_gen = match instance.def {
+        InstanceDef::Generator(..) => true,
+        _ => false,
+    };
+
+    if !is_gen {
     if let Some(name) = weak_lang_items::link_name(&attrs) {
         return name.to_string();
     }
@@ -246,6 +252,7 @@ fn compute_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, instance: Instance
     if attr::contains_name(&attrs, "no_mangle") {
         // Don't mangle
         return tcx.item_name(def_id).as_str().to_string();
+    }
     }
 
     // We want to compute the "type" of this item. Unfortunately, some
@@ -280,7 +287,13 @@ fn compute_symbol_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, instance: Instance
 
     let hash = get_symbol_hash(tcx, Some(def_id), instance_ty, Some(substs));
 
-    SymbolPathBuffer::from_interned(tcx.def_symbol_name(def_id)).finish(hash)
+    let mut buffer = SymbolPathBuffer::from_interned(tcx.def_symbol_name(def_id));
+
+    if is_gen {
+        buffer.push("{{generator}}");
+    }
+
+    buffer.finish(hash)
 }
 
 // Follow C++ namespace-mangling style, see

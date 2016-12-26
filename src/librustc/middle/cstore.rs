@@ -426,7 +426,7 @@ impl CrateStore for DummyCrateStore {
                            -> &'tcx hir::Body {
         bug!("item_body")
     }
-
+    
     // This is basically a 1-based range of ints, which is a little
     // silly - I may fix that.
     fn crates(&self) -> Vec<CrateNum> { vec![] }

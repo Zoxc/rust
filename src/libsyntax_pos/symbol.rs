@@ -269,9 +269,11 @@ declare_keywords! {
     (54, StaticLifetime, "'static")
     (55, Union,          "union")
     (56, Catch,          "catch")
+    (57, Arg,            "arg")
+    (58, Gen,            "gen")
 
     // A virtual keyword that resolves to the crate root when used in a lexical scope.
-    (57, CrateRoot, "{{root}}")
+    (59, CrateRoot, "{{root}}")
 }
 
 // If an interner exists in TLS, return it. Otherwise, prepare a fresh one.

@@ -69,6 +69,7 @@ struct FindLocalByTypeVisitor<'a, 'gcx: 'a + 'tcx, 'tcx: 'a> {
     hir_map: &'a hir::map::Map<'gcx>,
     found_local_pattern: Option<&'gcx Pat>,
     found_arg_pattern: Option<&'gcx Pat>,
+    found_impl_arg: bool,
 }
 
 impl<'a, 'gcx, 'tcx> FindLocalByTypeVisitor<'a, 'gcx, 'tcx> {
@@ -109,6 +110,11 @@ impl<'a, 'gcx, 'tcx> Visitor<'gcx> for FindLocalByTypeVisitor<'a, 'gcx, 'tcx> {
         for argument in &body.arguments {
             if self.found_arg_pattern.is_none() && self.node_matches_type(&argument.id) {
                 self.found_arg_pattern = Some(&*argument.pat);
+            }
+        }
+        if let Some(ref impl_arg) = body.impl_arg {
+            if !self.found_impl_arg && self.node_matches_type(&impl_arg.id) {
+                self.found_impl_arg = true;
             }
         }
         intravisit::walk_body(self, body);
@@ -231,6 +237,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                     AdtKind::Union => Some(16),
                     AdtKind::Enum => Some(17),
                 },
+                ty::TyGenerator(..) => Some(18),
                 ty::TyInfer(..) | ty::TyError => None
             }
         }
@@ -999,6 +1006,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
             hir_map: &self.tcx.hir,
             found_local_pattern: None,
             found_arg_pattern: None,
+            found_impl_arg: false,
         };
 
         // #40294: cause.body_id can also be a fn declaration.
@@ -1035,6 +1043,10 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
             } else {
                 labels.push((pattern.span, format!("consider giving the pattern a type")));
             }
+        }
+
+        if local_visitor.found_impl_arg {
+            labels.push((DUMMY_SP, format!("consider giving a type to the implicit generator argument")));
         }
 
         let mut err = struct_span_err!(self.tcx.sess,

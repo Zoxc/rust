@@ -382,6 +382,7 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
             }
 
             ty::TyClosure(..) |
+            ty::TyGenerator(..) |
             ty::TyAnon(..) => {
                 bug!("Unexpected closure type in variance computation");
             }

@@ -94,6 +94,7 @@ fn dump_matched_mir_node<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                                    mir: &Mir<'tcx>) {
     let promotion_id = match source {
         MirSource::Promoted(_, id) => format!("-{:?}", id),
+        MirSource::GeneratorDrop(_) => format!("-drop"),
         _ => String::new()
     };
 
@@ -321,26 +322,34 @@ fn write_mir_sig(tcx: TyCtxt, src: MirSource, mir: &Mir, w: &mut Write)
         MirSource::Const(_) => write!(w, "const")?,
         MirSource::Static(_, hir::MutImmutable) => write!(w, "static")?,
         MirSource::Static(_, hir::MutMutable) => write!(w, "static mut")?,
-        MirSource::Promoted(_, i) => write!(w, "{:?} in", i)?
+        MirSource::Promoted(_, i) => write!(w, "{:?} in", i)?,
+        MirSource::GeneratorDrop(_) => write!(w, "drop_glue")?,
     }
 
-    write!(w, " {}", tcx.node_path_str(src.item_id()))?;
-
-    if let MirSource::Fn(_) = src {
-        write!(w, "(")?;
-
-        // fn argument types.
-        for (i, arg) in mir.args_iter().enumerate() {
-            if i != 0 {
-                write!(w, ", ")?;
-            }
-            write!(w, "{:?}: {}", Lvalue::Local(arg), mir.local_decls[arg].ty)?;
-        }
-
-        write!(w, ") -> {}", mir.return_ty)
+    if tcx.is_generator(tcx.hir.local_def_id(src.item_id())) {
+        write!(w, " [generator {}]", tcx.node_path_str(src.item_id()))?;
     } else {
-        assert_eq!(mir.arg_count, 0);
-        write!(w, ": {} =", mir.return_ty)
+        write!(w, " {}", tcx.node_path_str(src.item_id()))?;
+    }
+
+    match src {
+        MirSource::Fn(_) | MirSource::GeneratorDrop(_) => {
+            write!(w, "(")?;
+
+            // fn argument types.
+            for (i, arg) in mir.args_iter().enumerate() {
+                if i != 0 {
+                    write!(w, ", ")?;
+                }
+                write!(w, "{:?}: {}", Lvalue::Local(arg), mir.local_decls[arg].ty)?;
+            }
+
+            write!(w, ") -> {}", mir.return_ty)
+        }
+        _ => {
+            assert_eq!(mir.arg_count, 0);
+            write!(w, ": {} =", mir.return_ty)
+        }
     }
 }
 

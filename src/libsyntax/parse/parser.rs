@@ -2269,6 +2269,12 @@ impl<'a> Parser<'a> {
                     let lo = self.prev_span;
                     return self.parse_catch_expr(lo, attrs);
                 }
+                if self.is_gen_arg() {
+                    assert!(self.eat_keyword(keywords::Gen));
+                    assert!(self.eat_keyword(keywords::Arg));
+                    let hi = self.prev_span;
+                    return Ok(self.mk_expr(lo.to(hi), ExprKind::ImplArg, attrs));
+                }
                 if self.eat_keyword(keywords::Return) {
                     if self.token.can_begin_expr() {
                         let e = self.parse_expr()?;
@@ -2298,6 +2304,14 @@ impl<'a> Parser<'a> {
                     };
                     ex = ExprKind::Break(lt, e);
                     hi = self.prev_span;
+                } else if self.eat_keyword(keywords::Yield) {
+                    if self.token.can_begin_expr() {
+                        let e = self.parse_expr()?;
+                        hi = e.span;
+                        ex = ExprKind::Yield(Some(e));
+                    } else {
+                        ex = ExprKind::Yield(None);
+                    }
                 } else if self.token.is_keyword(keywords::Let) {
                     // Catch this syntax error here, instead of in `check_strict_keywords`, so
                     // that we can explicitly mention that let is not to be used as an expression
@@ -3748,6 +3762,11 @@ impl<'a> Parser<'a> {
         self.look_ahead(1, |t| t.is_ident() && !t.is_any_keyword())
     }
 
+    fn is_gen_arg(&self) -> bool {
+        self.token.is_keyword(keywords::Gen) &&
+        self.look_ahead(1, |t| t.is_keyword(keywords::Arg))
+    }
+
     fn eat_macro_def(&mut self, attrs: &[Attribute], vis: &Visibility)
                      -> PResult<'a, Option<P<Item>>> {
         let lo = self.span;
@@ -3801,7 +3820,8 @@ impl<'a> Parser<'a> {
         // Starts like a simple path, but not a union item.
         } else if self.token.is_path_start() &&
                   !self.token.is_qpath_start() &&
-                  !self.is_union_item() {
+                  !self.is_union_item() &&
+                  !self.is_gen_arg() {
             let pth = self.parse_path(PathStyle::Expr)?;
 
             if !self.eat(&token::Not) {
