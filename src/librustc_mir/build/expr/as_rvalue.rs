@@ -223,6 +223,17 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
                 block = unpack!(this.stmt_expr(block, expr));
                 block.and(this.unit_rvalue())
             }
+            ExprKind::Suspend { value } => {
+                let value = unpack!(block = this.as_operand(block, scope, value));
+                let resume = this.cfg.start_new_block();
+                let cleanup = this.diverge_cleanup();
+                this.cfg.terminate(block, source_info, TerminatorKind::Suspend {
+                    value: value,
+                    resume: resume,
+                    drop: cleanup,
+                });
+                resume.and(this.unit_rvalue())
+            }
             ExprKind::Literal { .. } |
             ExprKind::Block { .. } |
             ExprKind::Match { .. } |

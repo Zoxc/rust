@@ -470,7 +470,7 @@ fn visit_expr<'a, 'tcx>(ir: &mut IrMaps<'a, 'tcx>, expr: &'tcx Expr) {
       hir::ExprAgain(_) | hir::ExprLit(_) | hir::ExprRet(..) |
       hir::ExprBlock(..) | hir::ExprAssign(..) | hir::ExprAssignOp(..) |
       hir::ExprStruct(..) | hir::ExprRepeat(..) |
-      hir::ExprInlineAsm(..) | hir::ExprBox(..) |
+      hir::ExprInlineAsm(..) | hir::ExprBox(..) | hir::ExprSuspend(..) |
       hir::ExprType(..) | hir::ExprPath(hir::QPath::TypeRelative(..)) => {
           intravisit::walk_expr(ir, expr);
       }
@@ -1132,6 +1132,7 @@ impl<'a, 'tcx> Liveness<'a, 'tcx> {
           hir::ExprCast(ref e, _) |
           hir::ExprType(ref e, _) |
           hir::ExprUnary(_, ref e) |
+          hir::ExprSuspend(ref e) |
           hir::ExprRepeat(ref e, _) => {
             self.propagate_through_expr(&e, succ)
           }
@@ -1414,7 +1415,7 @@ fn check_expr<'a, 'tcx>(this: &mut Liveness<'a, 'tcx>, expr: &'tcx Expr) {
       hir::ExprBreak(..) | hir::ExprAgain(..) | hir::ExprLit(_) |
       hir::ExprBlock(..) | hir::ExprAddrOf(..) |
       hir::ExprStruct(..) | hir::ExprRepeat(..) |
-      hir::ExprClosure(..) | hir::ExprPath(_) |
+      hir::ExprClosure(..) | hir::ExprPath(_) | hir::ExprSuspend(..) |
       hir::ExprBox(..) | hir::ExprType(..) => {
         intravisit::walk_expr(this, expr);
       }

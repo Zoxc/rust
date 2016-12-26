@@ -255,6 +255,7 @@ enum SawExprComponent<'a> {
     SawExprInlineAsm(StableInlineAsm<'a>),
     SawExprStruct,
     SawExprRepeat,
+    SawExprSuspend,
 }
 
 // The boolean returned indicates whether the span of this expression is always
@@ -333,6 +334,7 @@ fn saw_expr<'a>(node: &'a Expr_,
         ExprInlineAsm(ref a,..)  => (SawExprInlineAsm(StableInlineAsm(a)), false),
         ExprStruct(..)           => (SawExprStruct, false),
         ExprRepeat(..)           => (SawExprRepeat, false),
+        ExprSuspend(..)           => (SawExprSuspend, false),
     }
 }
 

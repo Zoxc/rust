@@ -1660,6 +1660,18 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
 
         self.tcx.closure_type(def_id)
     }
+
+    pub fn generator_sig(&self, def_id: DefId) -> Option<ty::PolyGenSig<'tcx>> {
+        if let InferTables::InProgress(tables) = self.tables {
+            if let Some(id) = self.tcx.hir.as_local_node_id(def_id) {
+                if let Some(&ty) = tables.borrow().liberated_gen_sigs.get(&id) {
+                    return ty.map(|t| ty::Binder(t));
+                }
+            }
+        }
+
+        self.tcx.generator_sig(def_id)
+    }
 }
 
 impl<'a, 'gcx, 'tcx> TypeTrace<'tcx> {

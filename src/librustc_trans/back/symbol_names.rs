@@ -103,7 +103,7 @@ use monomorphize::Instance;
 use rustc::middle::weak_lang_items;
 use rustc::hir::def_id::LOCAL_CRATE;
 use rustc::hir::map as hir_map;
-use rustc::ty::{self, Ty, TypeFoldable};
+use rustc::ty::{self, Ty, TypeFoldable, InstanceDef};
 use rustc::ty::fold::TypeVisitor;
 use rustc::ty::item_path::{self, ItemPathBuffer, RootMode};
 use rustc::ty::subst::Substs;
@@ -202,26 +202,33 @@ pub fn symbol_name<'a, 'tcx>(instance: Instance<'tcx>,
         scx.sess().cstore.is_foreign_item(def_id)
     };
 
-    if let Some(name) = weak_lang_items::link_name(&attrs) {
-        return name.to_string();
-    }
+    let is_gen = match instance.def {
+        InstanceDef::Generator(..) => true,
+        _ => false,
+    };
 
-    if is_foreign {
-        if let Some(name) = attr::first_attr_value_str_by_name(&attrs, "link_name") {
+    if !is_gen {
+        if let Some(name) = weak_lang_items::link_name(&attrs) {
             return name.to_string();
         }
-        // Don't mangle foreign items.
-        return scx.tcx().item_name(def_id).as_str().to_string();
-    }
 
-    if let Some(name) = attr::find_export_name_attr(scx.sess().diagnostic(), &attrs) {
-        // Use provided name
-        return name.to_string();
-    }
+        if is_foreign {
+            if let Some(name) = attr::first_attr_value_str_by_name(&attrs, "link_name") {
+                return name.to_string();
+            }
+            // Don't mangle foreign items.
+            return scx.tcx().item_name(def_id).as_str().to_string();
+        }
 
-    if attr::contains_name(&attrs, "no_mangle") {
-        // Don't mangle
-        return scx.tcx().item_name(def_id).as_str().to_string();
+        if let Some(name) = attr::find_export_name_attr(scx.sess().diagnostic(), &attrs) {
+            // Use provided name
+            return name.to_string();
+        }
+
+        if attr::contains_name(&attrs, "no_mangle") {
+            // Don't mangle
+            return scx.tcx().item_name(def_id).as_str().to_string();
+        }
     }
 
     let def_path = scx.tcx().def_path(def_id);
@@ -265,6 +272,10 @@ pub fn symbol_name<'a, 'tcx>(instance: Instance<'tcx>,
     item_path::with_forced_absolute_paths(|| {
         scx.tcx().push_item_path(&mut buffer, def_id);
     });
+
+    if is_gen {
+        buffer.names.push(Symbol::intern("{{generator}}").as_str());
+    }
 
     mangle(buffer.names.into_iter(), &hash)
 }

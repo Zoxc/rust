@@ -109,7 +109,7 @@ fn push_subtypes<'tcx>(stack: &mut TypeWalkerStack<'tcx>, parent_ty: Ty<'tcx>) {
         ty::TyAdt(_, substs) | ty::TyAnon(_, substs) => {
             stack.extend(substs.types().rev());
         }
-        ty::TyClosure(_, ref substs) => {
+        ty::TyClosure(_, ref substs) | ty::TyGenerator(_, ref substs) => {
             stack.extend(substs.substs.types().rev());
         }
         ty::TyTuple(ts, _) => {

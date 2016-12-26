@@ -233,15 +233,15 @@ pub enum EntryKind<'tcx> {
     Variant(Lazy<VariantData<'tcx>>),
     Struct(Lazy<VariantData<'tcx>>, ReprOptions),
     Union(Lazy<VariantData<'tcx>>, ReprOptions),
-    Fn(Lazy<FnData>),
-    ForeignFn(Lazy<FnData>),
+    Fn(Lazy<FnData<'tcx>>),
+    ForeignFn(Lazy<FnData<'tcx>>),
     Mod(Lazy<ModData>),
     MacroDef(Lazy<MacroDef>),
     Closure(Lazy<ClosureData<'tcx>>),
     Trait(Lazy<TraitData<'tcx>>),
     Impl(Lazy<ImplData<'tcx>>),
     DefaultImpl(Lazy<ImplData<'tcx>>),
-    Method(Lazy<MethodData>),
+    Method(Lazy<MethodData<'tcx>>),
     AssociatedType(AssociatedContainer),
     AssociatedConst(AssociatedContainer, u8),
 }
@@ -257,9 +257,10 @@ pub struct MacroDef {
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-pub struct FnData {
+pub struct FnData<'tcx> {
     pub constness: hir::Constness,
     pub arg_names: LazySeq<ast::Name>,
+    pub gen: Option<Lazy<GeneratorData<'tcx>>>,
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
@@ -328,8 +329,8 @@ impl AssociatedContainer {
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
-pub struct MethodData {
-    pub fn_data: FnData,
+pub struct MethodData<'tcx> {
+    pub fn_data: FnData<'tcx>,
     pub container: AssociatedContainer,
     pub has_self: bool,
 }
@@ -338,4 +339,11 @@ pub struct MethodData {
 pub struct ClosureData<'tcx> {
     pub kind: ty::ClosureKind,
     pub ty: Lazy<ty::PolyFnSig<'tcx>>,
+    pub gen: Option<Lazy<GeneratorData<'tcx>>>,
+}
+
+#[derive(RustcEncodable, RustcDecodable)]
+pub struct GeneratorData<'tcx> {
+    pub sig: ty::PolyGenSig<'tcx>,
+    pub layout: mir::GeneratorLayout<'tcx>,
 }

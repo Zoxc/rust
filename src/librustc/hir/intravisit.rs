@@ -1040,6 +1040,9 @@ pub fn walk_expr<'v, V: Visitor<'v>>(visitor: &mut V, expression: &'v Expr) {
                 visitor.visit_expr(input)
             }
         }
+        ExprSuspend(ref subexpression) => {
+            visitor.visit_expr(subexpression);
+        }
     }
 }
 

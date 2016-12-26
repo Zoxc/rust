@@ -13,7 +13,7 @@
 use hir::def_id::DefId;
 
 use middle::region;
-use ty::subst::Substs;
+use ty::subst::{Subst, Substs};
 use ty::{self, AdtDef, TypeFlags, Ty, TyCtxt, TypeFoldable};
 use ty::{Slice, TyS};
 use ty::subst::Kind;
@@ -142,6 +142,9 @@ pub enum TypeVariants<'tcx> {
     /// `|a| a`.
     TyClosure(DefId, ClosureSubsts<'tcx>),
 
+    /// The anonymous type of a generator. Pairs with a TyClosure for closure generators.
+    TyGenerator(DefId, ClosureSubsts<'tcx>),
+
     /// The never type `!`
     TyNever,
 
@@ -265,6 +268,25 @@ impl<'a, 'gcx, 'acx, 'tcx> ClosureSubsts<'tcx> {
         let generics = tcx.item_generics(def_id);
         self.substs[self.substs.len()-generics.own_count()..].iter().map(
             |t| t.as_type().expect("unexpected region in upvars"))
+    }
+}
+
+impl<'a, 'gcx, 'tcx> ClosureSubsts<'tcx> {
+    pub fn state_tys(self, def_id: DefId, tcx: TyCtxt<'a, 'gcx, 'tcx>) ->
+        impl Iterator<Item=Ty<'tcx>> + 'tcx
+    {
+        let state = tcx.generator_layout(def_id).fields;
+        let state: Vec<_> = state.iter().map(|d| d.ty.subst(tcx, self.substs)).collect();
+        state.into_iter()
+    }
+
+    pub fn field_tys(self, def_id: DefId, tcx: TyCtxt<'a, 'gcx, 'tcx>) ->
+        impl Iterator<Item=Ty<'tcx>> + 'tcx
+    {
+        let upvars = self.upvar_tys(def_id, tcx);
+        let state = self.state_tys(def_id, tcx);
+        let tys: Vec<_> = upvars.chain(iter::once(tcx.types.u32)).chain(state).collect();
+        tys.into_iter()
     }
 }
 
@@ -549,6 +571,26 @@ pub struct ProjectionTy<'tcx> {
     /// The name `N` of the associated type.
     pub item_name: Name,
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, RustcEncodable, RustcDecodable)]
+pub struct GenSig<'tcx> {
+    pub suspend_ty: Ty<'tcx>,
+    pub return_ty: Ty<'tcx>,
+}
+
+#[allow(warnings)]
+pub type PolyGenSig<'tcx> = Binder<GenSig<'tcx>>;
+
+#[allow(warnings)]
+impl<'tcx> PolyGenSig<'tcx> {
+    pub fn suspend_ty(&self) -> ty::Binder<Ty<'tcx>> {
+        self.map_bound_ref(|sig| sig.suspend_ty)
+    }
+    pub fn return_ty(&self) -> ty::Binder<Ty<'tcx>> {
+        self.map_bound_ref(|sig| sig.return_ty)
+    }
+}
+
 /// Signature of a function type, which I have arbitrarily
 /// decided to use to refer to the input/output types.
 ///
@@ -1345,7 +1387,7 @@ impl<'a, 'gcx, 'tcx> TyS<'tcx> {
             TyAdt(_, substs) | TyAnon(_, substs) => {
                 substs.regions().collect()
             }
-            TyClosure(_, ref substs) => {
+            TyClosure(_, ref substs) | TyGenerator(_, ref substs) => {
                 substs.substs.regions().collect()
             }
             TyProjection(ref data) => {

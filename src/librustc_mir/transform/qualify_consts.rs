@@ -390,6 +390,7 @@ impl<'a, 'tcx> Qualifier<'a, 'tcx, 'tcx> {
                 TerminatorKind::SwitchInt {..} |
                 TerminatorKind::DropAndReplace { .. } |
                 TerminatorKind::Resume |
+                TerminatorKind::Suspend { .. } |
                 TerminatorKind::Unreachable => None,
 
                 TerminatorKind::Return => {

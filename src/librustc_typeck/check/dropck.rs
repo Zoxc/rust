@@ -480,7 +480,7 @@ fn iterate_over_potentially_unsafe_regions_in_type<'a, 'b, 'gcx, 'tcx>(
             Ok(())
         }
 
-        ty::TyClosure(def_id, substs) => {
+        ty::TyClosure(def_id, substs) | ty::TyGenerator(def_id, substs)  => {
             for ty in substs.upvar_tys(def_id, tcx) {
                 iterate_over_potentially_unsafe_regions_in_type(cx, context, ty, depth+1)?
             }

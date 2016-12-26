@@ -460,17 +460,18 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
             }
             ty::AssociatedKind::Method => {
                 let fn_data = if let hir::TraitItemKind::Method(_, ref m) = ast_item.node {
-                    let arg_names = match *m {
+                    let (arg_names, gen) = match *m {
                         hir::TraitMethod::Required(ref names) => {
-                            self.encode_fn_arg_names(names)
+                            (self.encode_fn_arg_names(names), None)
                         }
                         hir::TraitMethod::Provided(body) => {
-                            self.encode_fn_arg_names_for_body(body)
+                            (self.encode_fn_arg_names_for_body(body), self.encode_generator(def_id))
                         }
                     };
                     FnData {
                         constness: hir::Constness::NotConst,
-                        arg_names: arg_names
+                        arg_names: arg_names,
+                        gen: gen,
                     }
                 } else {
                     bug!()
@@ -542,6 +543,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
                     FnData {
                         constness: sig.constness,
                         arg_names: self.encode_fn_arg_names_for_body(body),
+                        gen: self.encode_generator(def_id),
                     }
                 } else {
                     bug!()
@@ -647,6 +649,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
                 let data = FnData {
                     constness: constness,
                     arg_names: self.encode_fn_arg_names_for_body(body),
+                    gen: self.encode_generator(def_id),
                 };
 
                 EntryKind::Fn(self.lazy(&data))
@@ -948,6 +951,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
                 let data = FnData {
                     constness: hir::Constness::NotConst,
                     arg_names: self.encode_fn_arg_names(names),
+                    gen: None,
                 };
                 EntryKind::ForeignFn(self.lazy(&data))
             }
@@ -1097,12 +1101,23 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
         }
     }
 
+    fn encode_generator(&mut self, def_id: DefId) -> Option<Lazy<GeneratorData<'tcx>>> {
+        self.tcx.generator_sig(def_id).map(|sig| {
+            let layout = self.tcx.generator_layout(def_id);
+            self.lazy(&GeneratorData {
+                sig,
+                layout,
+            })
+        })
+    }
+
     fn encode_info_for_closure(&mut self, def_id: DefId) -> Entry<'tcx> {
         let tcx = self.tcx;
 
         let data = ClosureData {
             kind: tcx.closure_kind(def_id),
             ty: self.lazy(&tcx.closure_type(def_id)),
+            gen: self.encode_generator(def_id),
         };
 
         Entry {

@@ -2247,6 +2247,14 @@ impl<'a> Parser<'a> {
                     };
                     ex = ExprKind::Break(lt, e);
                     hi = self.prev_span.hi;
+                } else if self.eat_keyword(keywords::Yield) {
+                    if self.token.can_begin_expr() {
+                        let e = self.parse_expr()?;
+                        hi = e.span.hi;
+                        ex = ExprKind::Yield(Some(e));
+                    } else {
+                        ex = ExprKind::Yield(None);
+                    }
                 } else if self.token.is_keyword(keywords::Let) {
                     // Catch this syntax error here, instead of in `check_strict_keywords`, so
                     // that we can explicitly mention that let is not to be used as an expression

@@ -30,6 +30,7 @@ pub enum SimplifiedType {
     TupleSimplifiedType(usize),
     TraitSimplifiedType(DefId),
     ClosureSimplifiedType(DefId),
+    GeneratorSimplifiedType(DefId),
     AnonSimplifiedType(DefId),
     FunctionSimplifiedType(usize),
     ParameterSimplifiedType,
@@ -70,6 +71,9 @@ pub fn simplify_type<'a, 'gcx, 'tcx>(tcx: TyCtxt<'a, 'gcx, 'tcx>,
         }
         ty::TyClosure(def_id, _) => {
             Some(ClosureSimplifiedType(def_id))
+        }
+        ty::TyGenerator(def_id, _) => {
+            Some(GeneratorSimplifiedType(def_id))
         }
         ty::TyNever => Some(NeverSimplifiedType),
         ty::TyTuple(ref tys, _) => {

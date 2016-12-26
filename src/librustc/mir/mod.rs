@@ -82,6 +82,9 @@ pub struct Mir<'tcx> {
     /// Return type of the function.
     pub return_ty: Ty<'tcx>,
 
+    /// Suspend type of the function, if it is a generator.
+    pub suspend_ty: Option<Ty<'tcx>>,
+
     /// Declarations of locals.
     ///
     /// The first local is the return value pointer, followed by `arg_count`
@@ -122,6 +125,7 @@ impl<'tcx> Mir<'tcx> {
                visibility_scopes: IndexVec<VisibilityScope, VisibilityScopeData>,
                promoted: IndexVec<Promoted, Mir<'tcx>>,
                return_ty: Ty<'tcx>,
+               suspend_ty: Option<Ty<'tcx>>,
                local_decls: IndexVec<Local, LocalDecl<'tcx>>,
                arg_count: usize,
                upvar_decls: Vec<UpvarDecl>,
@@ -137,6 +141,7 @@ impl<'tcx> Mir<'tcx> {
             visibility_scopes: visibility_scopes,
             promoted: promoted,
             return_ty: return_ty,
+            suspend_ty: suspend_ty,
             local_decls: local_decls,
             arg_count: arg_count,
             upvar_decls: upvar_decls,
@@ -526,7 +531,18 @@ pub enum TerminatorKind<'tcx> {
         msg: AssertMessage<'tcx>,
         target: BasicBlock,
         cleanup: Option<BasicBlock>
-    }
+    },
+
+    /// A suspend point
+    Suspend {
+        /// The value to return
+        value: Operand<'tcx>,
+        /// Where to resume to
+        resume: BasicBlock,
+        /// Cleanup to be done if the generator is dropped at this suspend point
+        drop: Option<BasicBlock>,
+    },
+
 }
 
 impl<'tcx> Terminator<'tcx> {
@@ -564,6 +580,8 @@ impl<'tcx> TerminatorKind<'tcx> {
                 slice::ref_slice(t).into_cow(),
             Call { destination: None, cleanup: Some(ref c), .. } => slice::ref_slice(c).into_cow(),
             Call { destination: None, cleanup: None, .. } => (&[]).into_cow(),
+            Suspend { resume: t, drop: Some(c), .. } => vec![t, c].into_cow(),
+            Suspend { resume: ref t, drop: None, .. } => slice::ref_slice(t).into_cow(),
             DropAndReplace { target, unwind: Some(unwind), .. } |
             Drop { target, unwind: Some(unwind), .. } => {
                 vec![target, unwind].into_cow()
@@ -591,6 +609,8 @@ impl<'tcx> TerminatorKind<'tcx> {
             Call { destination: Some((_, ref mut t)), cleanup: None, .. } => vec![t],
             Call { destination: None, cleanup: Some(ref mut c), .. } => vec![c],
             Call { destination: None, cleanup: None, .. } => vec![],
+            Suspend { resume: ref mut t, drop: Some(ref mut c), .. } => vec![t, c],
+            Suspend { resume: ref mut t, drop: None, .. } => vec![t],
             DropAndReplace { ref mut target, unwind: Some(ref mut unwind), .. } |
             Drop { ref mut target, unwind: Some(ref mut unwind), .. } => vec![target, unwind],
             DropAndReplace { ref mut target, unwind: None, .. } |
@@ -622,6 +642,14 @@ impl<'tcx> BasicBlockData<'tcx> {
 
     pub fn terminator_mut(&mut self) -> &mut Terminator<'tcx> {
         self.terminator.as_mut().expect("invalid terminator state")
+    }
+
+    pub fn retain_statements<F>(&mut self, mut f: F) where F: FnMut(&mut Statement) -> bool {
+        for s in &mut self.statements {
+            if !f(s) {
+                s.kind = StatementKind::Nop;
+            }
+        }
     }
 }
 
@@ -663,6 +691,7 @@ impl<'tcx> TerminatorKind<'tcx> {
             SwitchInt { discr: ref lv, .. } => write!(fmt, "switchInt({:?})", lv),
             Return => write!(fmt, "return"),
             Resume => write!(fmt, "resume"),
+            Suspend { ref value, .. } => write!(fmt, "suspend({:?})", value),
             Unreachable => write!(fmt, "unreachable"),
             Drop { ref location, .. } => write!(fmt, "drop({:?})", location),
             DropAndReplace { ref location, ref value, .. } =>
@@ -696,6 +725,9 @@ impl<'tcx> TerminatorKind<'tcx> {
                     AssertMessage::Math(ref err) => {
                         write!(fmt, "{:?}", err.description())?;
                     }
+                    AssertMessage::GeneratorResumedAfterReturn => {
+                        write!(fmt, "{:?}", "generator resumed after completion")?;
+                    }
                 }
 
                 write!(fmt, ")")
@@ -724,6 +756,9 @@ impl<'tcx> TerminatorKind<'tcx> {
             Call { destination: Some(_), cleanup: None, .. } => vec!["return".into_cow()],
             Call { destination: None, cleanup: Some(_), .. } => vec!["unwind".into_cow()],
             Call { destination: None, cleanup: None, .. } => vec![],
+            Suspend { drop: Some(_), .. } =>
+                vec!["resume".into_cow(), "drop".into_cow()],
+            Suspend { drop: None, .. } => vec!["resume".into_cow()],
             DropAndReplace { unwind: None, .. } |
             Drop { unwind: None, .. } => vec!["return".into_cow()],
             DropAndReplace { unwind: Some(_), .. } |
@@ -743,7 +778,8 @@ pub enum AssertMessage<'tcx> {
         len: Operand<'tcx>,
         index: Operand<'tcx>
     },
-    Math(ConstMathErr)
+    Math(ConstMathErr),
+    GeneratorResumedAfterReturn,
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1070,6 +1106,7 @@ pub enum AggregateKind<'tcx> {
     /// number and is present only for union expressions.
     Adt(&'tcx AdtDef, usize, &'tcx Substs<'tcx>, Option<usize>),
     Closure(DefId, ClosureSubsts<'tcx>),
+    Generator(DefId, ClosureSubsts<'tcx>),
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, RustcEncodable, RustcDecodable)]
@@ -1205,6 +1242,30 @@ impl<'tcx> Debug for Rvalue<'tcx> {
                             struct_fmt.finish()
                         } else {
                             write!(fmt, "[closure]")
+                        }
+                    }),
+
+                    AggregateKind::Generator(def_id, _) => ty::tls::with(|tcx| {
+                        if let Some(node_id) = tcx.hir.as_local_node_id(def_id) {
+                            let name = format!("[generator@{:?}]", tcx.hir.span(node_id));
+                            let mut struct_fmt = fmt.debug_struct(&name);
+
+                            tcx.with_freevars(node_id, |freevars| {
+                                for (freevar, lv) in freevars.iter().zip(lvs) {
+                                    let def_id = freevar.def.def_id();
+                                    let var_id = tcx.hir.as_local_node_id(def_id).unwrap();
+                                    let var_name = tcx.local_var_name_str(var_id);
+                                    struct_fmt.field(&var_name, lv);
+                                }
+                                struct_fmt.field("$state", &lvs[freevars.len()]);
+                                for i in (freevars.len() + 1)..lvs.len() {
+                                    struct_fmt.field(&format!("${}", i - freevars.len() - 1), &lvs[i]);
+                                }
+                            });
+
+                            struct_fmt.finish()
+                        } else {
+                            write!(fmt, "[generator]")
                         }
                     }),
                 }
@@ -1350,6 +1411,11 @@ impl Location {
     }
 }
 
+/// The layout of generator state
+#[derive(Clone, Debug, RustcEncodable, RustcDecodable)]
+pub struct GeneratorLayout<'tcx> {
+    pub fields: Vec<LocalDecl<'tcx>>,
+}
 
 /*
  * TypeFoldable implementations for MIR types
@@ -1362,6 +1428,7 @@ impl<'tcx> TypeFoldable<'tcx> for Mir<'tcx> {
             visibility_scopes: self.visibility_scopes.clone(),
             promoted: self.promoted.fold_with(folder),
             return_ty: self.return_ty.fold_with(folder),
+            suspend_ty: self.suspend_ty.fold_with(folder),
             local_decls: self.local_decls.fold_with(folder),
             arg_count: self.arg_count,
             upvar_decls: self.upvar_decls.clone(),
@@ -1469,6 +1536,11 @@ impl<'tcx> TypeFoldable<'tcx> for Terminator<'tcx> {
                 target: target,
                 unwind: unwind
             },
+            Suspend { ref value, resume, drop } => Suspend {
+                value: value.fold_with(folder),
+                resume: resume,
+                drop: drop,
+            },
             Call { ref func, ref args, ref destination, cleanup } => {
                 let dest = destination.as_ref().map(|&(ref loc, dest)| {
                     (loc.fold_with(folder), dest)
@@ -1517,6 +1589,8 @@ impl<'tcx> TypeFoldable<'tcx> for Terminator<'tcx> {
             Drop { ref location, ..} => location.visit_with(visitor),
             DropAndReplace { ref location, ref value, ..} =>
                 location.visit_with(visitor) || value.visit_with(visitor),
+            Suspend { ref value, ..} =>
+                value.visit_with(visitor),
             Call { ref func, ref args, ref destination, .. } => {
                 let dest = if let Some((ref loc, _)) = *destination {
                     loc.visit_with(visitor)
@@ -1582,7 +1656,9 @@ impl<'tcx> TypeFoldable<'tcx> for Rvalue<'tcx> {
                     AggregateKind::Adt(def, v, substs, n) =>
                         AggregateKind::Adt(def, v, substs.fold_with(folder), n),
                     AggregateKind::Closure(id, substs) =>
-                        AggregateKind::Closure(id, substs.fold_with(folder))
+                        AggregateKind::Closure(id, substs.fold_with(folder)),
+                    AggregateKind::Generator(id, substs) =>
+                        AggregateKind::Generator(id, substs.fold_with(folder)),
                 };
                 Aggregate(kind, fields.fold_with(folder))
             }
@@ -1608,7 +1684,8 @@ impl<'tcx> TypeFoldable<'tcx> for Rvalue<'tcx> {
                     AggregateKind::Array(ty) => ty.visit_with(visitor),
                     AggregateKind::Tuple => false,
                     AggregateKind::Adt(_, _, substs, _) => substs.visit_with(visitor),
-                    AggregateKind::Closure(_, substs) => substs.visit_with(visitor)
+                    AggregateKind::Closure(_, substs) => substs.visit_with(visitor),
+                    AggregateKind::Generator(_, substs) => substs.visit_with(visitor),
                 }) || fields.visit_with(visitor)
             }
         }

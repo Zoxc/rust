@@ -139,18 +139,30 @@ fn build_mir<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId)
             // types/lifetimes replaced)
             let fn_sig = cx.tables().liberated_fn_sigs[&id].clone();
 
-            let ty = tcx.item_type(tcx.hir.local_def_id(id));
+            let local_def_id = tcx.hir.local_def_id(id);
+            let ty = tcx.item_type(local_def_id);
             let mut abi = fn_sig.abi;
-            let implicit_argument = if let ty::TyClosure(..) = ty.sty {
+            let is_closure = if let ty::TyClosure(..) = ty.sty {
                 // HACK(eddyb) Avoid having RustCall on closures,
                 // as it adds unnecessary (and wrong) auto-tupling.
                 abi = Abi::Rust;
+                true
+            } else {
+                false
+            };
+            let body = tcx.hir.body(body_id);
+            let implicit_argument = if body.generator {
+                Some((generator_self_ty(tcx,
+                    def_id,
+                    is_closure,
+                    id,
+                    body_id), None))
+            } else if is_closure {
                 Some((closure_self_ty(tcx, id, body_id), None))
             } else {
                 None
             };
 
-            let body = tcx.hir.body(body_id);
             let explicit_arguments =
                 body.arguments
                     .iter()
@@ -160,7 +172,15 @@ fn build_mir<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId)
                     });
 
             let arguments = implicit_argument.into_iter().chain(explicit_arguments);
-            build::construct_fn(cx, id, arguments, abi, fn_sig.output(), body)
+
+            let (suspend_ty, return_ty) = if body.generator {
+                let gen_sig = cx.tables().liberated_gen_sigs[&id].clone().unwrap();
+                (Some(gen_sig.suspend_ty), gen_sig.return_ty)
+            } else {
+                (None, fn_sig.output())
+            };
+            
+            build::construct_fn(cx, id, arguments, abi, return_ty, suspend_ty, body)
         } else {
             build::construct_const(cx, body_id)
         };
@@ -246,7 +266,7 @@ fn create_constructor_shim<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
 ///////////////////////////////////////////////////////////////////////////
 // BuildMir -- walks a crate, looking for fn items and methods to build MIR from
 
-fn closure_self_ty<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
+pub fn closure_self_ty<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                              closure_expr_id: ast::NodeId,
                              body_id: hir::BodyId)
                              -> Ty<'tcx> {
@@ -270,4 +290,36 @@ fn closure_self_ty<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
         ty::ClosureKind::FnOnce =>
             closure_ty
     }
+}
+
+fn generator_self_ty<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
+                               id: DefId,
+                               closure: bool,
+                               closure_expr_id: ast::NodeId,
+                               body_id: hir::BodyId)
+                               -> Ty<'tcx> {
+    let substs = if closure {
+        let ty = tcx.body_tables(body_id).node_id_to_type(closure_expr_id);
+        match ty.sty {
+            ty::TyClosure(_, substs) => substs,
+            _  => bug!(),
+        }
+    } else {
+        ty::ClosureSubsts {
+            substs: Substs::identity_for_item(tcx, id)
+        }
+    };
+
+    let gen_ty = tcx.mk_generator_from_closure_substs(id, substs);
+    
+    let region = ty::Region::ReFree(ty::FreeRegion {
+        scope: tcx.region_maps.item_extent(body_id.node_id),
+        bound_region: ty::BoundRegion::BrEnv,
+    });
+
+    let region = tcx.mk_region(region);
+
+    tcx.mk_ref(region,
+                       ty::TypeAndMut { ty: gen_ty,
+                                        mutbl: hir::MutMutable })
 }

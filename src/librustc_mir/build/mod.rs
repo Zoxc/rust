@@ -126,6 +126,7 @@ pub fn construct_fn<'a, 'gcx, 'tcx, A>(hir: Cx<'a, 'gcx, 'tcx>,
                                        arguments: A,
                                        abi: Abi,
                                        return_ty: Ty<'gcx>,
+                                       suspend_ty: Option<Ty<'gcx>>,
                                        body: &'gcx hir::Body)
                                        -> Mir<'tcx>
     where A: Iterator<Item=(Ty<'gcx>, Option<&'gcx hir::Pat>)>
@@ -189,7 +190,7 @@ pub fn construct_fn<'a, 'gcx, 'tcx, A>(hir: Cx<'a, 'gcx, 'tcx>,
         }).collect()
     });
 
-    let mut mir = builder.finish(upvar_decls, return_ty);
+    let mut mir = builder.finish(upvar_decls, return_ty, suspend_ty);
     mir.spread_arg = spread_arg;
     mir
 }
@@ -220,7 +221,7 @@ pub fn construct_const<'a, 'gcx, 'tcx>(hir: Cx<'a, 'gcx, 'tcx>,
         return_block.unit()
     });
 
-    builder.finish(vec![], ty)
+    builder.finish(vec![], ty, None)
 }
 
 pub fn construct_error<'a, 'gcx, 'tcx>(hir: Cx<'a, 'gcx, 'tcx>,
@@ -231,7 +232,7 @@ pub fn construct_error<'a, 'gcx, 'tcx>(hir: Cx<'a, 'gcx, 'tcx>,
     let mut builder = Builder::new(hir, span, 0, ty);
     let source_info = builder.source_info(span);
     builder.cfg.terminate(START_BLOCK, source_info, TerminatorKind::Unreachable);
-    builder.finish(vec![], ty)
+    builder.finish(vec![], ty, None)
 }
 
 impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
@@ -265,7 +266,8 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
 
     fn finish(self,
               upvar_decls: Vec<UpvarDecl>,
-              return_ty: Ty<'tcx>)
+              return_ty: Ty<'tcx>,
+              suspend_ty: Option<Ty<'tcx>>)
               -> Mir<'tcx> {
         for (index, block) in self.cfg.basic_blocks.iter().enumerate() {
             if block.terminator.is_none() {
@@ -277,6 +279,7 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
                  self.visibility_scopes,
                  IndexVec::new(),
                  return_ty,
+                 suspend_ty,
                  self.local_decls,
                  self.arg_count,
                  upvar_decls,
