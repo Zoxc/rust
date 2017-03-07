@@ -20,6 +20,8 @@ use intrinsics;
 use ops::{CoerceUnsized, Deref};
 use fmt;
 use hash;
+#[cfg(not(stage0))]
+use marker::Move;
 use marker::{PhantomData, Unsize};
 use mem;
 use nonzero::NonZero;
@@ -867,16 +869,26 @@ impl<T: ?Sized> PartialOrd for *mut T {
 /// modified without a unique path to the `Unique` reference. Useful
 /// for building abstractions like `Vec<T>` or `Box<T>`, which
 /// internally use raw pointers to manage the memory that they own.
+#[cfg(not(stage0))]
 #[allow(missing_debug_implementations)]
 #[unstable(feature = "unique", reason = "needs an RFC to flesh out design",
            issue = "27730")]
-pub struct Unique<T: ?Sized> {
+pub struct Unique<T: ?Sized+?Move> {
     pointer: NonZero<*const T>,
     // NOTE: this marker has no consequences for variance, but is necessary
     // for dropck to understand that we logically own a `T`.
     //
     // For details, see:
     // https://github.com/rust-lang/rfcs/blob/master/text/0769-sound-generic-drop.md#phantom-data
+    _marker: PhantomData<T>,
+}
+/// docs
+#[cfg(stage0)]
+#[allow(missing_debug_implementations)]
+#[unstable(feature = "unique", reason = "needs an RFC to flesh out design",
+           issue = "27730")]
+pub struct Unique<T: ?Sized> {
+    pointer: NonZero<*const T>,
     _marker: PhantomData<T>,
 }
 
@@ -940,16 +952,26 @@ impl<T> fmt::Pointer for Unique<T> {
 /// of this wrapper has shared ownership of the referent. Useful for
 /// building abstractions like `Rc<T>` or `Arc<T>`, which internally
 /// use raw pointers to manage the memory that they own.
+#[cfg(not(stage0))]
 #[allow(missing_debug_implementations)]
 #[unstable(feature = "shared", reason = "needs an RFC to flesh out design",
            issue = "27730")]
-pub struct Shared<T: ?Sized> {
+pub struct Shared<T: ?Sized+?Move> {
     pointer: NonZero<*const T>,
     // NOTE: this marker has no consequences for variance, but is necessary
     // for dropck to understand that we logically own a `T`.
     //
     // For details, see:
     // https://github.com/rust-lang/rfcs/blob/master/text/0769-sound-generic-drop.md#phantom-data
+    _marker: PhantomData<T>,
+}
+/// docs
+#[cfg(stage0)]
+#[allow(missing_debug_implementations)]
+#[unstable(feature = "shared", reason = "needs an RFC to flesh out design",
+           issue = "27730")]
+pub struct Shared<T: ?Sized> {
+    pointer: NonZero<*const T>,
     _marker: PhantomData<T>,
 }
 

@@ -10,8 +10,11 @@
 
 #![feature(associated_consts)]
 #![feature(optin_builtin_traits)]
+#![feature(immovable_types)]
 
-trait MarkerTr {}
+use std::marker::Move;
+
+trait MarkerTr: ?Move {}
 pub trait Tr {
     fn f();
     const C: u8;
@@ -39,7 +42,7 @@ pub extern "C" { //~ ERROR unnecessary visibility qualifier
 }
 
 const MAIN: u8 = {
-    trait MarkerTr {}
+    trait MarkerTr: ?Move {}
     pub trait Tr {
         fn f();
         const C: u8;
@@ -70,7 +73,7 @@ const MAIN: u8 = {
 };
 
 fn main() {
-    trait MarkerTr {}
+    trait MarkerTr: ?Move {}
     pub trait Tr {
         fn f();
         const C: u8;

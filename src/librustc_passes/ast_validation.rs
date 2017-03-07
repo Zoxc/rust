@@ -86,19 +86,6 @@ impl<'a> AstValidator<'a> {
             _ => {}
         }
     }
-
-    fn no_questions_in_bounds(&self, bounds: &TyParamBounds, where_: &str, is_trait: bool) {
-        for bound in bounds {
-            if let TraitTyParamBound(ref poly, TraitBoundModifier::Maybe) = *bound {
-                let mut err = self.err_handler().struct_span_err(poly.span,
-                                    &format!("`?Trait` is not permitted in {}", where_));
-                if is_trait {
-                    err.note(&format!("traits are `?{}` by default", poly.trait_ref.path));
-                }
-                err.emit();
-            }
-        }
-    }
 }
 
 impl<'a> Visitor<'a> for AstValidator<'a> {
@@ -155,7 +142,6 @@ impl<'a> Visitor<'a> for AstValidator<'a> {
                         any_lifetime_bounds = true;
                     }
                 }
-                self.no_questions_in_bounds(bounds, "trait object types", false);
             }
             TyKind::ImplTrait(ref bounds) => {
                 if !bounds.iter()
@@ -222,8 +208,7 @@ impl<'a> Visitor<'a> for AstValidator<'a> {
                     }
                 }
             }
-            ItemKind::Trait(.., ref bounds, ref trait_items) => {
-                self.no_questions_in_bounds(bounds, "supertraits", true);
+            ItemKind::Trait(.., ref trait_items) => {
                 for trait_item in trait_items {
                     if let TraitItemKind::Method(ref sig, ref block) = trait_item.node {
                         self.check_trait_fn_not_const(sig.constness);

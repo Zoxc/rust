@@ -614,11 +614,33 @@ impl<'o, 'gcx: 'tcx, 'tcx> AstConv<'gcx, 'tcx>+'o {
 
     fn conv_object_ty_poly_trait_ref(&self,
         span: Span,
-        trait_bounds: &[hir::PolyTraitRef],
+        bounds: &[hir::TyParamBound],
         lifetime: &hir::Lifetime)
         -> Ty<'tcx>
     {
         let tcx = self.tcx();
+
+        let move_id = tcx.lang_items.move_trait().unwrap();
+        let mut is_move = true;
+        let mut trait_bounds = Vec::new();
+        for bound in bounds {
+            match *bound {
+                hir::TraitTyParamBound(ref trait_ref, hir::TraitBoundModifier::None) => {
+                    trait_bounds.push(trait_ref.clone());
+                }
+                hir::TraitTyParamBound(ref trait_ref, hir::TraitBoundModifier::Maybe) => {
+                    if self.trait_def_id(&trait_ref.trait_ref) == move_id {
+                        is_move = false;
+                    } else {
+                        tcx.sess.span_warn(span,
+                                           "default bound relaxed for a trait object, but \
+                                            this does nothing because the given bound is not \
+                                            a default. Only `?Move` is supported");
+                    }
+                },
+                _ => unreachable!(),
+            }
+        }
 
         if trait_bounds.is_empty() {
             span_err!(tcx.sess, span, E0224,
@@ -632,14 +654,18 @@ impl<'o, 'gcx: 'tcx, 'tcx> AstConv<'gcx, 'tcx>+'o {
                                                         dummy_self,
                                                         &mut projection_bounds);
 
-        let (auto_traits, trait_bounds) = split_auto_traits(tcx, &trait_bounds[1..]);
+        let (mut auto_traits, trait_bounds) = split_auto_traits(tcx, &trait_bounds[1..]);
+
+        if is_move {
+            auto_traits.push(move_id);
+        }
 
         if !trait_bounds.is_empty() {
             let b = &trait_bounds[0];
             let span = b.trait_ref.path.span;
             struct_span_err!(self.tcx().sess, span, E0225,
-                "only Send/Sync traits can be used as additional traits in a trait object")
-                .span_label(span, &format!("non-Send/Sync additional trait"))
+                "only Send/Sync/Move traits can be used as additional traits in a trait object")
+                .span_label(span, &format!("non-Send/Sync/Move additional trait"))
                 .emit();
         }
 
@@ -1381,7 +1407,8 @@ fn split_auto_traits<'a, 'b, 'gcx, 'tcx>(tcx: TyCtxt<'a, 'gcx, 'tcx>,
                 // Checks whether `trait_did` refers to one of the builtin
                 // traits, like `Send`, and adds it to `auto_traits` if so.
                 if Some(trait_did) == tcx.lang_items.send_trait() ||
-                    Some(trait_did) == tcx.lang_items.sync_trait() {
+                    Some(trait_did) == tcx.lang_items.sync_trait() ||
+                    Some(trait_did) == tcx.lang_items.move_trait() {
                     let segments = &bound.trait_ref.path.segments;
                     let parameters = &segments[segments.len() - 1].parameters;
                     if !parameters.types().is_empty() {
@@ -1482,6 +1509,7 @@ fn report_lifetime_number_error(tcx: TyCtxt, span: Span, number: usize, expected
 pub struct Bounds<'tcx> {
     pub region_bounds: Vec<&'tcx ty::Region>,
     pub implicitly_sized: bool,
+    pub implicitly_move: bool,
     pub trait_bounds: Vec<ty::PolyTraitRef<'tcx>>,
     pub projection_bounds: Vec<ty::PolyProjectionPredicate<'tcx>>,
 }
@@ -1491,6 +1519,17 @@ impl<'a, 'gcx, 'tcx> Bounds<'tcx> {
                       -> Vec<ty::Predicate<'tcx>>
     {
         let mut vec = Vec::new();
+
+        // If it could be move, and is, add the move predicate
+        if self.implicitly_move {
+            if let Some(sized) = tcx.lang_items.move_trait() {
+                let trait_ref = ty::TraitRef {
+                    def_id: sized,
+                    substs: tcx.mk_substs_trait(param_ty, &[])
+                };
+                vec.push(trait_ref.to_predicate());
+            }
+        }
 
         // If it could be sized, and is, add the sized predicate
         if self.implicitly_sized {

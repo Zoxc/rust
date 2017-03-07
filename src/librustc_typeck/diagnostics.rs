@@ -2025,11 +2025,11 @@ unsafe impl !Clone for Foo { }
 This will compile:
 
 ```
-#![feature(optin_builtin_traits)]
+#![feature(optin_builtin_traits, immovable_types)]
 
 struct Foo;
 
-trait Enterprise {}
+trait Enterprise: ?std::marker::Move {}
 
 impl Enterprise for .. { }
 
@@ -4112,6 +4112,13 @@ compiler, but this was since corrected. See [issue #33685] for more
 details.
 
 [issue #33685]: https://github.com/rust-lang/rust/issues/33685
+"##,
+
+E0592: r##"
+The `Sized` trait is a special trait built-in to the compiler for types with a
+constant size known at compile-time. This trait is automatically implemented
+for types as needed by the compiler, and it is currently disallowed to
+explicitly implement it for a type.
 "##,
 
 }

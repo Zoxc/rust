@@ -1139,6 +1139,9 @@ pub struct ParameterEnvironment<'tcx> {
 
     /// A cache for `type_is_sized`
     pub is_sized_cache: RefCell<FxHashMap<Ty<'tcx>, bool>>,
+
+    /// A cache for `type_is_move`
+    pub is_move: RefCell<FxHashMap<Ty<'tcx>, bool>>,
 }
 
 impl<'a, 'tcx> ParameterEnvironment<'tcx> {
@@ -1153,6 +1156,7 @@ impl<'a, 'tcx> ParameterEnvironment<'tcx> {
             free_id_outlive: self.free_id_outlive,
             is_copy_cache: RefCell::new(FxHashMap()),
             is_sized_cache: RefCell::new(FxHashMap()),
+            is_move: RefCell::new(FxHashMap()),
         }
     }
 
@@ -2486,6 +2490,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             free_id_outlive: free_id_outlive,
             is_copy_cache: RefCell::new(FxHashMap()),
             is_sized_cache: RefCell::new(FxHashMap()),
+            is_move: RefCell::new(FxHashMap()),
         }
     }
 
@@ -2558,6 +2563,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             free_id_outlive: free_id_outlive,
             is_copy_cache: RefCell::new(FxHashMap()),
             is_sized_cache: RefCell::new(FxHashMap()),
+            is_move: RefCell::new(FxHashMap()),
         };
 
         let cause = traits::ObligationCause::misc(span, free_id_outlive.node_id(&self.region_maps));

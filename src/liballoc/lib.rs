@@ -89,6 +89,7 @@
 #![feature(placement_in_syntax)]
 #![feature(shared)]
 #![feature(staged_api)]
+#![cfg_attr(not(stage0), feature(immovable_types))]
 #![feature(unboxed_closures)]
 #![feature(unique)]
 #![feature(unsize)]

@@ -56,7 +56,7 @@ There are some shortcomings in this design:
 use astconv::{AstConv, Bounds};
 use lint;
 use constrained_type_params as ctp;
-use middle::lang_items::SizedTraitLangItem;
+use middle::lang_items::{SizedTraitLangItem, MoveTraitLangItem};
 use middle::const_val::ConstVal;
 use middle::resolve_lifetime as rl;
 use rustc_const_eval::{ConstContext, report_const_eval_err};
@@ -1196,48 +1196,39 @@ fn impl_trait_ref<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
     }
 }
 
-// Is it marked with ?Sized
-fn is_unsized<'gcx: 'tcx, 'tcx>(astconv: &AstConv<'gcx, 'tcx>,
+// Is it marked with ?Move
+fn opt_out_bounds<'gcx: 'tcx, 'tcx>(astconv: &AstConv<'gcx, 'tcx>,
                                 ast_bounds: &[hir::TyParamBound],
-                                span: Span) -> bool
+                                span: Span,
+                                sized_by_default: bool) -> (bool, bool)
 {
     let tcx = astconv.tcx();
+    let move_id = tcx.lang_items.require(MoveTraitLangItem).ok().map(|id| Def::Trait(id));
+    let size_id = if sized_by_default {
+        tcx.lang_items.require(SizedTraitLangItem).ok().map(|id| Def::Trait(id))
+    } else {
+        None
+    };
+    let (mut move_bound, mut size_bound) = (true, sized_by_default);
 
-    // Try to find an unbound in bounds.
-    let mut unbound = None;
     for ab in ast_bounds {
         if let &hir::TraitTyParamBound(ref ptr, hir::TraitBoundModifier::Maybe) = ab  {
-            if unbound.is_none() {
-                unbound = Some(ptr.trait_ref.clone());
+            let def = Some(ptr.trait_ref.path.def);
+
+            if def == move_id {
+                move_bound = false;
+            } else if def == size_id {
+                size_bound = false;
             } else {
-                span_err!(tcx.sess, span, E0203,
-                          "type parameter has more than one relaxed default \
-                                                bound, only one is supported");
+                tcx.sess.span_warn(span,
+                                        "default bound relaxed for a type parameter, but \
+                                        this does nothing because the given bound is not \
+                                        a default. Only `?Sized` and `?Move` is supported");
             }
         }
     }
 
-    let kind_id = tcx.lang_items.require(SizedTraitLangItem);
-    match unbound {
-        Some(ref tpb) => {
-            // FIXME(#8559) currently requires the unbound to be built-in.
-            if let Ok(kind_id) = kind_id {
-                if tpb.path.def != Def::Trait(kind_id) {
-                    tcx.sess.span_warn(span,
-                                       "default bound relaxed for a type parameter, but \
-                                       this does nothing because the given bound is not \
-                                       a default. Only `?Sized` is supported");
-                }
-            }
-        }
-        _ if kind_id.is_ok() => {
-            return false;
-        }
-        // No lang item for Sized, so we can't add it as a bound.
-        None => {}
-    }
-
-    true
+    (move_bound, size_bound)
 }
 
 /// Returns the early-bound lifetimes declared in this generics
@@ -1474,6 +1465,7 @@ fn predicates<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
     }
 }
 
+#[derive(Eq, PartialEq)]
 pub enum SizedByDefault { Yes, No, }
 
 /// Translate the AST's notion of ty param bounds (which are an enum consisting of a newtyped Ty or
@@ -1514,15 +1506,16 @@ pub fn compute_bounds<'gcx: 'tcx, 'tcx>(astconv: &AstConv<'gcx, 'tcx>,
 
     trait_bounds.sort_by(|a,b| a.def_id().cmp(&b.def_id()));
 
-    let implicitly_sized = if let SizedByDefault::Yes = sized_by_default {
-        !is_unsized(astconv, ast_bounds, span)
-    } else {
-        false
-    };
+    let (implicitly_move, implicitly_sized) =
+        opt_out_bounds(astconv,
+            ast_bounds,
+            span,
+            sized_by_default == SizedByDefault::Yes);
 
     Bounds {
         region_bounds: region_bounds,
         implicitly_sized: implicitly_sized,
+        implicitly_move: implicitly_move,
         trait_bounds: trait_bounds,
         projection_bounds: projection_bounds,
     }
