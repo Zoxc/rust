@@ -1139,6 +1139,9 @@ pub struct ParameterEnvironment<'tcx> {
 
     /// A cache for `type_is_sized`
     pub is_sized_cache: RefCell<FxHashMap<Ty<'tcx>, bool>>,
+
+    /// A cache for `can_move`
+    pub is_move: RefCell<FxHashMap<Ty<'tcx>, bool>>,
 }
 
 impl<'a, 'tcx> ParameterEnvironment<'tcx> {
@@ -1153,6 +1156,7 @@ impl<'a, 'tcx> ParameterEnvironment<'tcx> {
             free_id_outlive: self.free_id_outlive,
             is_copy_cache: RefCell::new(FxHashMap()),
             is_sized_cache: RefCell::new(FxHashMap()),
+            is_move: RefCell::new(FxHashMap()),
         }
     }
 
@@ -1593,6 +1597,131 @@ impl<'a, 'gcx, 'tcx> AdtDef {
 
     pub fn destructor(&self, tcx: TyCtxt<'a, 'gcx, 'tcx>) -> Option<Destructor> {
         queries::adt_destructor::get(tcx, DUMMY_SP, self.did)
+    }
+
+    pub fn move_constraint(&self, tcx: TyCtxt<'a, 'gcx, 'tcx>) -> Ty<'tcx> {
+        self.calculate_move_constraint_inner(tcx.global_tcx(), &mut Vec::new())
+    }
+
+    fn calculate_move_constraint_inner(&self,
+                                        tcx: TyCtxt<'a, 'tcx, 'tcx>,
+                                        stack: &mut Vec<DefId>)
+                                        -> Ty<'tcx>
+    {
+        if stack.contains(&self.did) {
+            debug!("calculate_move_constraint: {:?} is recursive", self);
+            // This should be reported as an error by `check_representable`.
+            //
+            // Consider the type as Sized in the meanwhile to avoid
+            // further errors.
+            return tcx.types.err;
+        }
+
+        stack.push(self.did);
+
+        let tys : Vec<_> =
+            self.variants.iter().flat_map(|v| {
+                v.fields.last()
+            }).flat_map(|f| {
+                let ty = tcx.item_type(f.did);
+                self.move_constraint_for_ty(tcx, stack, ty)
+            }).collect();
+
+        let self_ = stack.pop().unwrap();
+        assert_eq!(self_, self.did);
+
+        let ty = match tys.len() {
+            _ if tys.references_error() => tcx.types.err,
+            0 => tcx.types.bool,
+            1 => tys[0],
+            _ => tcx.intern_tup(&tys[..], false)
+        };
+
+        ty
+    }
+
+    fn move_constraint_for_ty(&self,
+                               tcx: TyCtxt<'a, 'tcx, 'tcx>,
+                               stack: &mut Vec<DefId>,
+                               ty: Ty<'tcx>)
+                               -> Vec<Ty<'tcx>> {
+        let result = match ty.sty {
+            TyBool | TyChar | TyInt(..) | TyUint(..) | TyFloat(..) |
+            TyRawPtr(..) | TyRef(..) | TyFnDef(..) | TyFnPtr(_) |
+            TyClosure(..) | TyStr | TyNever | TyError => {
+                vec![]
+            }
+
+            TyArray(element_ty, _) => {
+                vec![element_ty]
+            }
+
+            TySlice(element_ty) => {
+                vec![element_ty]
+            }
+
+            TyDynamic(..) => {
+                // FIXME: move if trait implies move
+                vec![]
+            }
+
+            TyTuple(ref tys, _) => {
+                match tys.last() {
+                    None => vec![],
+                    Some(ty) => self.move_constraint_for_ty(tcx, stack, ty)
+                }
+            }
+
+            TyAdt(adt, substs) => {
+                // recursive case
+                let adt_ty =
+                    adt.calculate_move_constraint_inner(tcx, stack)
+                       .subst(tcx, substs);
+                debug!("move_constraint_for_ty({:?}) intermediate = {:?}",
+                       ty, adt_ty);
+                if let ty::TyTuple(ref tys, _) = adt_ty.sty {
+                    tys.iter().flat_map(|ty| {
+                        self.move_constraint_for_ty(tcx, stack, ty)
+                    }).collect()
+                } else {
+                    self.move_constraint_for_ty(tcx, stack, adt_ty)
+                }
+            }
+
+            TyProjection(..) | TyAnon(..) => {
+                // must calculate explicitly.
+                // FIXME: consider special-casing always-Sized projections
+                vec![ty]
+            }
+
+            TyParam(..) => {
+                // perf hack: if there is a `T: Sized` bound, then
+                // we know that `T` is Sized and do not need to check
+                // it on the impl.
+
+                let move_trait = match tcx.lang_items.move_trait() {
+                    Some(x) => x,
+                    _ => return vec![ty]
+                };
+                let move_predicate = Binder(TraitRef {
+                    def_id: move_trait,
+                    substs: tcx.mk_substs_trait(ty, &[])
+                }).to_predicate();
+                let predicates = tcx.item_predicates(self.did).predicates;
+                if predicates.into_iter().any(|p| p == move_predicate) {
+                    vec![]
+                } else {
+                    vec![ty]
+                }
+            }
+
+            TyInfer(..) => {
+                bug!("unexpected type `{:?}` in move_constraint_for_ty",
+                     ty)
+            }
+        };
+        debug!("move_constraint_for_ty({:?}) = {:?}", ty, result);
+        result
     }
 
     /// Returns a simpler type such that `Self: Sized` if and only
@@ -2486,6 +2615,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             free_id_outlive: free_id_outlive,
             is_copy_cache: RefCell::new(FxHashMap()),
             is_sized_cache: RefCell::new(FxHashMap()),
+            is_move: RefCell::new(FxHashMap()),
         }
     }
 
@@ -2558,6 +2688,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             free_id_outlive: free_id_outlive,
             is_copy_cache: RefCell::new(FxHashMap()),
             is_sized_cache: RefCell::new(FxHashMap()),
+            is_move: RefCell::new(FxHashMap()),
         };
 
         let cause = traits::ObligationCause::misc(span, free_id_outlive.node_id(&self.region_maps));

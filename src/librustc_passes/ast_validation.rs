@@ -222,8 +222,7 @@ impl<'a> Visitor<'a> for AstValidator<'a> {
                     }
                 }
             }
-            ItemKind::Trait(.., ref bounds, ref trait_items) => {
-                self.no_questions_in_bounds(bounds, "supertraits", true);
+            ItemKind::Trait(.., ref trait_items) => {
                 for trait_item in trait_items {
                     if let TraitItemKind::Method(ref sig, ref block) = trait_item.node {
                         self.check_trait_fn_not_const(sig.constness);

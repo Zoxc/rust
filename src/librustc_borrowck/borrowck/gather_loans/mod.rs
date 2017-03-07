@@ -136,6 +136,14 @@ impl<'a, 'tcx> euv::Delegate<'tcx> for GatherLoanCtxt<'a, 'tcx> {
                borrow_id, cmt, loan_region,
                bk, loan_cause);
 
+        let tcx = self.bccx.tcx;
+        let ty = tcx.lift_to_global(&cmt.ty).unwrap();
+        if !ty.can_move(tcx.global_tcx(), &self.infcx.parameter_environment, borrow_span) {
+            span_err!(tcx.sess, borrow_span, E0593,
+                "cannot borrow a value of type {0}: it does not implement Move",
+                ty);
+        }
+
         self.guarantee_valid(borrow_id,
                              borrow_span,
                              cmt,

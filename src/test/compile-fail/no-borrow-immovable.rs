@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2017 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,23 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(optin_builtin_traits)]
-
-trait MyTrait: ?Move {}
-
-impl MyTrait for .. {}
-
-struct MyS;
-
-struct MyS2;
-
-impl !MyTrait for MyS2 {}
-
-fn is_mytrait<T: MyTrait>() {}
-
-fn main() {
-    is_mytrait::<MyS>();
-
-    is_mytrait::<(MyS2, MyS)>();
-    //~^ ERROR `MyS2: MyTrait` is not satisfied
+fn foo<T: ?Move>(x: T) 
+{
+	&x;
+	//~^ ERROR cannot borrow a value of type
 }
+
+fn main() { }

@@ -19,7 +19,12 @@
 // Reexported core operators
 #[stable(feature = "core_prelude", since = "1.4.0")]
 #[doc(no_inline)]
+#[cfg(stage0)]
 pub use marker::{Copy, Send, Sized, Sync};
+#[stable(feature = "core_prelude", since = "1.4.0")]
+#[doc(no_inline)]
+#[cfg(not(stage0))]
+pub use marker::{Copy, Send, Sized, Sync, Move};
 #[stable(feature = "core_prelude", since = "1.4.0")]
 #[doc(no_inline)]
 pub use ops::{Drop, Fn, FnMut, FnOnce};

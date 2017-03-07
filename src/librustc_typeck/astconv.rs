@@ -1482,6 +1482,7 @@ fn report_lifetime_number_error(tcx: TyCtxt, span: Span, number: usize, expected
 pub struct Bounds<'tcx> {
     pub region_bounds: Vec<&'tcx ty::Region>,
     pub implicitly_sized: bool,
+    pub implicitly_move: bool,
     pub trait_bounds: Vec<ty::PolyTraitRef<'tcx>>,
     pub projection_bounds: Vec<ty::PolyProjectionPredicate<'tcx>>,
 }
@@ -1491,6 +1492,17 @@ impl<'a, 'gcx, 'tcx> Bounds<'tcx> {
                       -> Vec<ty::Predicate<'tcx>>
     {
         let mut vec = Vec::new();
+
+        // If it could be move, and is, add the move predicate
+        if self.implicitly_move {
+            if let Some(sized) = tcx.lang_items.move_trait() {
+                let trait_ref = ty::TraitRef {
+                    def_id: sized,
+                    substs: tcx.mk_substs_trait(param_ty, &[])
+                };
+                vec.push(trait_ref.to_predicate());
+            }
+        }
 
         // If it could be sized, and is, add the sized predicate
         if self.implicitly_sized {

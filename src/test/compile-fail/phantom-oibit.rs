@@ -16,7 +16,7 @@
 
 use std::marker::{PhantomData};
 
-unsafe trait Zen {}
+unsafe trait Zen: ?Move {}
 
 unsafe impl Zen for .. {}
 

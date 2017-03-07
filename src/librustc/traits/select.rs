@@ -1144,7 +1144,13 @@ impl<'cx, 'gcx, 'tcx> SelectionContext<'cx, 'gcx, 'tcx> {
             // For other types, we'll use the builtin rules.
             let copy_conditions = self.copy_conditions(obligation);
             self.assemble_builtin_bound_candidates(copy_conditions, &mut candidates)?;
-        } else if self.tcx().lang_items.sized_trait() == Some(def_id) {
+        } else if self.tcx().lang_items.move_trait() == Some(def_id) {
+            // Move is never implementable by end-users, it is
+            // always automatically computed.
+            let move_conditions = self.move_conditions(obligation);
+            self.assemble_builtin_bound_candidates(move_conditions,
+                                                   &mut candidates)?;
+         } else if self.tcx().lang_items.sized_trait() == Some(def_id) {
             // Sized is never implementable by end-users, it is
             // always automatically computed.
             let sized_conditions = self.sized_conditions(obligation);
@@ -1767,6 +1773,80 @@ impl<'cx, 'gcx, 'tcx> SelectionContext<'cx, 'gcx, 'tcx> {
         }
     }
 
+    fn move_conditions(&mut self, obligation: &TraitObligation<'tcx>)
+                     -> BuiltinImplConditions<'tcx>
+    {
+        use self::BuiltinImplConditions::{Ambiguous, None, Where};
+
+        // NOTE: binder moved to (*)
+        let self_ty = self.infcx.shallow_resolve(
+            obligation.predicate.skip_binder().self_ty());
+
+        match self_ty.sty {
+            ty::TyInfer(ty::IntVar(_)) | ty::TyInfer(ty::FloatVar(_)) |
+            ty::TyUint(_) | ty::TyInt(_) | ty::TyBool | ty::TyFloat(_) |
+            ty::TyFnDef(..) | ty::TyFnPtr(_) | ty::TyRawPtr(..) |
+            ty::TyChar | ty::TyRef(..) |
+            ty::TyClosure(..) | ty::TyNever |
+            ty::TyError | ty::TyStr  => {
+                // safe for everything
+                Where(ty::Binder(Vec::new()))
+            }
+
+            // FIXME move if trait implies move
+            ty::TyDynamic(ref _data, ..) => {
+                /*data.principal()
+
+                match data.principal() {
+                    Some(p) => p.with_self_ty(this.tcx(), self_ty),
+                    None => Where(ty::Binder(Vec::new())),
+                }
+
+                let trait_ref = ty::Binder(ty::TraitRef {
+                    def_id: trait_def_id,
+                    substs: Substs::identity_for_item(self, trait_def_id)
+                });
+                supertraits = Some(traits::supertraits(self, trait_ref).any());
+*/
+                Where(ty::Binder(Vec::new()))
+            }
+
+            ty::TyArray(element_ty, _) => {
+                // (*) binder moved here
+                Where(ty::Binder(vec![element_ty]))
+            }
+
+            ty::TySlice(element_ty) => {
+                // (*) binder moved here
+                Where(ty::Binder(vec![element_ty]))
+            }
+
+            ty::TyTuple(tys, _) => {
+                Where(ty::Binder(tys.last().into_iter().cloned().collect()))
+            }
+
+            ty::TyAdt(def, substs) => {
+                let move_crit = def.move_constraint(self.tcx());
+                // (*) binder moved here
+                Where(ty::Binder(match move_crit.sty {
+                    ty::TyTuple(tys, _) => tys.to_vec().subst(self.tcx(), substs),
+                    ty::TyBool => vec![],
+                    _ => vec![move_crit.subst(self.tcx(), substs)]
+                }))
+            }
+
+            ty::TyProjection(_) | ty::TyParam(_) | ty::TyAnon(..) => None,
+            ty::TyInfer(ty::TyVar(_)) => Ambiguous,
+
+            ty::TyInfer(ty::FreshTy(_))
+            | ty::TyInfer(ty::FreshIntTy(_))
+            | ty::TyInfer(ty::FreshFloatTy(_)) => {
+                bug!("asked to assemble builtin bounds of unexpected type: {:?}",
+                     self_ty);
+            }
+        }
+    }
+
     fn sized_conditions(&mut self, obligation: &TraitObligation<'tcx>)
                      -> BuiltinImplConditions<'tcx>
     {
@@ -2119,6 +2199,9 @@ impl<'cx, 'gcx, 'tcx> SelectionContext<'cx, 'gcx, 'tcx> {
         let obligations = if has_nested {
             let trait_def = obligation.predicate.def_id();
             let conditions = match trait_def {
+                _ if Some(trait_def) == self.tcx().lang_items.move_trait() => {
+                    self.move_conditions(obligation)
+                }
                 _ if Some(trait_def) == self.tcx().lang_items.sized_trait() => {
                     self.sized_conditions(obligation)
                 }

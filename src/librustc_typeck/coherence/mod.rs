@@ -57,6 +57,18 @@ fn enforce_trait_manually_implementable(tcx: TyCtxt, impl_def_id: DefId, trait_d
     let li = &tcx.lang_items;
 
     // Disallow *all* explicit impls of `Sized` and `Unsize` for now.
+    if did == li.move_trait() {
+        let span = tcx.span_of_impl(impl_def_id).unwrap();
+        struct_span_err!(tcx.sess,
+                         span,
+                         E0592,
+                         "explicit impls for the `Move` trait are not permitted")
+            .span_label(span, &format!("impl of 'Move' not allowed"))
+            .emit();
+        return;
+    }
+
+    // Disallow *all* explicit impls of `Sized` and `Unsize` for now.
     if did == li.sized_trait() {
         let span = tcx.span_of_impl(impl_def_id).unwrap();
         struct_span_err!(tcx.sess,

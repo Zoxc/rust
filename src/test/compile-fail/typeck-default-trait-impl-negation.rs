@@ -10,11 +10,11 @@
 
 #![feature(optin_builtin_traits)]
 
-trait MyTrait {}
+trait MyTrait: ?Move {}
 
 impl MyTrait for .. {}
 
-unsafe trait MyUnsafeTrait {}
+unsafe trait MyUnsafeTrait: ?Move {}
 
 unsafe impl MyUnsafeTrait for .. {}
 

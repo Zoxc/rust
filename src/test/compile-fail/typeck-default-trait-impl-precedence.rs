@@ -15,7 +15,7 @@
 
 #![feature(optin_builtin_traits)]
 
-trait Defaulted { }
+trait Defaulted: ?Move { }
 impl Defaulted for .. { }
 impl<'a,T:Signed> Defaulted for &'a T { }
 impl<'a,T:Signed> Defaulted for &'a mut T { }

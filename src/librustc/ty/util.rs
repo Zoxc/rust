@@ -635,6 +635,15 @@ impl<'a, 'tcx> ty::TyS<'tcx> {
         result
     }
 
+    pub fn can_move(&'tcx self, tcx: TyCtxt<'a, 'tcx, 'tcx>,
+                         param_env: &ParameterEnvironment<'tcx>,
+                         span: Span) -> bool {
+        assert!(!self.needs_infer());
+
+        self.impls_bound(tcx, param_env, tcx.require_lang_item(lang_items::MoveTraitLangItem),
+                              &param_env.is_move, span)
+    }
+
     #[inline]
     pub fn layout<'lcx>(&'tcx self, infcx: &InferCtxt<'a, 'tcx, 'lcx>)
                         -> Result<&'tcx Layout, LayoutError<'tcx>> {

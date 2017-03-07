@@ -40,7 +40,33 @@ use hash::Hasher;
 #[stable(feature = "rust1", since = "1.0.0")]
 #[lang = "send"]
 #[rustc_on_unimplemented = "`{Self}` cannot be sent between threads safely"]
+#[cfg(stage0)]
 pub unsafe trait Send {
+    // empty.
+}
+
+/// Types that can be transferred across thread boundaries.
+///
+/// This trait is automatically implemented when the compiler determines it's
+/// appropriate.
+///
+/// An example of a non-`Send` type is the reference-counting pointer
+/// [`rc::Rc`][`Rc`]. If two threads attempt to clone [`Rc`]s that point to the same
+/// reference-counted value, they might try to update the reference count at the
+/// same time, which is [undefined behavior][ub] because [`Rc`] doesn't use atomic
+/// operations. Its cousin [`sync::Arc`][arc] does use atomic operations (incurring
+/// some overhead) and thus is `Send`.
+///
+/// See [the Nomicon](../../nomicon/send-and-sync.html) for more details.
+///
+/// [`Rc`]: ../../std/rc/struct.Rc.html
+/// [arc]: ../../std/sync/struct.Arc.html
+/// [ub]: ../../reference/behavior-considered-undefined.html
+#[stable(feature = "rust1", since = "1.0.0")]
+#[lang = "send"]
+#[rustc_on_unimplemented = "`{Self}` cannot be sent between threads safely"]
+#[cfg(not(stage0))]
+pub unsafe trait Send: ?Move {
     // empty.
 }
 
@@ -89,7 +115,58 @@ impl<T: ?Sized> !Send for *mut T { }
 #[lang = "sized"]
 #[rustc_on_unimplemented = "`{Self}` does not have a constant size known at compile-time"]
 #[fundamental] // for Default, for example, which requires that `[T]: !Default` be evaluatable
+#[cfg(stage0)]
 pub trait Sized {
+    // Empty.
+}
+
+/// Types with a constant size known at compile time.
+///
+/// All type parameters have an implicit bound of `Sized`. The special syntax
+/// `?Sized` can be used to remove this bound if it's not appropriate.
+///
+/// ```
+/// # #![allow(dead_code)]
+/// struct Foo<T>(T);
+/// struct Bar<T: ?Sized>(T);
+///
+/// // struct FooUse(Foo<[i32]>); // error: Sized is not implemented for [i32]
+/// struct BarUse(Bar<[i32]>); // OK
+/// ```
+///
+/// The one exception is the implicit `Self` type of a trait, which does not
+/// get an implicit `Sized` bound. This is because a `Sized` bound prevents
+/// the trait from being used to form a [trait object]:
+///
+/// ```
+/// # #![allow(unused_variables)]
+/// trait Foo { }
+/// trait Bar: Sized { }
+///
+/// struct Impl;
+/// impl Foo for Impl { }
+/// impl Bar for Impl { }
+///
+/// let x: &Foo = &Impl;    // OK
+/// // let y: &Bar = &Impl; // error: the trait `Bar` cannot
+///                         // be made into an object
+/// ```
+///
+/// [trait object]: ../../book/trait-objects.html
+#[stable(feature = "rust1", since = "1.0.0")]
+#[lang = "sized"]
+#[rustc_on_unimplemented = "`{Self}` does not have a constant size known at compile-time"]
+#[fundamental] // for Default, for example, which requires that `[T]: !Default` be evaluatable
+#[cfg(not(stage0))]
+pub trait Sized: ?Move {
+    // Empty.
+}
+
+/// Types can be moved after being borrowed
+#[cfg(not(stage0))]
+#[lang = "move"]
+#[stable(feature = "rust1", since = "1.0.0")]
+pub trait Move: ?Move {
     // Empty.
 }
 
@@ -343,7 +420,84 @@ pub trait Copy : Clone {
 #[stable(feature = "rust1", since = "1.0.0")]
 #[lang = "sync"]
 #[rustc_on_unimplemented = "`{Self}` cannot be shared between threads safely"]
+#[cfg(stage0)]
 pub unsafe trait Sync {
+    // Empty
+}
+
+/// Types for which it is safe to share references between threads.
+///
+/// This trait is automatically implemented when the compiler determines
+/// it's appropriate.
+///
+/// The precise definition is: a type `T` is `Sync` if `&T` is
+/// [`Send`][send]. In other words, if there is no possibility of
+/// [undefined behavior][ub] (including data races) when passing
+/// `&T` references between threads.
+///
+/// As one would expect, primitive types like [`u8`][u8] and [`f64`][f64]
+/// are all `Sync`, and so are simple aggregate types containing them,
+/// like tuples, structs and enums. More examples of basic `Sync`
+/// types include "immutable" types like `&T`, and those with simple
+/// inherited mutability, such as [`Box<T>`][box], [`Vec<T>`][vec] and
+/// most other collection types. (Generic parameters need to be `Sync`
+/// for their container to be `Sync`.)
+///
+/// A somewhat surprising consequence of the definition is that `&mut T`
+/// is `Sync` (if `T` is `Sync`) even though it seems like that might
+/// provide unsynchronized mutation. The trick is that a mutable
+/// reference behind a shared reference (that is, `& &mut T`)
+/// becomes read-only, as if it were a `& &T`. Hence there is no risk
+/// of a data race.
+///
+/// Types that are not `Sync` are those that have "interior
+/// mutability" in a non-thread-safe form, such as [`cell::Cell`][cell]
+/// and [`cell::RefCell`][refcell]. These types allow for mutation of
+/// their contents even through an immutable, shared reference. For
+/// example the `set` method on [`Cell<T>`][cell] takes `&self`, so it requires
+/// only a shared reference [`&Cell<T>`][cell]. The method performs no
+/// synchronization, thus [`Cell`][cell] cannot be `Sync`.
+///
+/// Another example of a non-`Sync` type is the reference-counting
+/// pointer [`rc::Rc`][rc]. Given any reference [`&Rc<T>`][rc], you can clone
+/// a new [`Rc<T>`][rc], modifying the reference counts in a non-atomic way.
+///
+/// For cases when one does need thread-safe interior mutability,
+/// Rust provides [atomic data types], as well as explicit locking via
+/// [`sync::Mutex`][mutex] and [`sync::RWLock`][rwlock]. These types
+/// ensure that any mutation cannot cause data races, hence the types
+/// are `Sync`. Likewise, [`sync::Arc`][arc] provides a thread-safe
+/// analogue of [`Rc`][rc].
+///
+/// Any types with interior mutability must also use the
+/// [`cell::UnsafeCell`][unsafecell] wrapper around the value(s) which
+/// can be mutated through a shared reference. Failing to doing this is
+/// [undefined behavior][ub]. For example, [`transmute`][transmute]-ing
+/// from `&T` to `&mut T` is invalid.
+///
+/// See [the Nomicon](../../nomicon/send-and-sync.html) for more
+/// details about `Sync`.
+///
+/// [send]: trait.Send.html
+/// [u8]: ../../std/primitive.u8.html
+/// [f64]: ../../std/primitive.f64.html
+/// [box]: ../../std/boxed/struct.Box.html
+/// [vec]: ../../std/vec/struct.Vec.html
+/// [cell]: ../cell/struct.Cell.html
+/// [refcell]: ../cell/struct.RefCell.html
+/// [rc]: ../../std/rc/struct.Rc.html
+/// [arc]: ../../std/sync/struct.Arc.html
+/// [atomic data types]: ../sync/atomic/index.html
+/// [mutex]: ../../std/sync/struct.Mutex.html
+/// [rwlock]: ../../std/sync/struct.RwLock.html
+/// [unsafecell]: ../cell/struct.UnsafeCell.html
+/// [ub]: ../../reference/behavior-considered-undefined.html
+/// [transmute]: ../../std/mem/fn.transmute.html
+#[stable(feature = "rust1", since = "1.0.0")]
+#[lang = "sync"]
+#[rustc_on_unimplemented = "`{Self}` cannot be shared between threads safely"]
+#[cfg(not(stage0))]
+pub unsafe trait Sync: ?Move {
     // Empty
 }
 

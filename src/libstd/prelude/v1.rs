@@ -16,7 +16,11 @@
 
 // Reexported core operators
 #[stable(feature = "rust1", since = "1.0.0")]
+#[cfg(stage0)]
 #[doc(no_inline)] pub use marker::{Copy, Send, Sized, Sync};
+#[stable(feature = "rust1", since = "1.0.0")]
+#[cfg(not(stage0))]
+#[doc(no_inline)] pub use marker::{Copy, Send, Sized, Sync, Move};
 #[stable(feature = "rust1", since = "1.0.0")]
 #[doc(no_inline)] pub use ops::{Drop, Fn, FnMut, FnOnce};
 

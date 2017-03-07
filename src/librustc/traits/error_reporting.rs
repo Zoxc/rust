@@ -742,6 +742,11 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                         .map_or(false, |sized_id| sized_id == trait_ref.def_id())
                     {
                         self.need_type_info(obligation, self_ty);
+                    } else if
+                        self.tcx.lang_items.move_trait()
+                        .map_or(false, |move_id| move_id == trait_ref.def_id())
+                    {
+                        self.need_type_info(obligation, self_ty);
                     } else {
                         let mut err = struct_span_err!(self.tcx.sess,
                                                         obligation.cause.span, E0283,

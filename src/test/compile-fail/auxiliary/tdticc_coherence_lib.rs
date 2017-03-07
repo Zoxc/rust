@@ -11,7 +11,7 @@
 #![feature(optin_builtin_traits, core)]
 #![crate_type = "rlib"]
 
-pub trait DefaultedTrait { }
+pub trait DefaultedTrait: ?Move { }
 impl DefaultedTrait for .. { }
 
 pub struct Something<T> { t: T }

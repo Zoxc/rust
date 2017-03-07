@@ -10,7 +10,7 @@
 
 #![feature(optin_builtin_traits)]
 
-trait MyTrait {}
+trait MyTrait: ?Move {}
 
 impl MyTrait for .. {}
 impl<T> !MyTrait for *mut T {}
