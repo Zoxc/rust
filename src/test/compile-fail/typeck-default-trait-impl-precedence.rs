@@ -14,8 +14,11 @@
 // impls whose types unify.
 
 #![feature(optin_builtin_traits)]
+#![feature(immovable_types)]
 
-trait Defaulted { }
+use std::marker::Move;
+
+trait Defaulted: ?Move { }
 impl Defaulted for .. { }
 impl<'a,T:Signed> Defaulted for &'a T { }
 impl<'a,T:Signed> Defaulted for &'a mut T { }

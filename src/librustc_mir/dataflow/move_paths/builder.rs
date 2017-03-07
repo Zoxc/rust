@@ -28,6 +28,7 @@ pub(super) struct MoveDataBuilder<'a, 'tcx: 'a> {
     tcx: TyCtxt<'a, 'tcx, 'tcx>,
     param_env: ty::ParamEnv<'tcx>,
     data: MoveData<'tcx>,
+    move_check: bool,
 }
 
 pub enum MovePathError {
@@ -38,7 +39,8 @@ pub enum MovePathError {
 impl<'a, 'tcx> MoveDataBuilder<'a, 'tcx> {
     fn new(mir: &'a Mir<'tcx>,
            tcx: TyCtxt<'a, 'tcx, 'tcx>,
-           param_env: ty::ParamEnv<'tcx>)
+           param_env: ty::ParamEnv<'tcx>,
+           move_check: bool)
            -> Self {
         let mut move_paths = IndexVec::new();
         let mut path_map = IndexVec::new();
@@ -47,6 +49,7 @@ impl<'a, 'tcx> MoveDataBuilder<'a, 'tcx> {
             mir,
             tcx,
             param_env,
+            move_check,
             data: MoveData {
                 moves: IndexVec::new(),
                 loc_map: LocationMap::new(mir),
@@ -174,9 +177,10 @@ impl<'a, 'tcx> MoveDataBuilder<'a, 'tcx> {
 
 pub(super) fn gather_moves<'a, 'tcx>(mir: &Mir<'tcx>,
                                      tcx: TyCtxt<'a, 'tcx, 'tcx>,
-                                     param_env: ty::ParamEnv<'tcx>)
+                                     param_env: ty::ParamEnv<'tcx>,
+                                     move_check: bool)
                                      -> MoveData<'tcx> {
-    let mut builder = MoveDataBuilder::new(mir, tcx, param_env);
+    let mut builder = MoveDataBuilder::new(mir, tcx, param_env, move_check);
 
     for (bb, block) in mir.basic_blocks().iter_enumerated() {
         for (i, stmt) in block.statements.iter().enumerate() {
@@ -314,6 +318,10 @@ impl<'a, 'tcx> MoveDataBuilder<'a, 'tcx> {
         if !lv_ty.moves_by_default(self.tcx, self.param_env, DUMMY_SP) {
             debug!("gather_move({:?}, {:?}) - {:?} is Copy. skipping", loc, lval, lv_ty);
             return
+        }
+
+        if self.move_check && lv_ty.is_move(self.tcx, self.param_env, DUMMY_SP) {
+            // FIXME: skip?
         }
 
         let path = match self.move_path_for(lval) {

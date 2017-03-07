@@ -1909,11 +1909,14 @@ impl Clean<Type> for hir::Ty {
                 }
             }
             TyTraitObject(ref bounds, ref lifetime) => {
-                match bounds[0].clean(cx).trait_ {
+                let bound = match bounds[0] {
+                    hir::TraitTyParamBound(ref trait_ref,
+                        hir::TraitBoundModifier::None) => trait_ref,
+                    _ => panic!(),
+                };
+                match bound.clean(cx).trait_ {
                     ResolvedPath { path, typarams: None, did, is_generic } => {
-                        let mut bounds: Vec<_> = bounds[1..].iter().map(|bound| {
-                            TraitBound(bound.clean(cx), hir::TraitBoundModifier::None)
-                        }).collect();
+                        let mut bounds: Vec<_> = bounds[1..].clean(cx);
                         if !lifetime.is_elided() {
                             bounds.push(RegionBound(lifetime.clean(cx)));
                         }

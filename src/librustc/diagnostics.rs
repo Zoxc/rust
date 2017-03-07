@@ -1201,7 +1201,7 @@ to unambiguously choose an implementation.
 
 For example:
 
-```compile_fail,E0283
+```compile_fail,E0282
 trait Generator {
     fn create() -> u32;
 }

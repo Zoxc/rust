@@ -717,10 +717,26 @@ pub trait FnBox<A> {
     fn call_box(self: Box<Self>, args: A) -> Self::Output;
 }
 
+#[cfg(stage0)]
 #[unstable(feature = "fnbox",
            reason = "will be deprecated if and when `Box<FnOnce>` becomes usable", issue = "28796")]
 impl<A, F> FnBox<A> for F
     where F: FnOnce<A>
+{
+    type Output = F::Output;
+
+    fn call_box(self: Box<F>, args: A) -> F::Output {
+        self.call_once(args)
+    }
+}
+
+#[cfg(not(stage0))]
+#[unstable(feature = "fnbox",
+           reason = "will be deprecated if and when `Box<FnOnce>` becomes usable", issue = "28796")]
+impl<A, F> FnBox<A> for F
+    where F: FnOnce<A>,
+          <F as FnOnce<A>>::Output: marker::Move,
+
 {
     type Output = F::Output;
 

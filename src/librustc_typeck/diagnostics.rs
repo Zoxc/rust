@@ -1855,11 +1855,11 @@ unsafe impl !Clone for Foo { }
 This will compile:
 
 ```
-#![feature(optin_builtin_traits)]
+#![feature(optin_builtin_traits, immovable_types)]
 
 struct Foo;
 
-trait Enterprise {}
+trait Enterprise: ?std::marker::Move {}
 
 impl Enterprise for .. { }
 

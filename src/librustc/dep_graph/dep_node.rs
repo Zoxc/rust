@@ -493,6 +493,7 @@ define_dep_nodes!( <'tcx>
     [anon] IsCopy,
     [anon] IsSized,
     [anon] IsFreeze,
+    [anon] IsMove,
     [anon] NeedsDrop,
     [anon] Layout,
 

@@ -59,7 +59,7 @@ fn mir_borrowck<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId) {
     let param_env = tcx.param_env(def_id);
     tcx.infer_ctxt().enter(|_infcx| {
 
-        let move_data = MoveData::gather_moves(mir, tcx, param_env);
+        let move_data = MoveData::gather_moves(mir, tcx, param_env, false);
         let mdpe = MoveDataParamEnv { move_data: move_data, param_env: param_env };
         let dead_unwinds = IdxSetBuf::new_empty(mir.basic_blocks().len());
         let flow_borrows = do_dataflow(tcx, mir, id, &attributes, &dead_unwinds,

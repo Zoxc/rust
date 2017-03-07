@@ -327,9 +327,21 @@ impl<'tcx> fmt::Display for &'tcx ty::Slice<ty::ExistentialPredicate<'tcx>> {
                 parameterized(f, principal.substs, principal.def_id, &projections)?;
             }
 
+            let move_id = tcx.lang_items.move_trait().unwrap();
+
+            let mut is_move = false;
+
             // Builtin bounds.
             for did in self.auto_traits() {
-                write!(f, " + {}", tcx.item_path_str(did))?;
+                if move_id == did {
+                    is_move = true;
+                } else {
+                    write!(f, " + {}", tcx.item_path_str(did))?;
+                }
+            }
+
+            if !is_move {
+                write!(f, " + ?Move")?;
             }
 
             Ok(())
@@ -810,9 +822,15 @@ impl<'tcx> fmt::Display for ty::TypeVariants<'tcx> {
 
                     let mut first = true;
                     let mut is_sized = false;
+                    let mut is_move = false;
                     write!(f, "impl")?;
                     for predicate in bounds.predicates {
                         if let Some(trait_ref) = predicate.to_opt_poly_trait_ref() {
+                            // Don't print +Move, but rather +?Move if absent.
+                            if Some(trait_ref.def_id()) == tcx.lang_items.move_trait() {
+                                is_move = true;
+                                continue;
+                            }
                             // Don't print +Sized, but rather +?Sized if absent.
                             if Some(trait_ref.def_id()) == tcx.lang_items().sized_trait() {
                                 is_sized = true;
@@ -822,6 +840,10 @@ impl<'tcx> fmt::Display for ty::TypeVariants<'tcx> {
                             write!(f, "{}{}", if first { " " } else { "+" }, trait_ref)?;
                             first = false;
                         }
+                    }
+                    if !is_move {
+                        write!(f, "{}?Move", if first { " " } else { "+" })?;
+                        first = false;
                     }
                     if !is_sized {
                         write!(f, "{}?Sized", if first { " " } else { "+" })?;

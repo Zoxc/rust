@@ -1006,4 +1006,5 @@ register_diagnostics! {
     E0524, // two closures require unique access to `..` at the same time
     E0526, // shuffle indices are not constant
     E0625, // thread-local statics cannot be accessed at compile-time
+    E0901, // move of observed immovable value
 }

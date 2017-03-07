@@ -230,8 +230,9 @@ impl<'tcx> MovePathLookup<'tcx> {
 impl<'a, 'tcx> MoveData<'tcx> {
     pub fn gather_moves(mir: &Mir<'tcx>,
                         tcx: TyCtxt<'a, 'tcx, 'tcx>,
-                        param_env: ty::ParamEnv<'tcx>)
+                        param_env: ty::ParamEnv<'tcx>,
+                        move_check: bool)
                         -> Self {
-        builder::gather_moves(mir, tcx, param_env)
+        builder::gather_moves(mir, tcx, param_env, move_check)
     }
 }
