@@ -17,7 +17,7 @@ trait Foo {
     fn foo(self);
 }
 
-fn foo<'a,'b,T>(x: &'a T, y: &'b T) //~ ERROR type annotations required
+fn foo<'a,'b,T>(x: &'a T, y: &'b T) //~ ERROR type annotations
     where &'a T : Foo,
           &'b T : Foo
 {

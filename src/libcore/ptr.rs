@@ -855,6 +855,21 @@ impl<T: ?Sized> PartialOrd for *mut T {
     fn ge(&self, other: &*mut T) -> bool { *self >= *other }
 }
 
+/// docs
+#[allow(missing_debug_implementations)]
+#[cfg(stage0)]
+#[unstable(feature = "unique", reason = "needs an RFC to flesh out design",
+           issue = "27730")]
+pub struct Unique<T: ?Sized> {
+    pointer: NonZero<*const T>,
+    // NOTE: this marker has no consequences for variance, but is necessary
+    // for dropck to understand that we logically own a `T`.
+    //
+    // For details, see:
+    // https://github.com/rust-lang/rfcs/blob/master/text/0769-sound-generic-drop.md#phantom-data
+    _marker: PhantomData<T>,
+}
+
 /// A wrapper around a raw non-null `*mut T` that indicates that the possessor
 /// of this wrapper owns the referent. This in turn implies that the
 /// `Unique<T>` is `Send`/`Sync` if `T` is `Send`/`Sync`, unlike a raw
@@ -864,9 +879,10 @@ impl<T: ?Sized> PartialOrd for *mut T {
 /// for building abstractions like `Vec<T>` or `Box<T>`, which
 /// internally use raw pointers to manage the memory that they own.
 #[allow(missing_debug_implementations)]
+#[cfg(not(stage0))]
 #[unstable(feature = "unique", reason = "needs an RFC to flesh out design",
            issue = "27730")]
-pub struct Unique<T: ?Sized> {
+pub struct Unique<T: ?Sized+?Move> {
     pointer: NonZero<*const T>,
     // NOTE: this marker has no consequences for variance, but is necessary
     // for dropck to understand that we logically own a `T`.

@@ -10,6 +10,6 @@
 
 fn main() {
     let _: Box<std::io::Read + std::io::Write>;
-    //~^ ERROR only Send/Sync traits can be used as additional traits in a trait object [E0225]
-    //~| NOTE non-Send/Sync additional trait
+    //~^ ERROR only Send/Sync/Move traits can be used as additional traits in a trait object [E0225]
+    //~| NOTE non-Send/Sync/Move additional trait
 }

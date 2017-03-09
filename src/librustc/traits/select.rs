@@ -1793,22 +1793,13 @@ impl<'cx, 'gcx, 'tcx> SelectionContext<'cx, 'gcx, 'tcx> {
                 Where(ty::Binder(Vec::new()))
             }
 
-            // FIXME move if trait implies move
-            ty::TyDynamic(ref _data, ..) => {
-                /*data.principal()
-
-                match data.principal() {
-                    Some(p) => p.with_self_ty(this.tcx(), self_ty),
-                    None => Where(ty::Binder(Vec::new())),
+            ty::TyDynamic(ref data, ..) => {
+                let move_id = self.tcx().lang_items.move_trait().unwrap();
+                if data.auto_traits().find(|t| *t == move_id).is_some() {
+                    Where(ty::Binder(Vec::new()))
+                } else {
+                    None
                 }
-
-                let trait_ref = ty::Binder(ty::TraitRef {
-                    def_id: trait_def_id,
-                    substs: Substs::identity_for_item(self, trait_def_id)
-                });
-                supertraits = Some(traits::supertraits(self, trait_ref).any());
-*/
-                Where(ty::Binder(Vec::new()))
             }
 
             ty::TyArray(element_ty, _) => {
@@ -1822,7 +1813,7 @@ impl<'cx, 'gcx, 'tcx> SelectionContext<'cx, 'gcx, 'tcx> {
             }
 
             ty::TyTuple(tys, _) => {
-                Where(ty::Binder(tys.last().into_iter().cloned().collect()))
+                Where(ty::Binder(tys.to_vec()))
             }
 
             ty::TyAdt(def, substs) => {

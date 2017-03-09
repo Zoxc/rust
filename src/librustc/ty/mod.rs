@@ -1610,10 +1610,7 @@ impl<'a, 'gcx, 'tcx> AdtDef {
     {
         if stack.contains(&self.did) {
             debug!("calculate_move_constraint: {:?} is recursive", self);
-            // This should be reported as an error by `check_representable`.
-            //
-            // Consider the type as Sized in the meanwhile to avoid
-            // further errors.
+            // Recursive type, which is treated as Move
             return tcx.types.err;
         }
 
@@ -1621,7 +1618,7 @@ impl<'a, 'gcx, 'tcx> AdtDef {
 
         let tys : Vec<_> =
             self.variants.iter().flat_map(|v| {
-                v.fields.last()
+                v.fields.iter()
             }).flat_map(|f| {
                 let ty = tcx.item_type(f.did);
                 self.move_constraint_for_ty(tcx, stack, ty)
@@ -1661,15 +1658,11 @@ impl<'a, 'gcx, 'tcx> AdtDef {
             }
 
             TyDynamic(..) => {
-                // FIXME: move if trait implies move
-                vec![]
+                vec![ty]
             }
 
             TyTuple(ref tys, _) => {
-                match tys.last() {
-                    None => vec![],
-                    Some(ty) => self.move_constraint_for_ty(tcx, stack, ty)
-                }
+                tys.to_vec()
             }
 
             TyAdt(adt, substs) => {
@@ -1695,8 +1688,8 @@ impl<'a, 'gcx, 'tcx> AdtDef {
             }
 
             TyParam(..) => {
-                // perf hack: if there is a `T: Sized` bound, then
-                // we know that `T` is Sized and do not need to check
+                // perf hack: if there is a `T: Move` bound, then
+                // we know that `T` is Move and do not need to check
                 // it on the impl.
 
                 let move_trait = match tcx.lang_items.move_trait() {

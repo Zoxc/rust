@@ -2398,7 +2398,12 @@ impl<Idx: PartialOrd<Idx>> RangeToInclusive<Idx> {
 pub trait Deref {
     /// The resulting type after dereferencing
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[cfg(stage0)]
     type Target: ?Sized;
+    /// The resulting type after dereferencing
+    #[stable(feature = "rust1", since = "1.0.0")]
+    #[cfg(not(stage0))]
+    type Target: ?Sized+?Move;
 
     /// The method called to dereference a value
     #[stable(feature = "rust1", since = "1.0.0")]
@@ -2505,6 +2510,18 @@ impl<'a, T: ?Sized> DerefMut for &'a mut T {
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_paren_sugar]
 #[fundamental] // so that regex can rely that `&str: !FnMut`
+#[cfg(not(stage0))]
+pub trait Fn<Args: ?Move> : FnMut<Args> {
+    /// This is called when the call operator is used.
+    #[unstable(feature = "fn_traits", issue = "29625")]
+    extern "rust-call" fn call(&self, args: Args) -> Self::Output;
+}
+/// docs
+#[lang = "fn"]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[rustc_paren_sugar]
+#[fundamental] // so that regex can rely that `&str: !FnMut`
+#[cfg(stage0)]
 pub trait Fn<Args> : FnMut<Args> {
     /// This is called when the call operator is used.
     #[unstable(feature = "fn_traits", issue = "29625")]
@@ -2550,6 +2567,18 @@ pub trait Fn<Args> : FnMut<Args> {
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_paren_sugar]
 #[fundamental] // so that regex can rely that `&str: !FnMut`
+#[cfg(not(stage0))]
+pub trait FnMut<Args: ?Move> : FnOnce<Args> {
+    /// This is called when the call operator is used.
+    #[unstable(feature = "fn_traits", issue = "29625")]
+    extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output;
+}
+/// docs
+#[lang = "fn_mut"]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[rustc_paren_sugar]
+#[fundamental] // so that regex can rely that `&str: !FnMut`
+#[cfg(stage0)]
 pub trait FnMut<Args> : FnOnce<Args> {
     /// This is called when the call operator is used.
     #[unstable(feature = "fn_traits", issue = "29625")]
@@ -2596,6 +2625,23 @@ pub trait FnMut<Args> : FnOnce<Args> {
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_paren_sugar]
 #[fundamental] // so that regex can rely that `&str: !FnMut`
+#[cfg(not(stage0))]
+pub trait FnOnce<Args: ?Move> {
+    /// The returned type after the call operator is used.
+    #[stable(feature = "fn_once_output", since = "1.12.0")]
+    type Output: ?Move;
+
+    /// This is called when the call operator is used.
+    #[unstable(feature = "fn_traits", issue = "29625")]
+    extern "rust-call" fn call_once(self, args: Args) -> Self::Output;
+}
+
+/// docs
+#[lang = "fn_once"]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[rustc_paren_sugar]
+#[fundamental] // so that regex can rely that `&str: !FnMut`
+#[cfg(stage0)]
 pub trait FnOnce<Args> {
     /// The returned type after the call operator is used.
     #[stable(feature = "fn_once_output", since = "1.12.0")]

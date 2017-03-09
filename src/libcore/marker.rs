@@ -695,6 +695,13 @@ macro_rules! impls{
 /// as not to indicate ownership.
 ///
 /// [drop check]: ../../nomicon/dropck.html
+#[cfg(not(stage0))]
+#[lang = "phantom_data"]
+#[stable(feature = "rust1", since = "1.0.0")]
+pub struct PhantomData<T:?Sized+?Move>;
+
+/// docs
+#[cfg(stage0)]
 #[lang = "phantom_data"]
 #[stable(feature = "rust1", since = "1.0.0")]
 pub struct PhantomData<T:?Sized>;

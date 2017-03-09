@@ -17,8 +17,13 @@ use ops::{CoerceUnsized, Deref};
 
 /// Unsafe trait to indicate what types are usable with the NonZero struct
 pub unsafe trait Zeroable {}
-
+#[cfg(not(stage0))]
+unsafe impl<T:?Sized+?Move> Zeroable for *const T {}
+#[cfg(not(stage0))]
+unsafe impl<T:?Sized+?Move> Zeroable for *mut T {}
+#[cfg(stage0)]
 unsafe impl<T:?Sized> Zeroable for *const T {}
+#[cfg(stage0)]
 unsafe impl<T:?Sized> Zeroable for *mut T {}
 unsafe impl Zeroable for isize {}
 unsafe impl Zeroable for usize {}

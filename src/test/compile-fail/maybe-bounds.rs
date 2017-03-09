@@ -10,7 +10,7 @@
 
 trait Tr: ?Sized {} //~ WARN default bound relaxed
 
-type A1 = Tr + ?Sized; //~ ERROR `?Trait` is not permitted in trait object types
-type A2 = for<'a> Tr + ?Sized; //~ ERROR `?Trait` is not permitted in trait object types
+type A1 = Tr + ?Sized; //~ WARN default bound relaxed
+type A2 = for<'a> Tr + ?Sized; //~ WARN default bound relaxed
 
 fn main() {}

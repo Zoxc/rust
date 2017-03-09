@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![allow(dead_code)]
+
 use super::{
     FulfillmentError,
     FulfillmentErrorCode,
@@ -852,7 +854,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                                        "type annotations needed");
 
         err.span_label(cause.span, &format!("cannot infer type for `{}`", name));
-
+/*
         let expr = self.tcx.hir.expect_expr(cause.body_id);
 
         let mut local_visitor = FindLocalByTypeVisitor {
@@ -873,7 +875,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                 err.span_label(pattern_span, &format!("consider giving a type to pattern"));
             }
         }
-
+*/
         err.emit();
     }
 

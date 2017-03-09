@@ -99,13 +99,21 @@ pub struct ExchangeHeapSingleton {
     _force_singleton: (),
 }
 
+/// docs
+#[lang = "owned_box"]
+#[fundamental]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[cfg(stage0)]
+pub struct Box<T: ?Sized>(Unique<T>);
+
 /// A pointer type for heap allocation.
 ///
 /// See the [module-level documentation](../../std/boxed/index.html) for more.
 #[lang = "owned_box"]
 #[fundamental]
 #[stable(feature = "rust1", since = "1.0.0")]
-pub struct Box<T: ?Sized>(Unique<T>);
+#[cfg(not(stage0))]
+pub struct Box<T: ?Sized+?Move>(Unique<T>);
 
 /// `IntermediateBox` represents uninitialized backing storage for `Box`.
 ///
@@ -293,8 +301,17 @@ impl<T: ?Sized> Box<T> {
     }
 }
 
+#[cfg(stage0)]
 #[stable(feature = "rust1", since = "1.0.0")]
 unsafe impl<#[may_dangle] T: ?Sized> Drop for Box<T> {
+    fn drop(&mut self) {
+        // FIXME: Do nothing, drop is currently performed by compiler.
+    }
+}
+
+#[cfg(not(stage0))]
+#[stable(feature = "rust1", since = "1.0.0")]
+unsafe impl<#[may_dangle] T: ?Sized+?Move> Drop for Box<T> {
     fn drop(&mut self) {
         // FIXME: Do nothing, drop is currently performed by compiler.
     }
@@ -627,10 +644,27 @@ pub trait FnBox<A> {
     fn call_box(self: Box<Self>, args: A) -> Self::Output;
 }
 
+#[cfg(stage0)]
 #[unstable(feature = "fnbox",
            reason = "will be deprecated if and when `Box<FnOnce>` becomes usable", issue = "28796")]
 impl<A, F> FnBox<A> for F
     where F: FnOnce<A>
+
+{
+    type Output = F::Output;
+
+    fn call_box(self: Box<F>, args: A) -> F::Output {
+        self.call_once(args)
+    }
+}
+
+#[cfg(not(stage0))]
+#[unstable(feature = "fnbox",
+           reason = "will be deprecated if and when `Box<FnOnce>` becomes usable", issue = "28796")]
+impl<A, F> FnBox<A> for F
+    where F: FnOnce<A>,
+          <F as FnOnce<A>>::Output: Move,
+
 {
     type Output = F::Output;
 
