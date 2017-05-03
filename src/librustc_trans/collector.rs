@@ -563,6 +563,7 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
             mir::TerminatorKind::Return |
             mir::TerminatorKind::Unreachable |
             mir::TerminatorKind::Assert { .. } => {}
+            mir::TerminatorKind::GeneratorDrop |
             mir::TerminatorKind::Suspend { .. } => bug!(),
         }
 

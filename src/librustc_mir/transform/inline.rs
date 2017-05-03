@@ -768,6 +768,8 @@ impl<'a, 'tcx> MutVisitor<'tcx> for Integrator<'a, 'tcx> {
         self.super_terminator_kind(block, kind, loc);
 
         match *kind {
+            TerminatorKind::GeneratorDrop |
+            TerminatorKind::Suspend { .. } => bug!(),
             TerminatorKind::Goto { ref mut target} => {
                 *target = self.update_target(*target);
             }
@@ -785,16 +787,6 @@ impl<'a, 'tcx> MutVisitor<'tcx> for Integrator<'a, 'tcx> {
                     // Unless this drop is in a cleanup block, add an unwind edge to
                     // the orignal call's cleanup block
                     *unwind = self.cleanup_block;
-                }
-            }
-            TerminatorKind::Suspend { ref mut resume, ref mut drop, .. } => {
-                *resume = self.update_target(*resume);
-                if let Some(tgt) = *drop {
-                    *drop = Some(self.update_target(tgt));
-                } else if !self.in_cleanup_block {
-                    // Unless this drop is in a cleanup block, add an unwind edge to
-                    // the orignal call's cleanup block
-                    *drop = self.cleanup_block;
                 }
             }
             TerminatorKind::Call { ref mut destination, ref mut cleanup, .. } => {

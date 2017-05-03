@@ -231,7 +231,7 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
                     Lvalue::Local(Local::new(1)),
                     impl_arg_ty));
                 let resume = this.cfg.start_new_block();
-                let cleanup = this.diverge_cleanup();
+                let cleanup = this.generator_drop_cleanup();
                 this.cfg.terminate(block, source_info, TerminatorKind::Suspend {
                     value: value,
                     resume: resume,

@@ -323,7 +323,7 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
             });
             let lvalue = Lvalue::Local(Local::new(1));
             // Make sure we drop the argument on completion
-            self.schedule_drop(ast_body.span, argument_extent, &lvalue, impl_arg_ty);
+            self.schedule_drop(ast_body.span, argument_extent, &lvalue, impl_arg_ty, true);
         };
 
         // Allocate locals for the function arguments
@@ -362,7 +362,7 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
 
             // Make sure we drop (parts of) the argument even when not matched on.
             self.schedule_drop(pattern.as_ref().map_or(ast_body.span, |pat| pat.span),
-                               argument_extent, &lvalue, ty);
+                               argument_extent, &lvalue, ty, false);
 
         }
 

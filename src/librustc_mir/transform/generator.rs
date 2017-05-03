@@ -402,57 +402,6 @@ fn insert_entry_point<'tcx>(mir: &mut Mir<'tcx>,
     }
 }
 
-fn convert_cleaup_blocks<'tcx>(mir: &mut Mir<'tcx>) {
-    fn reachable_no_unwind<'tcx>(visited: &mut BitVector, mir: &mut Mir<'tcx>, block: BasicBlock) {
-        if !visited.insert(block.index()) {
-            return;
-        }
-
-        let succ: Vec<_> = mir.basic_blocks_mut()[block].terminator_mut().kind.successors_no_unwind_mut().into_iter().map(|s| *s).collect();
-
-        for b in succ {
-            reachable_no_unwind(visited, mir, b);
-        }
-    }
-
-    // Find the blocks reachable without unwind paths
-
-    let mut visited = BitVector::new(mir.basic_blocks().len());
-    reachable_no_unwind(&mut visited, mir, BasicBlock::new(0));
-
-    // Are any of the reachable blocks cleanup blocks?
-    // If so, we want to duplicate them
-
-    let to_dup: Vec<_> = visited.iter().map(|i| BasicBlock::new(i)).filter(|i| mir.basic_blocks()[*i].is_cleanup).collect();
-
-    let mut map = HashMap::new();
-
-    for b in to_dup {
-        let di = BasicBlock::new(mir.basic_blocks().len());
-        let mut db = mir.basic_blocks()[b].clone();
-        db.is_cleanup = false;
-        if let TerminatorKind::Resume = db.terminator().kind {
-            db.terminator_mut().kind = TerminatorKind::Return; 
-        }
-        mir.basic_blocks_mut().push(db);
-        map.insert(b, di);
-    }
-
-    // Remap references from non-unwind paths to the cloned blocks
-
-    for i in visited.iter() {
-        let b = BasicBlock::new(i);
-
-        let succ: Vec<_> = mir.basic_blocks_mut()[b].terminator_mut().kind.successors_no_unwind_mut();
-
-        for b in succ {
-            if let Some(r) = map.get(b) {
-                *b = *r;
-            }
-        }
-    }
-}
-
 fn generate_drop<'a, 'tcx>(
                 tcx: TyCtxt<'a, 'tcx, 'tcx>,
                 transform: &TransformVisitor<'a, 'tcx>,
@@ -497,6 +446,13 @@ fn generate_drop<'a, 'tcx>(
         is_cleanup: false,
     });
 
+    for block in mir.basic_blocks_mut() {
+        let kind = &mut block.terminator_mut().kind;
+        if let TerminatorKind::GeneratorDrop = *kind {
+            *kind = TerminatorKind::Return;
+        }
+    }
+
     // Remove the implicit argument
     mir.arg_count = 1;
     mir.local_decls.raw.pop();
@@ -528,7 +484,6 @@ fn generate_drop<'a, 'tcx>(
         is_user_variable: false,
     };
 
-    convert_cleaup_blocks(mir);
     simplify::remove_dead_blocks(mir);
 
     dump_mir(tcx, "generator_drop", &0, source, mir);

@@ -429,6 +429,7 @@ impl<'a, 'gcx, 'tcx> TypeChecker<'a, 'gcx, 'tcx> {
             TerminatorKind::Goto { .. } |
             TerminatorKind::Resume |
             TerminatorKind::Return |
+            TerminatorKind::GeneratorDrop |
             TerminatorKind::Unreachable |
             TerminatorKind::Drop { .. } => {
                 // no checks needed for these
@@ -635,9 +636,18 @@ impl<'a, 'gcx, 'tcx> TypeChecker<'a, 'gcx, 'tcx> {
                     span_mirbug!(self, block, "return on cleanup block")
                 }
             }
-            TerminatorKind::Suspend { .. } => {
+            TerminatorKind::GeneratorDrop { .. } => {
+                if is_cleanup {
+                    span_mirbug!(self, block, "generator_drop in cleanup block")
+                }
+            }
+            TerminatorKind::Suspend { resume, drop, .. } => {
                 if is_cleanup {
                     span_mirbug!(self, block, "suspend in cleanup block")
+                }
+                self.assert_iscleanup(mir, block, resume, is_cleanup);
+                if let Some(drop) = drop {
+                    self.assert_iscleanup(mir, block, drop, is_cleanup);
                 }
             }
             TerminatorKind::Unreachable => {}

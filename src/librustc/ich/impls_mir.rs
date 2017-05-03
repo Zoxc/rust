@@ -99,6 +99,7 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a, 'tcx>> for mir::TerminatorKin
             }
             mir::TerminatorKind::Resume |
             mir::TerminatorKind::Return |
+            mir::TerminatorKind::GeneratorDrop |
             mir::TerminatorKind::Unreachable => {}
             mir::TerminatorKind::Drop { ref location, target, unwind } => {
                 location.hash_stable(hcx, hasher);

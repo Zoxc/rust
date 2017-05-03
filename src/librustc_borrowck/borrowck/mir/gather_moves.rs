@@ -458,6 +458,7 @@ impl<'a, 'tcx> MoveDataBuilder<'a, 'tcx> {
         match term.kind {
             TerminatorKind::Goto { target: _ } |
             TerminatorKind::Resume |
+            TerminatorKind::GeneratorDrop |
             TerminatorKind::Unreachable => { }
 
             TerminatorKind::Return => {

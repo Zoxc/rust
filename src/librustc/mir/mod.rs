@@ -572,6 +572,8 @@ pub enum TerminatorKind<'tcx> {
         drop: Option<BasicBlock>,
     },
 
+    /// Indicates the end of the dropping of a generator
+    GeneratorDrop,
 }
 
 impl<'tcx> Terminator<'tcx> {
@@ -601,7 +603,7 @@ impl<'tcx> TerminatorKind<'tcx> {
         match *self {
             Goto { target: ref b } => slice::ref_slice(b).into_cow(),
             SwitchInt { targets: ref b, .. } => b[..].into_cow(),
-            Resume => (&[]).into_cow(),
+            Resume | GeneratorDrop => (&[]).into_cow(),
             Return => (&[]).into_cow(),
             Unreachable => (&[]).into_cow(),
             Call { destination: Some((_, t)), cleanup: Some(c), .. } => vec![t, c].into_cow(),
@@ -631,7 +633,7 @@ impl<'tcx> TerminatorKind<'tcx> {
         match *self {
             Goto { target: ref mut b } => vec![b],
             SwitchInt { targets: ref mut b, .. } => b.iter_mut().collect(),
-            Resume => Vec::new(),
+            Resume | GeneratorDrop => Vec::new(),
             Return => Vec::new(),
             Unreachable => Vec::new(),
             Call { destination: Some((_, ref mut t)), cleanup: Some(ref mut c), .. } => vec![t, c],
@@ -647,23 +649,6 @@ impl<'tcx> TerminatorKind<'tcx> {
                 vec![target]
             }
             Assert { ref mut target, cleanup: Some(ref mut unwind), .. } => vec![target, unwind],
-            Assert { ref mut target, .. } => vec![target]
-        }
-    }
-
-    pub fn successors_no_unwind_mut(&mut self) -> Vec<&mut BasicBlock> {
-        use self::TerminatorKind::*;
-        match *self {
-            Goto { target: ref mut b } => vec![b],
-            SwitchInt { targets: ref mut b, .. } => b.iter_mut().collect(),
-            Resume => Vec::new(),
-            Return => Vec::new(),
-            Unreachable => Vec::new(),
-            Call { destination: Some((_, ref mut t)), .. } => vec![t],
-            Call { destination: None, .. } => vec![],
-            Suspend { resume: ref mut t, .. } => vec![t],
-            DropAndReplace { ref mut target, .. } |
-            Drop { ref mut target, .. } |
             Assert { ref mut target, .. } => vec![target]
         }
     }
@@ -736,6 +721,7 @@ impl<'tcx> TerminatorKind<'tcx> {
             Goto { .. } => write!(fmt, "goto"),
             SwitchInt { discr: ref lv, .. } => write!(fmt, "switchInt({:?})", lv),
             Return => write!(fmt, "return"),
+            GeneratorDrop => write!(fmt, "generator_drop"),
             Resume => write!(fmt, "resume"),
             Suspend { ref value, .. } => write!(fmt, "_1 = suspend({:?})", value),
             Unreachable => write!(fmt, "unreachable"),
@@ -785,7 +771,7 @@ impl<'tcx> TerminatorKind<'tcx> {
     pub fn fmt_successor_labels(&self) -> Vec<Cow<'static, str>> {
         use self::TerminatorKind::*;
         match *self {
-            Return | Resume | Unreachable => vec![],
+            Return | Resume | Unreachable | GeneratorDrop => vec![],
             Goto { .. } => vec!["".into()],
             SwitchInt { ref values, .. } => {
                 values.iter()
@@ -1623,6 +1609,7 @@ impl<'tcx> TypeFoldable<'tcx> for Terminator<'tcx> {
                     cleanup: cleanup
                 }
             },
+            GeneratorDrop => GeneratorDrop,
             Resume => Resume,
             Return => Return,
             Unreachable => Unreachable,
@@ -1664,6 +1651,7 @@ impl<'tcx> TypeFoldable<'tcx> for Terminator<'tcx> {
             Goto { .. } |
             Resume |
             Return |
+            GeneratorDrop |
             Unreachable => false
         }
     }
