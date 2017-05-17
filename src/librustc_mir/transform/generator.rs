@@ -82,12 +82,14 @@ impl<'tcx> MutVisitor<'tcx> for DerefArgVisitor {
                     lvalue: &mut Lvalue<'tcx>,
                     context: LvalueContext<'tcx>,
                     location: Location) {
-        if *lvalue == Lvalue::Local(Local::new(1)) {
+        if *lvalue == Lvalue::Local(Local::new(2)) {
             *lvalue = Lvalue::Projection(Box::new(Projection {
                 base: lvalue.clone(),
                 elem: ProjectionElem::Deref,
             }));
         }
+
+        self.super_lvalue(lvalue, context, location);
     }
 }
 
