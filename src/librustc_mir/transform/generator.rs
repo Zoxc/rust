@@ -87,9 +87,9 @@ impl<'tcx> MutVisitor<'tcx> for DerefArgVisitor {
                 base: lvalue.clone(),
                 elem: ProjectionElem::Deref,
             }));
+        } else {
+            self.super_lvalue(lvalue, context, location);
         }
-
-        self.super_lvalue(lvalue, context, location);
     }
 }
 
