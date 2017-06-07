@@ -3038,7 +3038,7 @@ pub enum State<Y, R> {
 #[lang = "generator"]
 #[unstable(feature = "generator_trait", issue = "0")]
 #[fundamental]
-pub trait Generator<Arg: 'static = ()> {
+pub trait Generator<Arg = ()> {
     /// The type of value this generator yields.
     type Yield;
 

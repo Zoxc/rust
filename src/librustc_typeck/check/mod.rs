@@ -1028,9 +1028,17 @@ fn check_fn<'a, 'gcx, 'tcx>(inherited: &'a Inherited<'a, 'gcx, 'tcx>,
     let span = body.value.span;
 
     let real_ret_ty = if let Some(ref impl_arg) = body.impl_arg {
-        //fcx.impl_arg_ty = Some(fcx.infcx.type_var_for_impl_arg(span, def_id));
-        fcx.impl_arg_ty = Some(fcx.next_ty_var(TypeVariableOrigin::TypeInference(span)));
-        fcx.write_ty(impl_arg.id, fcx.impl_arg_ty.unwrap());
+        let impl_arg_ty = fcx.infcx.type_var_for_impl_arg(span, def_id);
+
+        // Require impl_arg: 'static
+        let cause = traits::ObligationCause::new(span, body.value.id, traits::MiscObligation);;
+        fcx.register_region_obligation(impl_arg_ty, fcx.tcx.types.re_static, cause);
+
+        fcx.impl_arg_ty = Some(impl_arg_ty);
+
+        // Write the type to the impl arg id
+        fcx.write_ty(impl_arg.id, impl_arg_ty);
+
         fcx.suspend_ty = Some(fcx.next_ty_var(TypeVariableOrigin::TypeInference(span)));
         fcx.next_ty_var(TypeVariableOrigin::TypeInference(span))
     } else {
