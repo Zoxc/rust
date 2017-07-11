@@ -946,9 +946,23 @@ impl EmitterWriter {
 
                 // Then, the secondary file indicator
                 buffer.prepend(buffer_msg_line_offset + 1, "::: ", Style::LineNumber);
-                buffer.append(buffer_msg_line_offset + 1,
-                              &annotated_file.file.name,
-                              Style::LineAndColumn);
+                let info = annotated_file.lines.first().and_then(|line| {
+                    line.annotations.first().map(|annotation| {
+                        (line.line_index, annotation.start_col)
+                    })
+                });
+                if let Some((line, col)) = info {
+                    buffer.append(buffer_msg_line_offset + 1,
+                                  &format!("{}:{}:{}",
+                                           annotated_file.file.name,
+                                           line,
+                                           col + 1),
+                                  Style::LineAndColumn);
+                } else {
+                    buffer.append(buffer_msg_line_offset + 1,
+                                  &annotated_file.file.name,
+                                  Style::LineAndColumn);
+                }
                 for _ in 0..max_line_num_len {
                     buffer.prepend(buffer_msg_line_offset + 1, " ", Style::NoStyle);
                 }
