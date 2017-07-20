@@ -806,7 +806,7 @@ impl<'a> CrateLoader<'a> {
         // performed later as part of the `dependency_format` module.
         let name = match desired_strategy {
             PanicStrategy::Unwind => Symbol::intern("panic_unwind"),
-            PanicStrategy::Abort => Symbol::intern("panic_abort"),
+            PanicStrategy::Abort => Symbol::intern("panic_unwind"),
         };
         info!("panic runtime not found -- loading {}", name);
 

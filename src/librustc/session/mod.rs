@@ -416,7 +416,8 @@ impl Session {
     /// Returns the panic strategy for this compile session. If the user explicitly selected one
     /// using '-C panic', use that, otherwise use the panic strategy defined by the target.
     pub fn panic_strategy(&self) -> PanicStrategy {
-        self.opts.cg.panic.unwrap_or(self.target.target.options.panic_strategy)
+        self.opts.cg.panic.unwrap_or(self.target.target.options.panic_strategy);
+        PanicStrategy::Abort
     }
     pub fn linker_flavor(&self) -> LinkerFlavor {
         self.opts.debugging_opts.linker_flavor.unwrap_or(self.target.target.linker_flavor)

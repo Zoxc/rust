@@ -8,19 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Implementation of panics via stack unwinding
+//! Implementation of Rust panics via process aborts
 //!
-//! This crate is an implementation of panics in Rust using "most native" stack
-//! unwinding mechanism of the platform this is being compiled for. This
-//! essentially gets categorized into three buckets currently:
-//!
-//! 1. MSVC targets use SEH in the `seh.rs` file.
-//! 2. The 64-bit MinGW target half-uses SEH and half-use gcc-like information
-//!    in the `seh64_gnu.rs` module.
-//! 3. All other targets use libunwind/libgcc in the `gcc/mod.rs` module.
-//!
-//! More documentation about each implementation can be found in the respective
-//! module.
+//! When compared to the implementation via unwinding, this crate is *much*
+//! simpler! That being said, it's not quite as versatile, but here goes!
 
 #![no_std]
 #![crate_name = "panic_unwind"]
@@ -32,86 +23,118 @@
        issue_tracker_base_url = "https://github.com/rust-lang/rust/issues/")]
 #![deny(warnings)]
 
-#![feature(alloc)]
-#![feature(core_intrinsics)]
-#![feature(lang_items)]
-#![feature(libc)]
-#![feature(panic_unwind)]
-#![feature(raw)]
 #![feature(staged_api)]
-#![feature(unwind_attributes)]
-#![cfg_attr(target_env = "msvc", feature(raw))]
+
+#![cfg_attr(stage0, feature(lang_items))]
 
 #![panic_runtime]
 #![feature(panic_runtime)]
+#![cfg_attr(unix, feature(libc))]
+#![cfg_attr(any(target_os = "redox", windows), feature(core_intrinsics))]
 
-extern crate alloc;
-extern crate libc;
-extern crate unwind;
-
-use core::intrinsics;
-use core::mem;
-use core::raw;
-
-// Rust runtime's startup objects depend on these symbols, so make them public.
-#[cfg(all(target_os="windows", target_arch = "x86", target_env="gnu"))]
-pub use imp::eh_frame_registry::*;
-
-// *-pc-windows-msvc
-#[cfg(target_env = "msvc")]
-#[path = "seh.rs"]
-mod imp;
-
-// x86_64-pc-windows-gnu
-#[cfg(all(windows, target_arch = "x86_64", target_env = "gnu"))]
-#[path = "seh64_gnu.rs"]
-mod imp;
-
-// i686-pc-windows-gnu and all others
-#[cfg(any(all(unix, not(target_os = "emscripten")),
-          target_os = "redox",
-          all(windows, target_arch = "x86", target_env = "gnu")))]
-#[path = "gcc.rs"]
-mod imp;
-
-// emscripten
-#[cfg(target_os = "emscripten")]
-#[path = "emcc.rs"]
-mod imp;
-
-mod dwarf;
-mod windows;
-
-// Entry point for catching an exception, implemented using the `try` intrinsic
-// in the compiler.
-//
-// The interaction between the `payload` function and the compiler is pretty
-// hairy and tightly coupled, for more information see the compiler's
-// implementation of this.
+// Rust's "try" function, but if we're aborting on panics we just call the
+// function as there's nothing else we need to do here.
 #[no_mangle]
-pub unsafe extern "C" fn __rust_maybe_catch_panic(f: fn(*mut u8),
-                                                  data: *mut u8,
-                                                  data_ptr: *mut usize,
-                                                  vtable_ptr: *mut usize)
-                                                  -> u32 {
-    let mut payload = imp::payload();
-    if intrinsics::try(f, data, &mut payload as *mut _ as *mut _) == 0 {
-        0
-    } else {
-        let obj = mem::transmute::<_, raw::TraitObject>(imp::cleanup(payload));
-        *data_ptr = obj.data as usize;
-        *vtable_ptr = obj.vtable as usize;
-        1
+pub unsafe extern fn __rust_maybe_catch_panic(f: fn(*mut u8),
+                                              data: *mut u8,
+                                              _data_ptr: *mut usize,
+                                              _vtable_ptr: *mut usize) -> u32 {
+    f(data);
+    0
+}
+
+// "Leak" the payload and shim to the relevant abort on the platform in
+// question.
+//
+// For Unix we just use `abort` from libc as it'll trigger debuggers, core
+// dumps, etc, as one might expect. On Windows, however, the best option we have
+// is the `__fastfail` intrinsics, but that's unfortunately not defined in LLVM,
+// and the `RaiseFailFastException` function isn't available until Windows 7
+// which would break compat with XP. For now just use `intrinsics::abort` which
+// will kill us with an illegal instruction, which will do a good enough job for
+// now hopefully.
+#[no_mangle]
+pub unsafe extern fn __rust_start_panic(_data: usize, _vtable: usize) -> u32 {
+    abort();
+
+    #[cfg(unix)]
+    unsafe fn abort() -> ! {
+        extern crate libc;
+        libc::abort();
+    }
+
+    #[cfg(any(target_os = "redox", windows))]
+    unsafe fn abort() -> ! {
+        core::intrinsics::abort();
     }
 }
 
-// Entry point for raising an exception, just delegates to the platform-specific
-// implementation.
-#[no_mangle]
-#[unwind]
-pub unsafe extern "C" fn __rust_start_panic(data: usize, vtable: usize) -> u32 {
-    imp::panic(mem::transmute(raw::TraitObject {
-        data: data as *mut (),
-        vtable: vtable as *mut (),
-    }))
+// This... is a bit of an oddity. The tl;dr; is that this is required to link
+// correctly, the longer explanation is below.
+//
+// Right now the binaries of libcore/libstd that we ship are all compiled with
+// `-C panic=unwind`. This is done to ensure that the binaries are maximally
+// compatible with as many situations as possible. The compiler, however,
+// requires a "personality function" for all functions compiled with `-C
+// panic=unwind`. This personality function is hardcoded to the symbol
+// `rust_eh_personality` and is defined by the `eh_personality` lang item.
+//
+// So... why not just define that lang item here? Good question! The way that
+// panic runtimes are linked in is actually a little subtle in that they're
+// "sort of" in the compiler's crate store, but only actually linked if another
+// isn't actually linked. This ends up meaning that both this crate and the
+// panic_unwind crate can appear in the compiler's crate store, and if both
+// define the `eh_personality` lang item then that'll hit an error.
+//
+// To handle this the compiler only requires the `eh_personality` is defined if
+// the panic runtime being linked in is the unwinding runtime, and otherwise
+// it's not required to be defined (rightfully so). In this case, however, this
+// library just defines this symbol so there's at least some personality
+// somewhere.
+//
+// Essentially this symbol is just defined to get wired up to libcore/libstd
+// binaries, but it should never be called as we don't link in an unwinding
+// runtime at all.
+pub mod personalities {
+
+    #[no_mangle]
+    #[cfg_attr(stage0, lang = "eh_personality")]
+    #[cfg(not(all(target_os = "windows",
+                  target_env = "gnu",
+                  target_arch = "x86_64")))]
+    pub extern fn rust_eh_personality() {
+        unsafe { ::core::intrinsics::abort() }
+    }
+
+    // On x86_64-pc-windows-gnu we use our own personality function that needs
+    // to return `ExceptionContinueSearch` as we're passing on all our frames.
+    #[no_mangle]
+    #[cfg_attr(stage0, lang = "eh_personality")]
+    #[cfg(all(target_os = "windows",
+              target_env = "gnu",
+              target_arch = "x86_64"))]
+    pub extern fn rust_eh_personality(_record: usize,
+                                      _frame: usize,
+                                      _context: usize,
+                                      _dispatcher: usize) -> u32 {
+        1 // `ExceptionContinueSearch`
+    }
+
+    // Similar to above, this corresponds to the `eh_unwind_resume` lang item
+    // that's only used on Windows currently.
+    //
+    // Note that we don't execute landing pads, so this is never called, so it's
+    // body is empty.
+    #[no_mangle]
+    #[cfg(all(target_os = "windows", target_env = "gnu"))]
+    pub extern fn rust_eh_unwind_resume() {}
+
+    // These two are called by our startup objects on i686-pc-windows-gnu, but
+    // they don't need to do anything so the bodies are nops.
+    #[no_mangle]
+    #[cfg(all(target_os = "windows", target_env = "gnu", target_arch = "x86"))]
+    pub extern fn rust_eh_register_frames() {}
+    #[no_mangle]
+    #[cfg(all(target_os = "windows", target_env = "gnu", target_arch = "x86"))]
+    pub extern fn rust_eh_unregister_frames() {}
 }
