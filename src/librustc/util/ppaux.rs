@@ -327,7 +327,7 @@ impl<'tcx> fmt::Display for &'tcx ty::Slice<ty::ExistentialPredicate<'tcx>> {
                 parameterized(f, principal.substs, principal.def_id, &projections)?;
             }
 
-            let move_id = tcx.lang_items.move_trait().unwrap();
+            let move_id = tcx.lang_items().move_trait().unwrap();
 
             let mut is_move = false;
 
@@ -827,7 +827,7 @@ impl<'tcx> fmt::Display for ty::TypeVariants<'tcx> {
                     for predicate in bounds.predicates {
                         if let Some(trait_ref) = predicate.to_opt_poly_trait_ref() {
                             // Don't print +Move, but rather +?Move if absent.
-                            if Some(trait_ref.def_id()) == tcx.lang_items.move_trait() {
+                            if Some(trait_ref.def_id()) == tcx.lang_items().move_trait() {
                                 is_move = true;
                                 continue;
                             }

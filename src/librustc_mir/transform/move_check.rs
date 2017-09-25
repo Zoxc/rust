@@ -67,7 +67,8 @@ impl MirPass for MoveCheck {
         for move_out in env.move_data.moves.iter() {
             let state = state_for_loc(move_out.source, &analysis, &observed);
 
-            // FIXME: on_all_children_bits - lvalue_contents_drop_state_cannot_differ might not be right here
+            // FIXME: on_all_children_bits - lvalue_contents_drop_state_cannot_differ might
+            // not be right here
             on_all_children_bits(tcx, mir, &env.move_data, move_out.path, |child| {
                 let lvalue = &env.move_data.move_paths[child].lvalue;
                 let lvalue_ty = lvalue.ty(mir, tcx).to_ty(tcx);
@@ -91,7 +92,9 @@ impl MirPass for MoveCheck {
 
                     for (i, loc) in observers.observers.iter().enumerate() {
                         if state.contains(&i) {
-                            span_note!(err, loc.source_info(mir).span, "the address was observed here");
+                            span_note!(err,
+                                       loc.source_info(mir).span,
+                                       "the address was observed here");
                         }
                     }
 

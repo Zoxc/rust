@@ -548,7 +548,7 @@ impl<'o, 'gcx: 'tcx, 'tcx> AstConv<'gcx, 'tcx>+'o {
     {
         let tcx = self.tcx();
 
-        let move_id = tcx.lang_items.move_trait().unwrap();
+        let move_id = tcx.lang_items().move_trait().unwrap();
         let mut is_move = true;
         let mut trait_bounds = Vec::new();
         for bound in bounds {
@@ -1467,7 +1467,7 @@ impl<'a, 'gcx, 'tcx> Bounds<'tcx> {
 
         // If it could be move, and is, add the move predicate
         if self.implicitly_move {
-            if let Some(sized) = tcx.lang_items.move_trait() {
+            if let Some(sized) = tcx.lang_items().move_trait() {
                 let trait_ref = ty::TraitRef {
                     def_id: sized,
                     substs: tcx.mk_substs_trait(param_ty, &[])

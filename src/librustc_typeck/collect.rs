@@ -1270,9 +1270,9 @@ fn opt_out_bounds<'gcx: 'tcx, 'tcx>(astconv: &AstConv<'gcx, 'tcx>,
                                 sized_by_default: bool) -> (bool, bool)
 {
     let tcx = astconv.tcx();
-    let move_id = tcx.lang_items.require(MoveTraitLangItem).ok().map(|id| Def::Trait(id));
+    let move_id = tcx.lang_items().require(MoveTraitLangItem).ok().map(|id| Def::Trait(id));
     let size_id = if sized_by_default {
-        tcx.lang_items.require(SizedTraitLangItem).ok().map(|id| Def::Trait(id))
+        tcx.lang_items().require(SizedTraitLangItem).ok().map(|id| Def::Trait(id))
     } else {
         None
     };

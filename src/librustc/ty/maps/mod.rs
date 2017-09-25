@@ -245,6 +245,7 @@ define_maps! { <'tcx>
     [] fn is_copy_raw: is_copy_dep_node(ty::ParamEnvAnd<'tcx, Ty<'tcx>>) -> bool,
     [] fn is_sized_raw: is_sized_dep_node(ty::ParamEnvAnd<'tcx, Ty<'tcx>>) -> bool,
     [] fn is_freeze_raw: is_freeze_dep_node(ty::ParamEnvAnd<'tcx, Ty<'tcx>>) -> bool,
+    [] fn is_move_raw: is_move_dep_node(ty::ParamEnvAnd<'tcx, Ty<'tcx>>) -> bool,
     [] fn needs_drop_raw: needs_drop_dep_node(ty::ParamEnvAnd<'tcx, Ty<'tcx>>) -> bool,
     [] fn layout_raw: layout_dep_node(ty::ParamEnvAnd<'tcx, Ty<'tcx>>)
                                   -> Result<&'tcx Layout, LayoutError<'tcx>>,
@@ -400,6 +401,10 @@ fn is_sized_dep_node<'tcx>(_: ty::ParamEnvAnd<'tcx, Ty<'tcx>>) -> DepConstructor
 
 fn is_freeze_dep_node<'tcx>(_: ty::ParamEnvAnd<'tcx, Ty<'tcx>>) -> DepConstructor<'tcx> {
     DepConstructor::IsFreeze
+}
+
+fn is_move_dep_node<'tcx>(_: ty::ParamEnvAnd<'tcx, Ty<'tcx>>) -> DepConstructor<'tcx> {
+    DepConstructor::IsMove
 }
 
 fn needs_drop_dep_node<'tcx>(_: ty::ParamEnvAnd<'tcx, Ty<'tcx>>) -> DepConstructor<'tcx> {

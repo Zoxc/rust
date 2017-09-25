@@ -950,7 +950,7 @@ impl<'a, 'gcx, 'tcx> InferCtxt<'a, 'gcx, 'tcx> {
                     {
                         self.need_type_info(body_id, span, self_ty);
                     } else if
-                        self.tcx.lang_items.move_trait()
+                        self.tcx.lang_items().move_trait()
                         .map_or(false, |move_id| move_id == trait_ref.def_id())
                     {
                         self.need_type_info(body_id, span, self_ty);
