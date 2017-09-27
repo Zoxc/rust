@@ -992,6 +992,9 @@ pub fn phase_3_run_analysis_passes<'tcx, F, R>(sess: &'tcx Session,
     // Remove all `EndRegion` statements that are not involved in borrows.
     passes.push_pass(MIR_CONST, mir::transform::clean_end_regions::CleanEndRegions);
 
+    // This needs to run before optimizations like SimplifyCfg and SimplifyBranches
+    passes.push_pass(MIR_CONST, mir::transform::move_check::MoveCheck);
+
     // What we need to do constant evaluation.
     passes.push_pass(MIR_CONST, mir::transform::simplify::SimplifyCfg::new("initial"));
     passes.push_pass(MIR_CONST, mir::transform::type_check::TypeckMir);
@@ -1002,7 +1005,6 @@ pub fn phase_3_run_analysis_passes<'tcx, F, R>(sess: &'tcx Session,
     // What we need to run borrowck etc.
 
     passes.push_pass(MIR_VALIDATED, mir::transform::qualify_consts::QualifyAndPromoteConstants);
-    passes.push_pass(MIR_VALIDATED, mir::transform::move_check::MoveCheck);
     passes.push_pass(MIR_VALIDATED, mir::transform::simplify::SimplifyCfg::new("qualify-consts"));
     passes.push_pass(MIR_VALIDATED, mir::transform::nll::NLL);
 
