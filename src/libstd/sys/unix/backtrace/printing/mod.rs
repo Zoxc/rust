@@ -34,7 +34,7 @@ where
     F: FnOnce(Option<(&str, usize)>) -> io::Result<()>
 {
     ::sys_common::gnu::libbacktrace::resolve_symname(frame, |syminfo| {
-        if symname.is_some() {
+        if syminfo.is_some() {
             callback(syminfo)
         } else {
             dladdr::resolve_symname(frame, callback, bc)

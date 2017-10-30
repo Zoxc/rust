@@ -8,8 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-macro_rules! m { ($v:vis) => {} }
-//~^ ERROR :vis fragment specifier is experimental and subject to change
+macro_rules! m { ($v:str) => {} }
+//~^ ERROR :str fragment specifier is experimental and subject to change
 
 fn main() {
     m!(pub);

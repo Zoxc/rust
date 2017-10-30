@@ -26,9 +26,9 @@ pub fn resolve_symname<F>(frame: Frame,
                          info.dli_sname.is_null() {
             None
         } else {
-            CStr::from_ptr(info.dli_sname).to_str().ok().map(|s| (s, nfo.dli_saddr as usize))
+            CStr::from_ptr(info.dli_sname).to_str().ok().map(|s| (s, info.dli_saddr as usize))
         };
-        callback(syminfo);
+        callback(syminfo)
     }
 }
 

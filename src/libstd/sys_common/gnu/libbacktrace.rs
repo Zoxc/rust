@@ -73,7 +73,7 @@ pub fn resolve_symname<F>(frame: Frame,
                 "failed to allocate libbacktrace state")
             )
         }
-        let mut data = (ptr::null(), usize);
+        let mut data = (ptr::null(), 0);
         let data_addr = &mut data as *mut _;
         let ret = unsafe {
             backtrace_syminfo(state,
@@ -86,7 +86,7 @@ pub fn resolve_symname<F>(frame: Frame,
             None
         } else {
             unsafe {
-                (CStr::from_ptr(data).to_str().ok(), data.1)
+                CStr::from_ptr(data.0).to_str().ok().map(|s| (s, data.1))
             }
         }
     };
