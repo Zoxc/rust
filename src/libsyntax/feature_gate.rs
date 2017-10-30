@@ -405,6 +405,9 @@ declare_features! (
     // `crate` as visibility modifier, synonymous to `pub(crate)`
     (active, crate_visibility_modifier, "1.23.0", Some(45388)),
 
+    // Allows use of the :str macro fragment specifier
+    (active, macro_str_matcher, "1.23.0", None),
+
     // extern types
     (active, extern_types, "1.23.0", Some(43467)),
 );
@@ -1157,6 +1160,9 @@ pub const EXPLAIN_DERIVE_UNDERSCORE: &'static str =
 
 pub const EXPLAIN_VIS_MATCHER: &'static str =
     ":vis fragment specifier is experimental and subject to change";
+
+pub const EXPLAIN_STR_MATCHER: &'static str =
+    ":str fragment specifier is experimental and subject to change";
 
 pub const EXPLAIN_PLACEMENT_IN: &'static str =
     "placement-in expression syntax is experimental and subject to change.";

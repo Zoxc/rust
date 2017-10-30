@@ -634,7 +634,7 @@ fn check_matcher_core(sess: &ParseSess,
                     let msg = format!("invalid fragment specifier `{}`", bad_frag);
                     sess.span_diagnostic.struct_span_err(token.span(), &msg)
                         .help("valid fragment specifiers are `ident`, `block`, `stmt`, `expr`, \
-                              `pat`, `ty`, `path`, `meta`, `tt`, `item` and `vis`")
+                              `pat`, `ty`, `path`, `meta`, `tt`, `item`, `str` and `vis`")
                         .emit();
                     // (This eliminates false positives and duplicates
                     // from error messages.)
@@ -807,7 +807,7 @@ fn is_in_follow(tok: &quoted::TokenTree, frag: &str) -> Result<bool, (String, &'
                 // maintain
                 Ok(true)
             },
-            "stmt" | "expr"  => match *tok {
+            "stmt" | "expr" | "str"  => match *tok {
                 TokenTree::Token(_, ref tok) => match *tok {
                     FatArrow | Comma | Semi => Ok(true),
                     _ => Ok(false)
@@ -859,7 +859,7 @@ fn is_in_follow(tok: &quoted::TokenTree, frag: &str) -> Result<bool, (String, &'
             _ => Err((format!("invalid fragment specifier `{}`", frag),
                      "valid fragment specifiers are `ident`, `block`, \
                       `stmt`, `expr`, `pat`, `ty`, `path`, `meta`, `tt`, \
-                      `item` and `vis`"))
+                      `item`, `str` and `vis`"))
         }
     }
 }
@@ -893,6 +893,18 @@ fn is_legal_fragment_specifier(sess: &ParseSess,
                 let explain = feature_gate::EXPLAIN_VIS_MATCHER;
                 emit_feature_err(sess,
                                  "macro_vis_matcher",
+                                 frag_span,
+                                 GateIssue::Language,
+                                 explain);
+            }
+            true
+        },
+        "str" => {
+            if     !features.borrow().macro_str_matcher
+                && !attr::contains_name(attrs, "allow_internal_unstable") {
+                let explain = feature_gate::EXPLAIN_STR_MATCHER;
+                emit_feature_err(sess,
+                                 "macro_str_matcher",
                                  frag_span,
                                  GateIssue::Language,
                                  explain);

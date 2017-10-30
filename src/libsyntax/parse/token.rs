@@ -210,6 +210,26 @@ impl Token {
         }
     }
 
+    /// Returns `true` if the token can appear at the start of an string literal.
+    pub fn can_begin_str(&self) -> bool {
+        match *self {
+            Literal(Str_(..), _) |
+            Literal(StrRaw(..), _) => true,
+            Interpolated(ref nt) => {
+                if let NtExpr(ref e) = nt.0 {
+                    if let ast::ExprKind::Lit(ref lit) = e.node {
+                        if let ast::LitKind::Str(..) = lit.node {
+                            return true;
+                        }
+                    }
+                }
+
+                false
+            },
+            _ => false,
+        }
+    }
+
     /// Returns `true` if the token can appear at the start of an expression.
     pub fn can_begin_expr(&self) -> bool {
         match *self {

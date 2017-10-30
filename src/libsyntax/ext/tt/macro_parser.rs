@@ -509,6 +509,7 @@ fn may_begin_with(name: &str, token: &Token) -> bool {
     }
 
     match name {
+        "str" => token.can_begin_str(),
         "expr" => token.can_begin_expr(),
         "ty" => token.can_begin_type(),
         "ident" => token.is_ident(),
@@ -585,7 +586,7 @@ fn parse_nt<'a>(p: &mut Parser<'a>, sp: Span, name: &str) -> Nonterminal {
             }
         },
         "pat" => token::NtPat(panictry!(p.parse_pat())),
-        "expr" => token::NtExpr(panictry!(p.parse_expr())),
+        "expr" | "str" => token::NtExpr(panictry!(p.parse_expr())),
         "ty" => token::NtTy(panictry!(p.parse_ty())),
         // this could be handled like a token, since it is one
         "ident" => match p.token {
