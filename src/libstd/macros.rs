@@ -58,6 +58,28 @@
 /// panic!(4); // panic with the value of 4 to be collected elsewhere
 /// panic!("this is a {} {message}", "fancy", message = "message");
 /// ```
+#[cfg(not(stage0))]
+#[macro_export]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[allow_internal_unstable]
+macro_rules! panic {
+    () => ({
+        panic!("explicit panic")
+    });
+    ($msg:str) => ({
+        $crate::rt::begin_panic_str(&($msg, file!(), line!(), __rust_unstable_column!()))
+    });
+    ($msg:expr) => ({
+        $crate::rt::begin_panic($msg, &(file!(), line!(), __rust_unstable_column!()))
+    });
+    ($fmt:expr, $($arg:tt)+) => ({
+        $crate::rt::begin_panic_fmt(&format_args!($fmt, $($arg)+),
+                                    &(file!(), line!(), __rust_unstable_column!()))
+    });
+}
+
+/// docs
+#[cfg(stage0)]
 #[macro_export]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[allow_internal_unstable]

@@ -498,6 +498,16 @@ pub extern fn rust_begin_panic(msg: fmt::Arguments,
     begin_panic_fmt(&msg, &(file, line, col))
 }
 
+/// This is the entry point of panicking for string literals.
+#[unstable(feature = "libstd_sys_internals",
+           reason = "used by the panic! macro",
+           issue = "0")]
+#[inline(never)] #[cold] // avoid code bloat at the call sites as much as possible
+pub fn begin_panic_str(expr_file_line_col: &(&'static str, &'static str, u32, u32)) -> ! {
+    let (expr, file, line, col) = *expr_file_line_col;
+    begin_panic(expr, &(file, line, col))
+}
+
 /// The entry point for panicking with a formatted message.
 ///
 /// This is designed to reduce the amount of code required at the call
@@ -535,6 +545,7 @@ pub fn begin_panic<M: Any + Send>(msg: M, file_line_col: &(&'static str, u32, u3
     // be performed in the parent of this thread instead of the thread that's
     // panicking.
 
+    // We want this call to get tail call optimized so `begin_panic` do not appear in backtraces
     rust_panic_with_hook(Box::new(msg), file_line_col)
 }
 
@@ -546,8 +557,8 @@ pub fn begin_panic<M: Any + Send>(msg: M, file_line_col: &(&'static str, u32, u3
 /// run panic hooks, and then delegate to the actual implementation of panics.
 #[inline(never)]
 #[cold]
-fn rust_panic_with_hook(msg: Box<Any + Send>,
-                        file_line_col: &(&'static str, u32, u32)) -> ! {
+pub(crate) fn rust_panic_with_hook(msg: Box<Any + Send>,
+                                   file_line_col: &(&'static str, u32, u32)) -> ! {
     let (file, line, col) = *file_line_col;
 
     let panics = update_panic_count(1);

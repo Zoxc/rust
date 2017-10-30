@@ -265,6 +265,7 @@
 #![feature(const_ptr_null_mut)]
 #![feature(core_float)]
 #![feature(core_intrinsics)]
+#![feature(core_panic)]
 #![feature(dropck_eyepatch)]
 #![feature(exact_size_is_empty)]
 #![feature(float_from_str_radix)]

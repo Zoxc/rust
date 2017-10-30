@@ -16,6 +16,8 @@ use io::prelude::*;
 use io;
 use libc;
 use str;
+use core;
+use panicking;
 use sync::atomic::{self, Ordering};
 use path::{self, Path};
 use sys::mutex::Mutex;
@@ -77,8 +79,8 @@ fn _print(w: &mut Write, format: PrintFormat) -> io::Result<()> {
 
     let filtered_frames = &frames[..nb_frames - skipped_after];
     for (index, frame) in filtered_frames.iter().skip(skipped_before).enumerate() {
-        resolve_symname(*frame, |symname| {
-            output(w, index, *frame, symname, format)
+        resolve_symname(*frame, |syminfo| {
+            output(w, index, *frame, syminfo.map(|i| i.0), format)
         }, &context)?;
         let has_more_filenames = foreach_symbol_fileline(*frame, |file, line| {
             output_fileline(w, file, line, format)
@@ -101,12 +103,32 @@ fn filter_frames(frames: &[Frame],
         return (0, 0);
     }
 
-    let skipped_before = 0;
+    #[derive(Eq, PartialEq)]
+    struct Function(*const ());
+    unsafe impl Sync for Function {}
+
+    static PANIC_FUNCTIONS: &[Function] = &[
+        Function(core::panicking::panic as *const ()),
+        Function(core::panicking::panic_bounds_check as *const ()),
+        Function(core::panicking::panic_fmt as *const ()),
+        Function(panicking::begin_panic_str as *const ()),
+        Function(panicking::begin_panic_fmt as *const ()),
+        Function(panicking::rust_panic_with_hook as *const ()),
+    ];
+
+    let skipped_before = frames.len() - frames.iter().rev().position(|frame| {
+        let mut addr = None;
+        resolve_symname(*frame, |syminfo| {
+            addr = syminfo.map(|a| a.1);
+            Ok(())
+        }, context).ok();
+        addr.map(|a| PANIC_FUNCTIONS.contains(&Function(a as *const ()))).unwrap_or(false)
+    }).unwrap_or(frames.len());
 
     let skipped_after = frames.len() - frames.iter().position(|frame| {
         let mut is_marker = false;
-        let _ = resolve_symname(*frame, |symname| {
-            if let Some(mangled_symbol_name) = symname {
+        let _ = resolve_symname(*frame, |syminfo| {
+            if let Some((mangled_symbol_name, _)) = syminfo {
                 // Use grep to find the concerned functions
                 if mangled_symbol_name.contains("__rust_begin_short_backtrace") {
                     is_marker = true;
@@ -125,13 +147,12 @@ fn filter_frames(frames: &[Frame],
     (skipped_before, skipped_after)
 }
 
-
 /// Fixed frame used to clean the backtrace with `RUST_BACKTRACE=1`.
 #[inline(never)]
-pub fn __rust_begin_short_backtrace<F, T>(f: F) -> T
+pub fn __rust_begin_short_backtrace<F, T>(f: F) -> (T, usize)
     where F: FnOnce() -> T, F: Send + 'static, T: Send + 'static
 {
-    f()
+    (f(), 0) // The number is a dummy return value to prevent tail call optimization
 }
 
 /// Controls how the backtrace should be formated.

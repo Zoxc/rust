@@ -53,7 +53,7 @@ pub fn panic(expr_file_line_col: &(&'static str, &'static str, u32, u32)) -> ! {
 
 #[cold] #[inline(never)]
 #[lang = "panic_bounds_check"]
-fn panic_bounds_check(file_line_col: &(&'static str, u32, u32),
+pub fn panic_bounds_check(file_line_col: &(&'static str, u32, u32),
                      index: usize, len: usize) -> ! {
     panic_fmt(format_args!("index out of bounds: the len is {} but the index is {}",
                            len, index), file_line_col)

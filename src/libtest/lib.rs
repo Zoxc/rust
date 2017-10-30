@@ -1355,14 +1355,14 @@ pub fn convert_benchmarks_to_tests(tests: Vec<TestDescAndFn>) -> Vec<TestDescAnd
             DynBenchFn(bench) => {
                 DynTestFn(Box::new(move |()| {
                     bench::run_once(|b| {
-                        __rust_begin_short_backtrace(|| bench.run(b))
+                        __rust_begin_short_backtrace(|| bench.run(b));
                     })
                 }))
             }
             StaticBenchFn(benchfn) => {
                 DynTestFn(Box::new(move |()| {
                     bench::run_once(|b| {
-                        __rust_begin_short_backtrace(|| benchfn(b))
+                        __rust_begin_short_backtrace(|| benchfn(b));
                     })
                 }))
             }
@@ -1471,20 +1471,21 @@ pub fn run_test(opts: &TestOpts,
         }
         DynTestFn(f) => {
             let cb = move |()| {
-                __rust_begin_short_backtrace(|| f.call_box(()))
+                __rust_begin_short_backtrace(|| f.call_box(()));
             };
             run_test_inner(desc, monitor_ch, opts.nocapture, Box::new(cb))
         }
         StaticTestFn(f) =>
             run_test_inner(desc, monitor_ch, opts.nocapture,
-                           Box::new(move |()| __rust_begin_short_backtrace(f))),
+                           Box::new(move |()| {__rust_begin_short_backtrace(f); })),
     }
 }
 
 /// Fixed frame used to clean the backtrace with `RUST_BACKTRACE=1`.
 #[inline(never)]
-fn __rust_begin_short_backtrace<F: FnOnce()>(f: F) {
-    f()
+fn __rust_begin_short_backtrace<F: FnOnce()>(f: F) -> usize {
+    f();
+    0 // A dummy return value to prevent tail call optimization
 }
 
 fn calc_result(desc: &TestDesc, task_result: Result<(), Box<Any + Send>>) -> TestResult {
