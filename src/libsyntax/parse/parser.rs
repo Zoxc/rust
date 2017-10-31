@@ -1758,16 +1758,20 @@ impl<'a> Parser<'a> {
         Ok(codemap::Spanned { node: lit, span: lo.to(self.prev_span) })
     }
 
+    pub fn parse_lit_as_expr(&mut self) -> PResult<'a, P<Expr>> {
+        let lo = self.span;
+        let literal = P(self.parse_lit()?);
+        let hi = self.prev_span;
+        Ok(self.mk_expr(lo.to(hi), ExprKind::Lit(literal), ThinVec::new()))
+    }
+
     /// matches '-' lit | lit (cf. ast_validation::AstValidator::check_expr_within_pat)
     pub fn parse_pat_literal_maybe_minus(&mut self) -> PResult<'a, P<Expr>> {
         maybe_whole_expr!(self);
 
         let minus_lo = self.span;
         let minus_present = self.eat(&token::BinOp(token::Minus));
-        let lo = self.span;
-        let literal = P(self.parse_lit()?);
-        let hi = self.prev_span;
-        let expr = self.mk_expr(lo.to(hi), ExprKind::Lit(literal), ThinVec::new());
+        let expr = self.parse_lit_as_expr()?;
 
         if minus_present {
             let minus_hi = self.prev_span;

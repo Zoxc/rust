@@ -586,7 +586,8 @@ fn parse_nt<'a>(p: &mut Parser<'a>, sp: Span, name: &str) -> Nonterminal {
             }
         },
         "pat" => token::NtPat(panictry!(p.parse_pat())),
-        "expr" | "str" => token::NtExpr(panictry!(p.parse_expr())),
+        "str" => token::NtExpr(panictry!(p.parse_lit_as_expr())),
+        "expr" => token::NtExpr(panictry!(p.parse_expr())),
         "ty" => token::NtTy(panictry!(p.parse_ty())),
         // this could be handled like a token, since it is one
         "ident" => match p.token {
