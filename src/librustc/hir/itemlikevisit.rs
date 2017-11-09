@@ -88,3 +88,23 @@ impl<'v, 'hir, V> ItemLikeVisitor<'hir> for DeepVisitor<'v, V>
         self.visitor.visit_impl_item(impl_item);
     }
 }
+
+impl<'hir, A, B> ItemLikeVisitor<'hir> for (A, B)
+    where A: ItemLikeVisitor<'hir>,
+          B: ItemLikeVisitor<'hir>,
+{
+    fn visit_item(&mut self, item: &'hir Item) {
+        self.0.visit_item(item);
+        self.1.visit_item(item);
+    }
+
+    fn visit_trait_item(&mut self, trait_item: &'hir TraitItem) {
+        self.0.visit_trait_item(trait_item);
+        self.1.visit_trait_item(trait_item);
+    }
+
+    fn visit_impl_item(&mut self, impl_item: &'hir ImplItem) {
+        self.0.visit_impl_item(impl_item);
+        self.1.visit_impl_item(impl_item);
+    }
+}

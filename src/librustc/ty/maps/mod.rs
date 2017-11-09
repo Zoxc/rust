@@ -201,11 +201,6 @@ define_maps! { <'tcx>
     /// (Defined only for LOCAL_CRATE)
     [] fn crate_inherent_impls: crate_inherent_impls_dep_node(CrateNum) -> CrateInherentImpls,
 
-    /// Checks all types in the krate for overlap in their inherent impls. Reports errors.
-    /// Not meant to be used directly outside of coherence.
-    /// (Defined only for LOCAL_CRATE)
-    [] fn crate_inherent_impls_overlap_check: inherent_impls_overlap_check_dep_node(CrateNum) -> (),
-
     /// Results of evaluating const items or constants embedded in
     /// other items (such as enum variant explicit discriminants).
     [] fn const_eval: const_eval_dep_node(ty::ParamEnvAnd<'tcx, (DefId, &'tcx Substs<'tcx>)>)
@@ -386,10 +381,6 @@ fn coherent_trait_dep_node<'tcx>((_, def_id): (CrateNum, DefId)) -> DepConstruct
 
 fn crate_inherent_impls_dep_node<'tcx>(_: CrateNum) -> DepConstructor<'tcx> {
     DepConstructor::Coherence
-}
-
-fn inherent_impls_overlap_check_dep_node<'tcx>(_: CrateNum) -> DepConstructor<'tcx> {
-    DepConstructor::CoherenceInherentImplOverlapCheck
 }
 
 fn reachability_dep_node<'tcx>(_: CrateNum) -> DepConstructor<'tcx> {

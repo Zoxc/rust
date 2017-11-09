@@ -58,14 +58,15 @@ use syntax_pos::Span;
 /// impl<'a> Trait<Foo> for Bar { type X = &'a i32; }
 ///      ^ 'a is unused and appears in assoc type, error
 /// ```
-pub fn impl_wf_check<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
+pub fn impl_wf_check<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) -> ImplWfCheck<'a, 'tcx> {
     // We will tag this as part of the WF check -- logically, it is,
     // but it's one that we must perform earlier than the rest of
     // WfCheck.
-    tcx.hir.krate().visit_all_item_likes(&mut ImplWfCheck { tcx: tcx });
+    // FIXME: How does this relate to the result of WF checking?
+    ImplWfCheck { tcx: tcx }
 }
 
-struct ImplWfCheck<'a, 'tcx: 'a> {
+pub struct ImplWfCheck<'a, 'tcx: 'a> {
     tcx: TyCtxt<'a, 'tcx, 'tcx>,
 }
 

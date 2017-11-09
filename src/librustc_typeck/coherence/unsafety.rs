@@ -15,12 +15,16 @@ use rustc::ty::TyCtxt;
 use rustc::hir::itemlikevisit::ItemLikeVisitor;
 use rustc::hir::{self, Unsafety};
 
-pub fn check<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
-    let mut unsafety = UnsafetyChecker { tcx: tcx };
-    tcx.hir.krate().visit_all_item_likes(&mut unsafety);
+pub fn check<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) -> UnsafetyChecker<'a, 'tcx> {
+    UnsafetyChecker { tcx: tcx }
 }
-
-struct UnsafetyChecker<'cx, 'tcx: 'cx> {
+/* FIXME: ask eddyb
+pub fn check2<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) ->
+        impl (for<'hir> ItemLikeVisitor<'hir>) + 'a + 'tcx {
+    UnsafetyChecker { tcx: tcx }
+}
+*/
+pub struct UnsafetyChecker<'cx, 'tcx: 'cx> {
     tcx: TyCtxt<'cx, 'tcx, 'tcx>,
 }
 

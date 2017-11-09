@@ -1060,24 +1060,31 @@ pub fn phase_3_run_analysis_passes<'tcx, F, R>(sess: &'tcx Session,
         // tcx available.
         rustc_incremental::dep_graph_tcx_init(tcx);
 
+        // Deep visitor (only bodies)
         time(time_passes,
              "stability checking",
              || stability::check_unstable_api_usage(tcx));
 
+        // Has deep visitor (only bodies)s and body owners
+        // Also some things which require the whole crate. Split the function.
         // passes are timed inside typeck
         try_with_f!(typeck::check_crate(tcx), (tcx, analysis, rx));
 
+        // Visits body owners
         time(time_passes,
              "const checking",
              || consts::check_crate(tcx));
 
+        // Needs the walk whole crate
         analysis.access_levels =
             time(time_passes, "privacy checking", || rustc_privacy::check_crate(tcx));
 
+        // This uses a deep visitor, but seems to actually only visit all bodies
         time(time_passes,
              "intrinsic checking",
              || middle::intrinsicck::check_crate(tcx));
 
+        // This uses a deep visitor, but seems to actually only visit all bodies
         time(time_passes,
              "match checking",
              || check_match::check_crate(tcx));
@@ -1086,18 +1093,22 @@ pub fn phase_3_run_analysis_passes<'tcx, F, R>(sess: &'tcx Session,
         // "not all control paths return a value" is reported here.
         //
         // maybe move the check to a MIR pass?
+        // This uses a deep visitor, but seems to actually only visit all bodies
         time(time_passes,
              "liveness checking",
              || middle::liveness::check_crate(tcx));
 
+        // Visits body owners
         time(time_passes,
              "borrow checking",
              || borrowck::check_crate(tcx));
 
+        // Visits body owners
         time(time_passes,
              "MIR borrow checking",
              || for def_id in tcx.body_owners() { tcx.mir_borrowck(def_id) });
 
+        // Visits body owners
         time(time_passes,
              "MIR effect checking",
              || for def_id in tcx.body_owners() {

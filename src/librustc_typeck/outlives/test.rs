@@ -12,11 +12,11 @@ use rustc::hir;
 use rustc::hir::itemlikevisit::ItemLikeVisitor;
 use rustc::ty::TyCtxt;
 
-pub fn test_inferred_outlives<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
-    tcx.hir.krate().visit_all_item_likes(&mut OutlivesTest { tcx });
+pub fn test_inferred_outlives<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) -> OutlivesTest<'a, 'tcx> {
+    OutlivesTest { tcx }
 }
 
-struct OutlivesTest<'a, 'tcx: 'a> {
+pub struct OutlivesTest<'a, 'tcx: 'a> {
     tcx: TyCtxt<'a, 'tcx, 'tcx>
 }
 

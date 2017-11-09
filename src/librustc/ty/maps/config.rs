@@ -102,12 +102,6 @@ impl<'tcx> QueryDescription for queries::crate_inherent_impls<'tcx> {
     }
 }
 
-impl<'tcx> QueryDescription for queries::crate_inherent_impls_overlap_check<'tcx> {
-    fn describe(_: TyCtxt, _: CrateNum) -> String {
-        format!("check for overlap between inherent impls defined in this crate")
-    }
-}
-
 impl<'tcx> QueryDescription for queries::crate_variances<'tcx> {
     fn describe(_tcx: TyCtxt, _: CrateNum) -> String {
         format!("computing the variances for items in this crate")

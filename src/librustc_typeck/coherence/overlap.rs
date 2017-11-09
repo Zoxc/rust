@@ -18,12 +18,10 @@ use syntax::ast;
 use rustc::hir;
 use rustc::hir::itemlikevisit::ItemLikeVisitor;
 
-pub fn check_auto_impls<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
-    let mut overlap = OverlapChecker { tcx };
-
+pub fn check_auto_impls<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) -> OverlapChecker<'a, 'tcx> {
     // this secondary walk specifically checks for some other cases,
     // like defaulted traits, for which additional overlap rules exist
-    tcx.hir.krate().visit_all_item_likes(&mut overlap);
+    OverlapChecker { tcx }
 }
 
 pub fn check_impl<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, node_id: ast::NodeId) {
@@ -67,7 +65,7 @@ pub fn check_impl<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, node_id: ast::NodeId) {
     }
 }
 
-struct OverlapChecker<'cx, 'tcx: 'cx> {
+pub struct OverlapChecker<'cx, 'tcx: 'cx> {
     tcx: TyCtxt<'cx, 'tcx, 'tcx>,
 }
 

@@ -16,12 +16,11 @@ use rustc::ty::{self, TyCtxt};
 use rustc::hir::itemlikevisit::ItemLikeVisitor;
 use rustc::hir;
 
-pub fn check<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
-    let mut orphan = OrphanChecker { tcx: tcx };
-    tcx.hir.krate().visit_all_item_likes(&mut orphan);
+pub fn check<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) -> OrphanChecker<'a, 'tcx> {
+    OrphanChecker { tcx: tcx }
 }
 
-struct OrphanChecker<'cx, 'tcx: 'cx> {
+pub struct OrphanChecker<'cx, 'tcx: 'cx> {
     tcx: TyCtxt<'cx, 'tcx, 'tcx>,
 }
 

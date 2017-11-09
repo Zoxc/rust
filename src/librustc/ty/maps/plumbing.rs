@@ -708,9 +708,6 @@ pub fn force_from_dep_node<'a, 'gcx, 'lcx>(tcx: TyCtxt<'a, 'gcx, 'lcx>,
         DepKind::RegionScopeTree => { force!(region_scope_tree, def_id!()); }
 
         DepKind::Coherence => { force!(crate_inherent_impls, LOCAL_CRATE); }
-        DepKind::CoherenceInherentImplOverlapCheck => {
-            force!(crate_inherent_impls_overlap_check, LOCAL_CRATE)
-        },
         DepKind::PrivacyAccessLevels => { force!(privacy_access_levels, LOCAL_CRATE); }
         DepKind::MirConstQualif => { force!(mir_const_qualif, def_id!()); }
         DepKind::MirConst => { force!(mir_const, def_id!()); }

@@ -101,13 +101,11 @@ fn enforce_trait_manually_implementable(tcx: TyCtxt, impl_def_id: DefId, trait_d
 pub fn provide(providers: &mut Providers) {
     use self::builtin::coerce_unsized_info;
     use self::inherent_impls::{crate_inherent_impls, inherent_impls};
-    use self::inherent_impls_overlap::crate_inherent_impls_overlap_check;
 
     *providers = Providers {
         coherent_trait,
         crate_inherent_impls,
         inherent_impls,
-        crate_inherent_impls_overlap_check,
         coerce_unsized_info,
         ..*providers
     };
@@ -125,16 +123,26 @@ fn coherent_trait<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
     builtin::check_trait(tcx, def_id);
 }
 
-pub fn check_coherence<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
+pub fn check_coherence_for_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
     for &trait_def_id in tcx.hir.krate().trait_impls.keys() {
         tcx.coherent_trait((LOCAL_CRATE, trait_def_id));
     }
 
-    unsafety::check(tcx);
-    orphan::check(tcx);
-    overlap::check_auto_impls(tcx);
-
     // these queries are executed for side-effects (error reporting):
-    tcx.crate_inherent_impls(LOCAL_CRATE);
-    tcx.crate_inherent_impls_overlap_check(LOCAL_CRATE);
+    tcx.crate_inherent_impls(LOCAL_CRATE); // Visits whole crate
+}
+
+pub fn check_coherence_for_item<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) ->
+        (((unsafety::UnsafetyChecker<'a, 'tcx>,
+            orphan::OrphanChecker<'a, 'tcx>),
+        overlap::OverlapChecker<'a, 'tcx>),
+        inherent_impls_overlap::InherentOverlapChecker<'a, 'tcx>) {
+    // Can visit every item like. Only cares about items
+    let result = unsafety::check(tcx);
+    // Can visit every item like. Only cares about hir::ItemImpl.
+    let result = (result, orphan::check(tcx));
+    // Can visit every item like. Only cares about items
+    let result = (result, overlap::check_auto_impls(tcx));
+    // Can visit every item like. Only cares about items
+    (result, inherent_impls_overlap::crate_inherent_impls_overlap_check(tcx))
 }

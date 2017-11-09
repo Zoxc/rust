@@ -301,38 +301,62 @@ pub fn check_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>)
     // this ensures that later parts of type checking can assume that items
     // have valid types and not error
     tcx.sess.track_errors(|| {
+        // Uses a deep visitor (only bodies). Dunno why.
+        // Visits nested bodies (closures, etc.) of items
         time(time_passes, "type collecting", ||
              collect::collect_item_types(tcx));
 
     })?;
 
     tcx.sess.track_errors(|| {
-        time(time_passes, "outlives testing", ||
-            outlives::test::test_inferred_outlives(tcx));
+        time(time_passes, "outlives testing + impl wf inference", || {
+            // "outlives testing"
+            // Visits using ItemLikeVisitor
+            let checks = outlives::test::test_inferred_outlives(tcx);
+
+            // "impl wf inference"
+            // Visits using ItemLikeVisitor
+            let mut checks = (checks, impl_wf_check::impl_wf_check(tcx));
+
+             tcx.hir.krate().visit_all_item_likes(&mut checks)
+        });
+
     })?;
 
     tcx.sess.track_errors(|| {
-        time(time_passes, "impl wf inference", ||
-             impl_wf_check::impl_wf_check(tcx));
+        time(time_passes, "coherence checking", || {
+            // Visits using ItemLikeVisitor
+            tcx.hir.krate().visit_all_item_likes(&mut coherence::check_coherence_for_item(tcx));
+
+            // We want E0204 to come before E0277. This generates E0204.
+            // error[E0204]: the trait `Copy` may not be implemented for this type
+            // error[E0277]: the trait bound `Foo: std::clone::Clone` is not satisfied
+            coherence::check_coherence_for_crate(tcx);
+        });
     })?;
 
     tcx.sess.track_errors(|| {
-      time(time_passes, "coherence checking", ||
-          coherence::check_coherence(tcx));
+        time(time_passes, "variance testing + item-types checking", || {
+            // "variance testing"
+            // Visits using ItemLikeVisitor
+            let checks = variance::test::test_variance(tcx);
+
+            // "item-types checking"
+            // Visits using ItemLikeVisitor
+            let mut checks = (checks, check::check_item_types(tcx));
+
+            tcx.hir.krate().visit_all_item_likes(&mut checks)
+        });
     })?;
 
-    tcx.sess.track_errors(|| {
-        time(time_passes, "variance testing", ||
-             variance::test::test_variance(tcx));
-    })?;
-
+    // Uses a deep visitor (doesn't visit children)
     time(time_passes, "wf checking", || check::check_wf_new(tcx))?;
 
-    time(time_passes, "item-types checking", || check::check_item_types(tcx))?;
-
+    // Walks body owners
     time(time_passes, "item-bodies checking", || check::check_item_bodies(tcx))?;
 
-    check_unused::check_crate(tcx);
+    check_unused::check_crate(tcx); // Accesses whole crate
+
     check_for_entry_fn(tcx);
 
     tcx.sess.compile_status()
