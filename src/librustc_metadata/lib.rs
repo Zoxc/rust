@@ -22,6 +22,8 @@
 #![feature(specialization)]
 #![feature(rustc_private)]
 
+#![recursion_limit="256"]
+
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -37,6 +39,7 @@ extern crate proc_macro;
 #[macro_use]
 extern crate rustc;
 extern crate rustc_back;
+#[macro_use]
 extern crate rustc_data_structures;
 
 mod diagnostics;
