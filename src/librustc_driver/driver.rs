@@ -50,6 +50,7 @@ use std::io::{self, Write};
 use std::iter;
 use std::path::{Path, PathBuf};
 use rustc_data_structures::sync::{Sync, Lrc};
+use rustc::util::common::PROFQ_CHAN;
 use std::sync::mpsc;
 use syntax::{self, ast, attr, diagnostics, visit};
 use syntax::ext::base::ExtCtxt;
@@ -73,6 +74,20 @@ pub fn compile_input(trans: Box<TransCrate>,
                      output: &Option<PathBuf>,
                      addl_plugins: Option<Vec<String>>,
                      control: &CompileController) -> CompileResult {
+    PROFQ_CHAN.set(&sess.profile_channel, || {
+        compile_input_impl(trans, sess, cstore, input_path, input, outdir, output, addl_plugins, control)
+    })
+}
+
+fn compile_input_impl(trans: Box<TransCrate>,
+                      sess: &Session,
+                      cstore: &CStore,
+                      input: &Input,
+                      outdir: &Option<PathBuf>,
+                      output: &Option<PathBuf>,
+                      addl_plugins: Option<Vec<String>>,
+                      control: &CompileController) -> CompileResult {
+
     macro_rules! controller_entry_point {
         ($point: ident, $tsess: expr, $make_state: expr, $phase_result: expr) => {{
             let state = &mut $make_state;
