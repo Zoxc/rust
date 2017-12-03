@@ -20,7 +20,6 @@ use session::Session;
 
 use std::cmp::Ord;
 use std::hash as std_hash;
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 use syntax::ast;
@@ -36,8 +35,10 @@ use rustc_data_structures::stable_hasher::{HashStable, StableHashingContextProvi
 use rustc_data_structures::accumulate_vec::AccumulateVec;
 use rustc_data_structures::fx::FxHashSet;
 
-thread_local!(static IGNORED_ATTR_NAMES: RefCell<FxHashSet<Symbol>> =
-    RefCell::new(FxHashSet()));
+rustc_global!(static IGNORED_ATTR_NAMES: FxHashSet<Symbol> = {
+    debug_assert!(ich::IGNORED_ATTRIBUTES.len() > 0);
+    ich::IGNORED_ATTRIBUTES.iter().map(|&s| Symbol::intern(s)).collect()
+});
 
 /// This is the context state available during incr. comp. hashing. It contains
 /// enough information to transform DefIds and HirIds into stable DefPaths (i.e.
@@ -91,15 +92,6 @@ impl<'gcx> StableHashingContext<'gcx> {
                -> Self {
         let hash_spans_initial = sess.opts.debuginfo != NoDebugInfo;
         let check_overflow_initial = sess.overflow_checks();
-
-        debug_assert!(ich::IGNORED_ATTRIBUTES.len() > 0);
-        IGNORED_ATTR_NAMES.with(|names| {
-            let mut names = names.borrow_mut();
-            if names.is_empty() {
-                names.extend(ich::IGNORED_ATTRIBUTES.iter()
-                                                    .map(|&s| Symbol::intern(s)));
-            }
-        });
 
         StableHashingContext {
             sess,
@@ -199,8 +191,8 @@ impl<'gcx> StableHashingContext<'gcx> {
 
     #[inline]
     pub fn is_ignored_attr(&self, name: Symbol) -> bool {
-        IGNORED_ATTR_NAMES.with(|names| {
-            names.borrow().contains(&name)
+        rustc_access_global!(IGNORED_ATTR_NAMES, |ignored_attrs| {
+            ignored_attrs.contains(&name)
         })
     }
 
