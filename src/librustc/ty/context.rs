@@ -854,9 +854,6 @@ pub struct GlobalCtxt<'tcx> {
     /// Data layout specification for the current target.
     pub data_layout: TargetDataLayout,
 
-    /// Used to prevent layout from recursing too deeply.
-    pub layout_depth: Cell<usize>,
-
     /// Map from function to the `#[derive]` mode that it's defining. Only used
     /// by `proc-macro` crates.
     pub derive_macros: RefCell<NodeMap<Symbol>>,
