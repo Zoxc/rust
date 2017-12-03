@@ -15,6 +15,7 @@ fmt_macros = { path = "../libfmt_macros" }
 graphviz = { path = "../libgraphviz" }
 jobserver = "0.1"
 log = { version = "0.4", features = ["release_max_level_info", "std"] }
+scoped-tls = { git = "https://github.com/Zoxc/scoped-tls.git", features=["nightly"] }
 rustc_apfloat = { path = "../librustc_apfloat" }
 rustc_back = { path = "../librustc_back" }
 rustc_const_math = { path = "../librustc_const_math" }
