@@ -371,8 +371,6 @@ impl<'a> ::std::cmp::PartialEq<InternedString> for &'a String {
     }
 }
 
-impl !Send for InternedString { }
-
 impl ::std::ops::Deref for InternedString {
     type Target = str;
     fn deref(&self) -> &str { self.string }
