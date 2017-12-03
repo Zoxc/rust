@@ -25,6 +25,7 @@
 #![feature(optin_builtin_traits)]
 #![allow(unused_attributes)]
 #![feature(specialization)]
+#![feature(box_leak)]
 
 use std::borrow::Cow;
 use std::cell::Cell;
