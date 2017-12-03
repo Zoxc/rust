@@ -778,12 +778,12 @@ impl<'tcx> CommonTypes<'tcx> {
 /// README](README.md) for more deatils.
 #[derive(Copy, Clone)]
 pub struct TyCtxt<'a, 'gcx: 'a+'tcx, 'tcx: 'a> {
-    gcx: &'a GlobalCtxt<'gcx>,
+    gcx: &'a ThreadCtxt<'gcx>,
     interners: &'a CtxtInterners<'tcx>
 }
 
 impl<'a, 'gcx, 'tcx> Deref for TyCtxt<'a, 'gcx, 'tcx> {
-    type Target = &'a GlobalCtxt<'gcx>;
+    type Target = &'a ThreadCtxt<'gcx>;
     fn deref(&self) -> &Self::Target {
         &self.gcx
     }
@@ -882,13 +882,31 @@ pub struct GlobalCtxt<'tcx> {
     output_filenames: Arc<OutputFilenames>,
 }
 
-impl<'tcx> GlobalCtxt<'tcx> {
+impl<'tcx> ThreadCtxt<'tcx> {
     /// Get the global TyCtxt.
     pub fn global_tcx<'a>(&'a self) -> TyCtxt<'a, 'tcx, 'tcx> {
         TyCtxt {
             gcx: self,
             interners: &self.global_interners
         }
+    }
+}
+
+/// A thread local context.
+/// Each worker thread in a query thread pool has one of these.
+pub struct ThreadCtxt<'tcx> {
+    /// The global context shared between threads
+    global: Lrc<GlobalCtxt<'tcx>>,
+
+    /// Used to prevent layout from recursing too deeply.
+    pub layout_depth: Cell<usize>,
+}
+
+impl<'tcx> Deref for ThreadCtxt<'tcx> {
+    type Target = GlobalCtxt<'tcx>;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.global
     }
 }
 
@@ -1079,7 +1097,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             Rc::get_mut(map).unwrap().insert(hir_id.local_id, Rc::new(v));
         }
 
-        tls::enter_global(GlobalCtxt {
+        let gcx = GlobalCtxt {
             sess: s,
             cstore,
             global_arenas: &arenas.global,
@@ -1124,7 +1142,14 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             all_traits: RefCell::new(None),
             tx_to_llvm_workers: tx,
             output_filenames: Arc::new(output_filenames.clone()),
-       }, f)
+        };
+
+        let thread_ctxt = ThreadCtxt {
+            global: Lrc::new(gcx),
+            layout_depth: Cell::new(0),
+        };
+
+        tls::enter_global(thread_ctxt, f)
     }
 
     pub fn consider_optimizing<T: Fn() -> String>(&self, msg: T) -> bool {
@@ -1261,7 +1286,7 @@ impl<'a, 'tcx> TyCtxt<'a, 'tcx, 'tcx> {
     }
 }
 
-impl<'gcx: 'tcx, 'tcx> GlobalCtxt<'gcx> {
+impl<'gcx: 'tcx, 'tcx> ThreadCtxt<'gcx> {
     /// Call the closure with a local `TyCtxt` using the given arena.
     pub fn enter_local<F, R>(&self, arena: &'tcx DroplessArena, f: F) -> R
         where F: for<'a> FnOnce(TyCtxt<'a, 'gcx, 'tcx>) -> R
@@ -1414,7 +1439,7 @@ impl<'a, 'tcx> Lift<'tcx> for &'a Slice<Predicate<'a>> {
 }
 
 pub mod tls {
-    use super::{CtxtInterners, GlobalCtxt, TyCtxt};
+    use super::{CtxtInterners, ThreadCtxt, TyCtxt};
 
     use std::cell::Cell;
     use std::fmt;
@@ -1423,11 +1448,11 @@ pub mod tls {
     /// Marker types used for the scoped TLS slot.
     /// The type context cannot be used directly because the scoped TLS
     /// in libstd doesn't allow types generic over lifetimes.
-    enum ThreadLocalGlobalCtxt {}
+    enum ThreadLocalThreadCtxt {}
     enum ThreadLocalInterners {}
 
     thread_local! {
-        static TLS_TCX: Cell<Option<(*const ThreadLocalGlobalCtxt,
+        static TLS_TCX: Cell<Option<(*const ThreadLocalThreadCtxt,
                                      *const ThreadLocalInterners)>> = Cell::new(None)
     }
 
@@ -1437,7 +1462,7 @@ pub mod tls {
         })
     }
 
-    pub fn enter_global<'gcx, F, R>(gcx: GlobalCtxt<'gcx>, f: F) -> R
+    pub fn enter_global<'gcx, F, R>(gcx: ThreadCtxt<'gcx>, f: F) -> R
         where F: for<'a> FnOnce(TyCtxt<'a, 'gcx, 'gcx>) -> R
     {
         syntax_pos::SPAN_DEBUG.with(|span_dbg| {
@@ -1449,12 +1474,12 @@ pub mod tls {
         })
     }
 
-    pub fn enter<'a, 'gcx: 'tcx, 'tcx, F, R>(gcx: &'a GlobalCtxt<'gcx>,
+    pub fn enter<'a, 'gcx: 'tcx, 'tcx, F, R>(gcx: &'a ThreadCtxt<'gcx>,
                                              interners: &'a CtxtInterners<'tcx>,
                                              f: F) -> R
         where F: FnOnce(TyCtxt<'a, 'gcx, 'tcx>) -> R
     {
-        let gcx_ptr = gcx as *const _ as *const ThreadLocalGlobalCtxt;
+        let gcx_ptr = gcx as *const _ as *const ThreadLocalThreadCtxt;
         let interners_ptr = interners as *const _ as *const ThreadLocalInterners;
         TLS_TCX.with(|tls| {
             let prev = tls.get();
@@ -1473,7 +1498,7 @@ pub mod tls {
     {
         TLS_TCX.with(|tcx| {
             let (gcx, interners) = tcx.get().unwrap();
-            let gcx = unsafe { &*(gcx as *const GlobalCtxt) };
+            let gcx = unsafe { &*(gcx as *const ThreadCtxt) };
             let interners = unsafe { &*(interners as *const CtxtInterners) };
             f(TyCtxt {
                 gcx,
