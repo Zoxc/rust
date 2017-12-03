@@ -862,7 +862,7 @@ fn get_metadata_section_imp(target: &Target,
             match DeflateDecoder::new(compressed_bytes).read_to_end(&mut inflated) {
                 Ok(_) => {
                     let buf = unsafe { OwningRef::new_assert_stable_address(inflated) };
-                    buf.map_owner_box().erase_owner()
+                    rustc_erase_owner!(buf.map_owner_box())
                 }
                 Err(_) => {
                     return Err(format!("failed to decompress metadata: {}", filename.display()));
@@ -872,7 +872,7 @@ fn get_metadata_section_imp(target: &Target,
         CrateFlavor::Rmeta => {
             let buf = fs::read(filename).map_err(|_|
                 format!("failed to read rmeta metadata: '{}'", filename.display()))?;
-            OwningRef::new(buf).map_owner_box().erase_owner()
+            rustc_erase_owner!(OwningRef::new(buf).map_owner_box())
         }
     };
     let blob = MetadataBlob(raw_bytes);
