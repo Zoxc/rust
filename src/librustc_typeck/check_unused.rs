@@ -15,7 +15,7 @@ use syntax::ast;
 use syntax_pos::{Span, DUMMY_SP};
 
 use rustc::hir::def_id::LOCAL_CRATE;
-use rustc::hir::itemlikevisit::ItemLikeVisitor;
+use rustc::hir::itemlikevisit::ParItemLikeVisitor;
 use rustc::hir;
 use rustc::util::nodemap::DefIdSet;
 
@@ -45,8 +45,8 @@ impl<'a, 'tcx> CheckVisitor<'a, 'tcx> {
     }
 }
 
-impl<'a, 'tcx, 'v> ItemLikeVisitor<'v> for CheckVisitor<'a, 'tcx> {
-    fn visit_item(&mut self, item: &hir::Item) {
+impl<'a, 'tcx, 'v> ParItemLikeVisitor<'v> for CheckVisitor<'a, 'tcx> {
+    fn visit_item(&self, item: &hir::Item) {
         if item.vis == hir::Public || item.span == DUMMY_SP {
             return;
         }
@@ -55,10 +55,10 @@ impl<'a, 'tcx, 'v> ItemLikeVisitor<'v> for CheckVisitor<'a, 'tcx> {
         }
     }
 
-    fn visit_trait_item(&mut self, _trait_item: &hir::TraitItem) {
+    fn visit_trait_item(&self, _trait_item: &hir::TraitItem) {
     }
 
-    fn visit_impl_item(&mut self, _impl_item: &hir::ImplItem) {
+    fn visit_impl_item(&self, _impl_item: &hir::ImplItem) {
     }
 }
 
@@ -71,8 +71,8 @@ pub fn check_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
         used_trait_imports.extend(imports.iter());
     }
 
-    let mut visitor = CheckVisitor { tcx, used_trait_imports };
-    tcx.hir.krate().visit_all_item_likes(&mut visitor);
+    let visitor = CheckVisitor { tcx, used_trait_imports };
+    tcx.hir.krate().par_visit_all_item_likes(&visitor);
 
     for &(def_id, span) in tcx.maybe_unused_extern_crates(LOCAL_CRATE).iter() {
         // The `def_id` here actually was calculated during resolution (at least

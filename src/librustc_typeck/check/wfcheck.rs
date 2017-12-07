@@ -660,6 +660,7 @@ fn reject_shadowing_type_parameters(tcx: TyCtxt, def_id: DefId) {
     }
 }
 
+#[derive(Clone)]
 pub struct CheckTypeWellFormedVisitor<'a, 'tcx: 'a> {
     tcx: TyCtxt<'a, 'tcx, 'tcx>,
 }
