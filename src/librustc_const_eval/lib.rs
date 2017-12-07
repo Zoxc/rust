@@ -26,6 +26,8 @@
 #![feature(i128_type)]
 #![feature(from_ref)]
 
+#![recursion_limit="256"]
+
 extern crate arena;
 #[macro_use] extern crate syntax;
 #[macro_use] extern crate log;
