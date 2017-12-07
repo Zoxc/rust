@@ -26,6 +26,7 @@ use errors::{DiagnosticBuilder, DiagnosticId};
 use rustc::hir::intravisit::{self, Visitor, NestedVisitorMap};
 use rustc::hir;
 
+#[derive(Clone)]
 pub struct CheckTypeWellFormedVisitor<'a, 'tcx:'a> {
     tcx: TyCtxt<'a, 'tcx, 'tcx>,
     code: ObligationCauseCode<'tcx>,

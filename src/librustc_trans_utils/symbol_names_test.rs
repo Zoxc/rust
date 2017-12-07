@@ -33,12 +33,13 @@ pub fn report_symbol_names<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
     }
 
     tcx.dep_graph.with_ignore(|| {
-        let mut visitor = SymbolNamesTest { tcx: tcx };
+        let visitor = SymbolNamesTest { tcx: tcx };
         // FIXME(#37712) could use ItemLikeVisitor if trait items were item-like
-        tcx.hir.krate().visit_all_item_likes(&mut visitor.as_deep_visitor());
+        tcx.hir.krate().par_deep_visit_items(visitor);
     })
 }
 
+#[derive(Clone)]
 struct SymbolNamesTest<'a, 'tcx:'a> {
     tcx: TyCtxt<'a, 'tcx, 'tcx>,
 }
