@@ -35,6 +35,8 @@
 #![feature(conservative_impl_trait)]
 #![feature(optin_builtin_traits)]
 
+#![recursion_limit="256"]
+
 use rustc::dep_graph::WorkProduct;
 use syntax_pos::symbol::Symbol;
 
