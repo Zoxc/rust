@@ -35,6 +35,7 @@ use back::write::{self, OngoingCrateTranslation, create_target_machine};
 use llvm::{ContextRef, ModuleRef, ValueRef, Vector, get_param};
 use llvm;
 use metadata;
+use rustc_data_structures::sync::{scope, Lock};
 use rustc::hir::def_id::{CrateNum, DefId, LOCAL_CRATE};
 use rustc::middle::lang_items::StartFnLangItem;
 use rustc::mir::mono::{Linkage, Visibility, Stats};
@@ -81,6 +82,7 @@ use std::time::{Instant, Duration};
 use std::{i32, usize};
 use std::iter;
 use std::sync::mpsc;
+use std::panic;
 use syntax_pos::Span;
 use syntax_pos::symbol::InternedString;
 use syntax::attr;
@@ -753,10 +755,11 @@ pub fn trans_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
             link_meta,
             metadata,
             rx,
+            0,
             1);
 
         ongoing_translation.submit_pre_translated_module_to_llvm(tcx, metadata_module);
-        ongoing_translation.translation_finished(tcx);
+        ongoing_translation.translation_finished();
 
         assert_and_save_dep_graph(tcx);
 
@@ -782,13 +785,16 @@ pub fn trans_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
         }
     }
 
+    let total_cgus = codegen_units.len() + tcx.sess.allocator_kind.get().is_some() as usize + 1;
+
     let ongoing_translation = write::start_async_translation(
         tcx,
         time_graph.clone(),
         link_meta,
         metadata,
         rx,
-        codegen_units.len());
+        codegen_units.len(),
+        total_cgus);
 
     // Translate an allocator shim, if any
     let allocator_module = if let Some(kind) = tcx.sess.allocator_kind.get() {
@@ -830,79 +836,113 @@ pub fn trans_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
         codegen_units
     };
 
-    let mut total_trans_time = Duration::new(0, 0);
-    let mut all_stats = Stats::default();
+    let total_trans_time = Lock::new(Duration::new(0, 0));
+    let all_stats = Lock::new(Stats::default());
 
-    for cgu in codegen_units.into_iter() {
-        ongoing_translation.wait_for_signal_to_translate_item();
-        ongoing_translation.check_for_errors(tcx.sess);
+    scope(|scope| {
+        for cgu in codegen_units.into_iter() {
+            ongoing_translation.wait_for_signal_to_translate_item();
+            ongoing_translation.check_for_errors(tcx.sess);
 
-        // First, if incremental compilation is enabled, we try to re-use the
-        // codegen unit from the cache.
-        if tcx.dep_graph.is_fully_enabled() {
-            let cgu_id = cgu.work_product_id();
+            // First, if incremental compilation is enabled, we try to re-use the
+            // codegen unit from the cache.
+            if tcx.dep_graph.is_fully_enabled() {
+                let cgu_id = cgu.work_product_id();
 
-            // Check whether there is a previous work-product we can
-            // re-use.  Not only must the file exist, and the inputs not
-            // be dirty, but the hash of the symbols we will generate must
-            // be the same.
-            if let Some(buf) = tcx.dep_graph.previous_work_product(&cgu_id) {
-                let dep_node = &DepNode::new(tcx,
-                    DepConstructor::CompileCodegenUnit(cgu.name().clone()));
+                // Check whether there is a previous work-product we can
+                // re-use.  Not only must the file exist, and the inputs not
+                // be dirty, but the hash of the symbols we will generate must
+                // be the same.
+                if let Some(buf) = tcx.dep_graph.previous_work_product(&cgu_id) {
+                    let dep_node = &DepNode::new(tcx,
+                        DepConstructor::CompileCodegenUnit(cgu.name().clone()));
 
-                // We try to mark the DepNode::CompileCodegenUnit green. If we
-                // succeed it means that none of the dependencies has changed
-                // and we can safely re-use.
-                if let Some(dep_node_index) = tcx.dep_graph.try_mark_green(tcx, dep_node) {
-                    // Append ".rs" to LLVM module identifier.
-                    //
-                    // LLVM code generator emits a ".file filename" directive
-                    // for ELF backends. Value of the "filename" is set as the
-                    // LLVM module identifier.  Due to a LLVM MC bug[1], LLVM
-                    // crashes if the module identifier is same as other symbols
-                    // such as a function name in the module.
-                    // 1. http://llvm.org/bugs/show_bug.cgi?id=11479
-                    let llmod_id = format!("{}.rs", cgu.name());
+                    // We try to mark the DepNode::CompileCodegenUnit green. If we
+                    // succeed it means that none of the dependencies has changed
+                    // and we can safely re-use.
+                    if let Some(dep_node_index) = tcx.dep_graph
+                                                        .try_mark_green(tcx, dep_node) {
+                        // Append ".rs" to LLVM module identifier.
+                        //
+                        // LLVM code generator emits a ".file filename" directive
+                        // for ELF backends. Value of the "filename" is set as the
+                        // LLVM module identifier.  Due to a LLVM MC bug[1], LLVM
+                        // crashes if the module identifier is same as other symbols
+                        // such as a function name in the module.
+                        // 1. http://llvm.org/bugs/show_bug.cgi?id=11479
+                        let llmod_id = format!("{}.rs", cgu.name());
 
-                    let module = ModuleTranslation {
-                        name: cgu.name().to_string(),
-                        source: ModuleSource::Preexisting(buf),
-                        kind: ModuleKind::Regular,
-                        llmod_id,
-                    };
-                    tcx.dep_graph.mark_loaded_from_cache(dep_node_index, true);
-                    write::submit_translated_module_to_llvm(tcx, module, 0);
-                    // Continue to next cgu, this one is done.
-                    continue
+                        let module = ModuleTranslation {
+                            name: cgu.name().to_string(),
+                            source: ModuleSource::Preexisting(buf),
+                            kind: ModuleKind::Regular,
+                            llmod_id,
+                        };
+                        tcx.dep_graph.mark_loaded_from_cache(dep_node_index, true);
+                        write::submit_translated_module_to_llvm(tcx, module, 0);
+                        // Continue to next cgu, this one is done.
+                        continue
+                    }
+                } else {
+                    // This can happen if files were  deleted from the cache
+                    // directory for some reason. We just re-compile then.
                 }
-            } else {
-                // This can happen if files were  deleted from the cache
-                // directory for some reason. We just re-compile then.
             }
+
+            let cgu_name = *cgu.name();
+            let all_stats = &all_stats;
+            let total_trans_time = &total_trans_time;
+            let time_graph = time_graph.as_ref();
+            let sender = ongoing_translation.trans_worker_sender();
+
+            scope.spawn(move |_| {
+                let _timing_guard = time_graph.map(|time_graph| {
+                    time_graph.start(write::TRANS_WORKER_TIMELINE,
+                                    write::TRANS_WORK_PACKAGE_KIND,
+                                    &format!("codegen {}", cgu_name))
+                });
+
+                let cgu_name = cgu_name;
+                let start_time = Instant::now();
+
+                #[cfg(parallel_queries)]
+                {
+                    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+                        let result = tcx.compile_codegen_unit(cgu_name);
+                        all_stats.lock().extend(result);
+                    }));
+
+                    if let Err(panic) = result {
+                        OngoingCrateTranslation::translation_panic(panic, sender);
+                    }
+                }
+
+                #[cfg(not(parallel_queries))]
+                {
+                    let result = tcx.compile_codegen_unit(cgu_name);
+                    all_stats.lock().extend(result);
+                }
+
+                let mut total_trans_time = total_trans_time.lock();
+                *total_trans_time += start_time.elapsed();
+            });
         }
+    });
 
-        let _timing_guard = time_graph.as_ref().map(|time_graph| {
-            time_graph.start(write::TRANS_WORKER_TIMELINE,
-                             write::TRANS_WORK_PACKAGE_KIND,
-                             &format!("codegen {}", cgu.name()))
-        });
-        let start_time = Instant::now();
-        all_stats.extend(tcx.compile_codegen_unit(*cgu.name()));
-        total_trans_time += start_time.elapsed();
-        ongoing_translation.check_for_errors(tcx.sess);
-    }
-
-    ongoing_translation.translation_finished(tcx);
+    ongoing_translation.translation_finished();
+    ongoing_translation.check_for_errors(tcx.sess);
 
     // Since the main thread is sometimes blocked during trans, we keep track
     // -Ztime-passes output manually.
     print_time_passes_entry(tcx.sess.time_passes(),
-                            "translate to LLVM IR",
-                            total_trans_time);
+                            "translate to LLVM IR (total time in all threads)",
+                            total_trans_time.into_inner());
 
     if tcx.sess.opts.incremental.is_some() {
         ::rustc_incremental::assert_module_sources::assert_module_sources(tcx);
     }
+
+    let mut all_stats = all_stats.into_inner();
 
     symbol_names_test::report_symbol_names(tcx);
 

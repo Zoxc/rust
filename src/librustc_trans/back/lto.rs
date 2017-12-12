@@ -42,6 +42,7 @@ pub fn crate_type_allows_lto(crate_type: config::CrateType) -> bool {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum LtoModuleTranslation {
     Fat {
         module: Option<ModuleTranslation>,
@@ -479,6 +480,7 @@ fn run_pass_manager(cgcx: &CodegenContext,
     debug!("lto done");
 }
 
+#[derive(Debug)]
 pub enum SerializedModule {
     Local(ModuleBuffer),
     FromRlib(Vec<u8>),
@@ -493,6 +495,7 @@ impl SerializedModule {
     }
 }
 
+#[derive(Debug)]
 pub struct ModuleBuffer(*mut llvm::ModuleBuffer);
 
 unsafe impl Send for ModuleBuffer {}
@@ -520,11 +523,13 @@ impl Drop for ModuleBuffer {
     }
 }
 
+#[derive(Debug)]
 pub struct ThinModule {
     shared: Arc<ThinShared>,
     idx: usize,
 }
 
+#[derive(Debug)]
 struct ThinShared {
     data: ThinData,
     thin_buffers: Vec<ThinBuffer>,
@@ -532,6 +537,7 @@ struct ThinShared {
     module_names: Vec<CString>,
 }
 
+#[derive(Debug)]
 struct ThinData(*mut llvm::ThinLTOData);
 
 unsafe impl Send for ThinData {}
@@ -545,6 +551,7 @@ impl Drop for ThinData {
     }
 }
 
+#[derive(Debug)]
 pub struct ThinBuffer(*mut llvm::ThinLTOBuffer);
 
 unsafe impl Send for ThinBuffer {}
