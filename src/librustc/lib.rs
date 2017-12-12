@@ -85,6 +85,7 @@ extern crate fmt_macros;
 extern crate getopts;
 extern crate graphviz;
 #[macro_use] extern crate lazy_static;
+extern crate num_cpus;
 #[cfg(windows)]
 extern crate libc;
 #[cfg(windows)]

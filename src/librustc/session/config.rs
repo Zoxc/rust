@@ -1163,6 +1163,8 @@ options! {DebuggingOptions, DebuggingSetter, basic_debugging_options,
         "print the AST as JSON and halt"),
     query_threads: Option<usize> = (None, parse_opt_uint, [UNTRACKED],
         "execute queries on a thread pool with N threads"),
+    codegen_threads: Option<usize> = (None, parse_opt_uint, [UNTRACKED],
+        "execute code generation work with N threads"),
     ast_json_noexpand: bool = (false, parse_bool, [UNTRACKED],
         "print the pre-expansion AST as JSON and halt"),
     ls: bool = (false, parse_bool, [UNTRACKED],
@@ -1926,6 +1928,10 @@ pub fn build_session_options_and_crate_config(
             error_format,
             "Value for query threads must be a positive nonzero integer",
         );
+    }
+
+    if debugging_opts.codegen_threads == Some(0) {
+        early_error(error_format, "Value for codegen threads must be a positive nonzero integer");
     }
 
     if debugging_opts.query_threads.unwrap_or(1) > 1 && debugging_opts.fuel.is_some() {

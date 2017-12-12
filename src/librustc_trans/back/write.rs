@@ -52,6 +52,7 @@ use std::ffi::{CString, CStr};
 use std::fs;
 use std::io::{self, Write};
 use std::mem;
+use std::cmp;
 use std::path::{Path, PathBuf};
 use std::str;
 use std::sync::Arc;
@@ -59,6 +60,7 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::slice;
 use std::time::Instant;
 use std::thread;
+use std::panic;
 use libc::{c_uint, c_void, c_char, size_t};
 
 pub const RELOC_MODEL_ARGS : [(&'static str, llvm::RelocMode); 7] = [
@@ -349,7 +351,7 @@ pub struct CodegenContext {
     debuginfo: config::DebugInfoLevel,
 
     // Number of cgus excluding the allocator/metadata modules
-    pub total_cgus: usize,
+    pub user_cgus: usize,
     // Handler to use for diagnostics produced during codegen.
     pub diag_emitter: SharedEmitter,
     // LLVM passes added by plugins.
@@ -885,6 +887,7 @@ pub fn start_async_translation(tcx: TyCtxt,
                                link: LinkMeta,
                                metadata: EncodedMetadata,
                                coordinator_receive: Receiver<Box<Any + Send>>,
+                               user_cgus: usize,
                                total_cgus: usize)
                                -> OngoingCrateTranslation {
     let sess = tcx.sess;
@@ -992,12 +995,16 @@ pub fn start_async_translation(tcx: TyCtxt,
 
     let (shared_emitter, shared_emitter_main) = SharedEmitter::new();
     let (trans_worker_send, trans_worker_receive) = channel();
+    let trans_worker_send_2 = trans_worker_send.clone();
+
+    let start = Instant::now();
 
     let coordinator_thread = start_executing_work(tcx,
                                                   &crate_info,
                                                   shared_emitter,
                                                   trans_worker_send,
                                                   coordinator_receive,
+                                                  user_cgus,
                                                   total_cgus,
                                                   sess.jobserver.clone(),
                                                   time_graph.clone(),
@@ -1012,10 +1019,11 @@ pub fn start_async_translation(tcx: TyCtxt,
         windows_subsystem,
         linker_info,
         crate_info,
-
+        start,
         time_graph,
         coordinator_send: tcx.tx_to_llvm_workers.lock().clone(),
         trans_worker_receive,
+        trans_worker_send: trans_worker_send_2,
         shared_emitter_main,
         future: coordinator_thread,
         output_filenames: tcx.output_filenames(LOCAL_CRATE),
@@ -1210,6 +1218,7 @@ pub(crate) fn dump_incremental_data(trans: &CrateTranslation) {
               trans.modules.len());
 }
 
+#[derive(Debug)]
 enum WorkItem {
     Optimize(ModuleTranslation),
     LTO(lto::LtoModuleTranslation),
@@ -1392,6 +1401,7 @@ enum Message {
         cost: u64,
     },
     TranslationComplete,
+    TranslationPanic(Box<Any + Send>),
     TranslateItem,
 }
 
@@ -1401,18 +1411,12 @@ struct Diagnostic {
     lvl: Level,
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum MainThreadWorkerState {
-    Idle,
-    Translating,
-    LLVMing,
-}
-
 fn start_executing_work(tcx: TyCtxt,
                         crate_info: &CrateInfo,
                         shared_emitter: SharedEmitter,
                         trans_worker_send: Sender<Message>,
                         coordinator_receive: Receiver<Box<Any + Send>>,
+                        user_cgus: usize,
                         total_cgus: usize,
                         jobserver: Client,
                         time_graph: Option<TimeGraph>,
@@ -1469,6 +1473,8 @@ fn start_executing_work(tcx: TyCtxt,
         each_linked_rlib_for_lto.push((cnum, path.to_path_buf()));
     }));
 
+
+    let max_workers = sess.codegen_threads();
     let assembler_cmd = if modules_config.no_integrated_as {
         // HACK: currently we use linker (gcc) as our assembler
         let (name, mut cmd) = get_linker(sess);
@@ -1503,12 +1509,13 @@ fn start_executing_work(tcx: TyCtxt,
         metadata_module_config: metadata_config,
         allocator_module_config: allocator_config,
         tm_factory: target_machine_factory(tcx.sess, false),
-        total_cgus,
+        user_cgus,
         msvc_imps_needed: msvc_imps_needed(tcx),
         target_pointer_width: tcx.sess.target.target.target_pointer_width.clone(),
         debuginfo: tcx.sess.opts.debuginfo,
         assembler_cmd,
     };
+    let mut main_thread_capacity = sess.query_threads();
 
     // This is the "main loop" of parallel work happening for parallel codegen.
     // It's here that we manage parallelism, schedule work, and work with
@@ -1649,7 +1656,6 @@ fn start_executing_work(tcx: TyCtxt,
         // We pretend to be within the top-level LLVM time-passes task here:
         set_time_depth(1);
 
-        let max_workers = ::num_cpus::get();
         let mut worker_id_counter = 0;
         let mut free_worker_ids = Vec::new();
         let mut get_worker_id = |free_worker_ids: &mut Vec<usize>| {
@@ -1670,66 +1676,37 @@ fn start_executing_work(tcx: TyCtxt,
         let mut needs_lto = Vec::new();
         let mut started_lto = false;
 
-        // This flag tracks whether all items have gone through translations
-        let mut translation_done = false;
-
         // This is the queue of LLVM work items that still need processing.
         let mut work_items = Vec::<(WorkItem, u64)>::new();
 
         // This are the Jobserver Tokens we currently hold. Does not include
         // the implicit Token the compiler process owns no matter what.
         let mut tokens = Vec::new();
+        let mut available_tokens = 1;
+        let mut requested_tokens = 0;
 
-        let mut main_thread_worker_state = MainThreadWorkerState::Idle;
         let mut running = 0;
+
+        let mut translated_cgus = 0;
+        let mut translation_cgu_queue = total_cgus;
 
         let mut llvm_start_time = None;
 
         // Run the message loop while there's still anything that needs message
         // processing:
-        while !translation_done ||
+        while translated_cgus < total_cgus ||
               work_items.len() > 0 ||
               running > 0 ||
-              needs_lto.len() > 0 ||
-              main_thread_worker_state != MainThreadWorkerState::Idle {
-
-            // While there are still CGUs to be translated, the coordinator has
-            // to decide how to utilize the compiler processes implicit Token:
-            // For translating more CGU or for running them through LLVM.
-            if !translation_done {
-                if main_thread_worker_state == MainThreadWorkerState::Idle {
-                    if !queue_full_enough(work_items.len(), running, max_workers) {
-                        // The queue is not full enough, translate more items:
-                        if let Err(_) = trans_worker_send.send(Message::TranslateItem) {
-                            panic!("Could not send Message::TranslateItem to main thread")
-                        }
-                        main_thread_worker_state = MainThreadWorkerState::Translating;
-                    } else {
-                        // The queue is full enough to not let the worker
-                        // threads starve. Use the implicit Token to do some
-                        // LLVM work too.
-                        let (item, _) = work_items.pop()
-                            .expect("queue empty - queue_full_enough() broken?");
-                        let cgcx = CodegenContext {
-                            worker: get_worker_id(&mut free_worker_ids),
-                            .. cgcx.clone()
-                        };
-                        maybe_start_llvm_timer(cgcx.config(item.kind()),
-                                               &mut llvm_start_time);
-                        main_thread_worker_state = MainThreadWorkerState::LLVMing;
-                        spawn_work(cgcx, item);
-                    }
-                }
-            } else {
+              needs_lto.len() > 0 {
+            if translated_cgus == total_cgus {
                 // If we've finished everything related to normal translation
                 // then it must be the case that we've got some LTO work to do.
                 // Perform the serial work here of figuring out what we're
                 // going to LTO and then push a bunch of work items onto our
                 // queue to do LTO
                 if work_items.len() == 0 &&
-                   running == 0 &&
-                   main_thread_worker_state == MainThreadWorkerState::Idle {
-                    assert!(!started_lto);
+                   running == 0 {
+                    assert!(!started_lto); // CHECK THIS
                     assert!(needs_lto.len() > 0);
                     started_lto = true;
                     let modules = mem::replace(&mut needs_lto, Vec::new());
@@ -1738,49 +1715,23 @@ fn start_executing_work(tcx: TyCtxt,
                             .binary_search_by_key(&cost, |&(_, cost)| cost)
                             .unwrap_or_else(|e| e);
                         work_items.insert(insertion_index, (work, cost));
-                        helper.request_token();
-                    }
-                }
-
-                // In this branch, we know that everything has been translated,
-                // so it's just a matter of determining whether the implicit
-                // Token is free to use for LLVM work.
-                match main_thread_worker_state {
-                    MainThreadWorkerState::Idle => {
-                        if let Some((item, _)) = work_items.pop() {
-                            let cgcx = CodegenContext {
-                                worker: get_worker_id(&mut free_worker_ids),
-                                .. cgcx.clone()
-                            };
-                            maybe_start_llvm_timer(cgcx.config(item.kind()),
-                                                   &mut llvm_start_time);
-                            main_thread_worker_state = MainThreadWorkerState::LLVMing;
-                            spawn_work(cgcx, item);
-                        } else {
-                            // There is no unstarted work, so let the main thread
-                            // take over for a running worker. Otherwise the
-                            // implicit token would just go to waste.
-                            // We reduce the `running` counter by one. The
-                            // `tokens.truncate()` below will take care of
-                            // giving the Token back.
-                            debug_assert!(running > 0);
-                            running -= 1;
-                            main_thread_worker_state = MainThreadWorkerState::LLVMing;
-                        }
-                    }
-                    MainThreadWorkerState::Translating => {
-                        bug!("trans worker should not be translating after \
-                              translation was already completed")
-                    }
-                    MainThreadWorkerState::LLVMing => {
-                        // Already making good use of that token
                     }
                 }
             }
 
+            // Request more tokens if there is more parallel work to do
+            let translation_work = cmp::min(main_thread_capacity, translation_cgu_queue);
+            let parallel_work = cmp::min(max_workers, work_items.len() + translation_work);
+            while parallel_work > (available_tokens + requested_tokens) {
+                helper.request_token();
+                requested_tokens += 1;
+            }
+
+            // Give priority to LLVM work, since when that ends, we can free memory.
+
             // Spin up what work we can, only doing this while we've got available
             // parallelism slots and work left to spawn.
-            while work_items.len() > 0 && running < tokens.len() {
+            while work_items.len() > 0 && running < available_tokens {
                 let (item, _) = work_items.pop().unwrap();
 
                 maybe_start_llvm_timer(cgcx.config(item.kind()),
@@ -1795,8 +1746,28 @@ fn start_executing_work(tcx: TyCtxt,
                 running += 1;
             }
 
+            // Then we try to translate CGUs with free tokens
+
+            // While there are still CGUs to be translated, the coordinator has
+            // to decide how to utilize the compiler processes implicit Token:
+            // For translating more CGU or for running them through LLVM.
+            while main_thread_capacity > 0 &&
+                    running < available_tokens &&
+                    translation_cgu_queue > 0 {
+                if let Err(_) = trans_worker_send.send(Message::TranslateItem) {
+                    panic!("Could not send Message::TranslateItem to main thread")
+                }
+                running += 1;
+                main_thread_capacity -= 1;
+                translation_cgu_queue -= 1;
+            }
+
             // Relinquish accidentally acquired extra tokens
-            tokens.truncate(running);
+            if running > 0 {
+                tokens.truncate(running - 1);
+            } else {
+                tokens.truncate(0);
+            }
 
             let msg = coordinator_receive.recv().unwrap();
             match *msg.downcast::<Message>().ok().unwrap() {
@@ -1807,15 +1778,8 @@ fn start_executing_work(tcx: TyCtxt,
                     match token {
                         Ok(token) => {
                             tokens.push(token);
-
-                            if main_thread_worker_state == MainThreadWorkerState::LLVMing {
-                                // If the main thread token is used for LLVM work
-                                // at the moment, we turn that thread into a regular
-                                // LLVM worker thread, so the main thread is free
-                                // to react to translation demand.
-                                main_thread_worker_state = MainThreadWorkerState::Idle;
-                                running += 1;
-                            }
+                            available_tokens += 1;
+                            requested_tokens -= 1;
                         }
                         Err(e) => {
                             let msg = &format!("failed to acquire jobserver token: {}", e);
@@ -1824,6 +1788,10 @@ fn start_executing_work(tcx: TyCtxt,
                             panic!("{}", msg)
                         }
                     }
+                }
+
+                Message::TranslationComplete => {
+                    assert_eq!(translated_cgus, total_cgus);
                 }
 
                 Message::TranslationDone { llvm_work_item, cost } => {
@@ -1842,17 +1810,9 @@ fn start_executing_work(tcx: TyCtxt,
                     };
                     work_items.insert(insertion_index, (llvm_work_item, cost));
 
-                    helper.request_token();
-                    assert_eq!(main_thread_worker_state,
-                               MainThreadWorkerState::Translating);
-                    main_thread_worker_state = MainThreadWorkerState::Idle;
-                }
-
-                Message::TranslationComplete => {
-                    translation_done = true;
-                    assert_eq!(main_thread_worker_state,
-                               MainThreadWorkerState::Translating);
-                    main_thread_worker_state = MainThreadWorkerState::Idle;
+                    translated_cgus += 1;
+                    running -= 1;
+                    main_thread_capacity += 1;
                 }
 
                 // If a thread exits successfully then we drop a token associated
@@ -1864,11 +1824,7 @@ fn start_executing_work(tcx: TyCtxt,
                 // Note that if the thread failed that means it panicked, so we
                 // abort immediately.
                 Message::Done { result: Ok(compiled_module), worker_id } => {
-                    if main_thread_worker_state == MainThreadWorkerState::LLVMing {
-                        main_thread_worker_state = MainThreadWorkerState::Idle;
-                    } else {
-                        running -= 1;
-                    }
+                    running -= 1;
 
                     free_worker_ids.push(worker_id);
 
@@ -1888,11 +1844,7 @@ fn start_executing_work(tcx: TyCtxt,
                 }
                 Message::NeedsLTO { result, worker_id } => {
                     assert!(!started_lto);
-                    if main_thread_worker_state == MainThreadWorkerState::LLVMing {
-                        main_thread_worker_state = MainThreadWorkerState::Idle;
-                    } else {
-                        running -= 1;
-                    }
+                    running -= 1;
 
                     free_worker_ids.push(worker_id);
                     needs_lto.push(result);
@@ -1902,8 +1854,9 @@ fn start_executing_work(tcx: TyCtxt,
                     // Exit the coordinator thread
                     return Err(())
                 }
-                Message::TranslateItem => {
-                    bug!("the coordinator should not receive translation requests")
+                Message::TranslateItem |
+                Message::TranslationPanic(..) => {
+                    bug!("the coordinator should not receive translation requests or panics")
                 }
             }
         }
@@ -1932,16 +1885,6 @@ fn start_executing_work(tcx: TyCtxt,
             allocator_module: compiled_allocator_module,
         })
     });
-
-    // A heuristic that determines if we have enough LLVM WorkItems in the
-    // queue so that the main thread can do LLVM work instead of translation
-    fn queue_full_enough(items_in_queue: usize,
-                         workers_running: usize,
-                         max_workers: usize) -> bool {
-        // Tune me, plz.
-        items_in_queue > 0 &&
-        items_in_queue >= max_workers.saturating_sub(workers_running / 2)
-    }
 
     fn maybe_start_llvm_timer(config: &ModuleConfig,
                               llvm_start_time: &mut Option<Instant>) {
@@ -2231,15 +2174,19 @@ impl SharedEmitterMain {
     }
 }
 
+pub struct TransWorkerSender(Sender<Message>);
+
 pub struct OngoingCrateTranslation {
     crate_name: Symbol,
     link: LinkMeta,
     metadata: EncodedMetadata,
     windows_subsystem: Option<String>,
+    start: Instant,
     linker_info: LinkerInfo,
     crate_info: CrateInfo,
     time_graph: Option<TimeGraph>,
     coordinator_send: Sender<Box<Any + Send>>,
+    trans_worker_send: Sender<Message>,
     trans_worker_receive: Receiver<Message>,
     shared_emitter_main: SharedEmitterMain,
     future: thread::JoinHandle<Result<CompiledModules, ()>>,
@@ -2262,6 +2209,11 @@ impl OngoingCrateTranslation {
                 sess.fatal("Error during translation/LLVM phase.");
             }
         };
+
+        let total_time = Instant::now().duration_since(self.start);
+        print_time_passes_entry(sess.time_passes(),
+                                "Translation + LLVM passes",
+                                total_time);
 
         sess.abort_if_errors();
 
@@ -2309,10 +2261,26 @@ impl OngoingCrateTranslation {
         submit_translated_module_to_llvm(tcx, mtrans, cost);
     }
 
-    pub fn translation_finished(&self, tcx: TyCtxt) {
-        self.wait_for_signal_to_translate_item();
-        self.check_for_errors(tcx.sess);
+    pub fn translation_finished(&self) {
+        // See if there are any pending panics
+        while let Ok(msg) = self.trans_worker_receive.try_recv() {
+            match msg {
+                Message::TranslationPanic(panic) => {
+                    panic::resume_unwind(panic)
+                }
+                _ => (),
+            }
+        }
+
         drop(self.coordinator_send.send(Box::new(Message::TranslationComplete)));
+    }
+
+    pub fn translation_panic(panic: Box<Any + Send>, sender: TransWorkerSender) {
+        drop(sender.0.send(Message::TranslationPanic(panic)));
+    }
+
+    pub fn trans_worker_sender(&self) -> TransWorkerSender {
+        TransWorkerSender(self.trans_worker_send.clone())
     }
 
     pub fn check_for_errors(&self, sess: &Session) {
@@ -2323,6 +2291,9 @@ impl OngoingCrateTranslation {
         match self.trans_worker_receive.recv() {
             Ok(Message::TranslateItem) => {
                 // Nothing to do
+            }
+            Ok(Message::TranslationPanic(panic)) => {
+                panic::resume_unwind(panic)
             }
             Ok(_) => panic!("unexpected message"),
             Err(_) => {

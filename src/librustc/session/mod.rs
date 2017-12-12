@@ -881,6 +881,12 @@ impl Session {
         Self::query_threads_from_opts(&self.opts)
     }
 
+    /// Returns the number of codegen threads that should be used for this
+    /// compilation
+    pub fn codegen_threads(&self) -> usize {
+        self.opts.debugging_opts.codegen_threads.unwrap_or(::num_cpus::get())
+    }
+
     /// Returns the number of codegen units that should be used for this
     /// compilation
     pub fn codegen_units(&self) -> usize {
