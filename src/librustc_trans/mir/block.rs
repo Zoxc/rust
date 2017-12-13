@@ -118,7 +118,7 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
             llargs: &[ValueRef],
             destination: Option<(ReturnDest<'tcx>, mir::BasicBlock)>,
             cleanup: Option<mir::BasicBlock>
-        | {
+        | -> Option<ValueRef> {
             if let Some(cleanup) = cleanup {
                 let ret_bcx = if let Some((_, target)) = destination {
                     this.blocks[target]
@@ -137,6 +137,8 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
                     this.set_debug_loc(&ret_bcx, terminator.source_info);
                     this.store_return(&ret_bcx, ret_dest, &fn_ty.ret, invokeret);
                 }
+
+                None
             } else {
                 let llret = bcx.call(fn_ptr, &llargs, cleanup_bundle);
                 fn_ty.apply_attrs_callsite(llret);
@@ -154,6 +156,8 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
                 } else {
                     bcx.unreachable();
                 }
+
+                Some(llret)
             }
         };
 
@@ -209,9 +213,9 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
             mir::TerminatorKind::Return => {
                 let llval = match self.fn_ty.ret.mode {
                     PassMode::Ignore | PassMode::Indirect(_) => {
-                        bcx.ret_void();
-                        return;
-                    }
+                    bcx.ret_void();
+                    return;
+                }
 
                     PassMode::Direct(_) | PassMode::Pair(..) => {
                         let op = self.trans_consume(&bcx, &mir::Place::Local(mir::RETURN_PLACE));
@@ -224,27 +228,27 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
 
                     PassMode::Cast(cast_ty) => {
                         let op = match self.locals[mir::RETURN_PLACE] {
-                            LocalRef::Operand(Some(op)) => op,
-                            LocalRef::Operand(None) => bug!("use of return before def"),
+                        LocalRef::Operand(Some(op)) => op,
+                        LocalRef::Operand(None) => bug!("use of return before def"),
                             LocalRef::Place(tr_place) => {
-                                OperandRef {
+                            OperandRef {
                                     val: Ref(tr_place.llval, tr_place.alignment),
                                     layout: tr_place.layout
-                                }
                             }
-                        };
-                        let llslot = match op.val {
-                            Immediate(_) | Pair(..) => {
+                        }
+                    };
+                    let llslot = match op.val {
+                        Immediate(_) | Pair(..) => {
                                 let scratch = PlaceRef::alloca(&bcx, self.fn_ty.ret.layout, "ret");
                                 op.val.store(&bcx, scratch);
                                 scratch.llval
-                            }
-                            Ref(llval, align) => {
-                                assert_eq!(align, Alignment::AbiAligned,
+                        }
+                        Ref(llval, align) => {
+                            assert_eq!(align, Alignment::AbiAligned,
                                            "return place is unaligned!");
-                                llval
-                            }
-                        };
+                            llval
+                        }
+                    };
                         bcx.load(
                             bcx.pointercast(llslot, cast_ty.llvm_type(bcx.ccx).ptr_to()),
                             Some(self.fn_ty.ret.layout.align))
@@ -448,6 +452,11 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
                 let sig = callee.layout.ty.fn_sig(bcx.tcx());
                 let sig = bcx.tcx().erase_late_bound_regions_and_normalize(&sig);
                 let abi = sig.abi;
+                let notail = def.map(|def| {
+                    def.attrs(bcx.ccx.tcx())
+                       .iter()
+                       .any(|attr| attr.check_name("notail_when_called"))
+                }).unwrap_or(false);
 
                 // Handle intrinsics old trans wants Expr's for, ourselves.
                 let intrinsic = match def {
@@ -508,28 +517,28 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
                         ReturnDest::Store(dst) => dst.llval,
                         ReturnDest::DirectOperand(_) =>
                             bug!("Cannot use direct operand with an intrinsic call")
-                    };
+                };
 
                     let args: Vec<_> = args.iter().enumerate().map(|(i, arg)| {
-                        // The indices passed to simd_shuffle* in the
-                        // third argument must be constant. This is
-                        // checked by const-qualification, which also
-                        // promotes any complex rvalues to constants.
+                    // The indices passed to simd_shuffle* in the
+                    // third argument must be constant. This is
+                    // checked by const-qualification, which also
+                    // promotes any complex rvalues to constants.
                         if i == 2 && intrinsic.unwrap().starts_with("simd_shuffle") {
-                            match *arg {
+                        match *arg {
                                 mir::Operand::Copy(_) |
                                 mir::Operand::Move(_) => {
-                                    span_bug!(span, "shuffle indices must be constant");
-                                }
-                                mir::Operand::Constant(ref constant) => {
-                                    let val = self.trans_constant(&bcx, constant);
+                                span_bug!(span, "shuffle indices must be constant");
+                            }
+                            mir::Operand::Constant(ref constant) => {
+                                let val = self.trans_constant(&bcx, constant);
                                     return OperandRef {
                                         val: Immediate(val.llval),
                                         layout: bcx.ccx.layout_of(val.ty)
                                     };
-                                }
                             }
                         }
+                    }
 
                         self.trans_operand(&bcx, arg)
                     }).collect();
@@ -597,9 +606,14 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
                     _ => span_bug!(span, "no llfn for call"),
                 };
 
-                do_call(self, bcx, fn_ty, fn_ptr, &llargs,
+                let llret = do_call(self, bcx, fn_ty, fn_ptr, &llargs,
                         destination.as_ref().map(|&(_, target)| (ret_dest, target)),
                         cleanup);
+                if notail {
+                    unsafe {
+                        llret.map(|llret| llvm::LLVMRustSetCallNoTail(llret));
+                    }
+                }
             }
             mir::TerminatorKind::GeneratorDrop |
             mir::TerminatorKind::Yield { .. } |
@@ -615,21 +629,21 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
         // Fill padding with undef value, where applicable.
         if let Some(ty) = arg.pad {
             llargs.push(C_undef(ty.llvm_type(bcx.ccx)));
-        }
+                    }
 
         if arg.is_ignore() {
             return;
-        }
+                }
 
         if let PassMode::Pair(..) = arg.mode {
             match op.val {
                 Pair(a, b) => {
                     llargs.push(a);
                     llargs.push(b);
-                    return;
-                }
-                _ => bug!("trans_argument: {:?} invalid for pair arugment", op)
+                return;
             }
+                _ => bug!("trans_argument: {:?} invalid for pair arugment", op)
+        }
         }
 
         // Force by-ref if we have to load through a cast pointer.
@@ -640,10 +654,10 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
                         let scratch = PlaceRef::alloca(bcx, arg.layout, "arg");
                         op.val.store(bcx, scratch);
                         (scratch.llval, Alignment::AbiAligned, true)
-                    }
+                }
                     _ => {
                         (op.immediate_or_packed_pair(bcx), Alignment::AbiAligned, false)
-                    }
+            }
                 }
             }
             Ref(llval, align @ Alignment::Packed(_)) if arg.is_indirect() => {
@@ -674,8 +688,8 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
                 if let layout::Abi::Scalar(ref scalar) = arg.layout.abi {
                     if scalar.is_bool() {
                         bcx.range_metadata(llval, 0..2);
-                    }
-                }
+            }
+        }
                 // We store bools as i8 so we need to truncate to i1.
                 llval = base::to_immediate(bcx, llval, arg.layout);
             }
@@ -697,15 +711,15 @@ impl<'a, 'tcx> MirContext<'a, 'tcx> {
             for i in 0..tuple.layout.fields.count() {
                 let field_ptr = tuple_ptr.project_field(bcx, i);
                 self.trans_argument(bcx, field_ptr.load(bcx), llargs, &args[i]);
-            }
-        } else {
+                }
+                } else {
             // If the tuple is immediate, the elements are as well.
             for i in 0..tuple.layout.fields.count() {
                 let op = tuple.extract_field(bcx, i);
                 self.trans_argument(bcx, op, llargs, &args[i]);
+                    }
+                }
             }
-        }
-    }
 
     fn get_personality_slot(&mut self, bcx: &Builder<'a, 'tcx>) -> PlaceRef<'tcx> {
         let ccx = bcx.ccx;

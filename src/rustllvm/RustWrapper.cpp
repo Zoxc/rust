@@ -1226,6 +1226,10 @@ extern "C" LLVMValueRef LLVMRustBuildCall(LLVMBuilderRef B, LLVMValueRef Fn,
       unwrap(Fn), makeArrayRef(unwrap(Args), NumArgs), Bundles, Name));
 }
 
+extern "C" void LLVMRustSetCallNoTail(LLVMValueRef Call) {
+  dyn_cast<CallInst>(unwrap(Call))->setTailCallKind(CallInst::TCK_NoTail);
+}
+
 extern "C" LLVMValueRef
 LLVMRustBuildInvoke(LLVMBuilderRef B, LLVMValueRef Fn, LLVMValueRef *Args,
                     unsigned NumArgs, LLVMBasicBlockRef Then,

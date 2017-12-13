@@ -91,6 +91,7 @@
 #![feature(untagged_unions)]
 #![feature(unwind_attributes)]
 #![feature(doc_spotlight)]
+#![cfg_attr(not(stage0), feature(notail_when_called))]
 
 #[prelude_import]
 #[allow(unused)]

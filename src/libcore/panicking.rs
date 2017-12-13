@@ -48,7 +48,7 @@ pub fn panic(expr_file_line_col: &(&'static str, &'static str, u32, u32)) -> ! {
     // Arguments::new_v1 may allow the compiler to omit Formatter::pad from the
     // output binary, saving up to a few kilobytes.
     let (expr, file, line, col) = *expr_file_line_col;
-    panic_dispatch(fmt::Arguments::new_v1(&[expr], &[]), &(file, line, col), &(panic as usize))
+    panic_dispatch(fmt::Arguments::new_v1(&[expr], &[]), &(file, line, col), panic as usize);
 }
 
 #[cold] #[inline(never)]
@@ -58,18 +58,20 @@ fn panic_bounds_check(file_line_col: &(&'static str, u32, u32),
     panic_dispatch(format_args!("index out of bounds: the len is {} but the index is {}",
                                 len, index),
                    file_line_col,
-                   &(panic_bounds_check as usize))
+                   panic_bounds_check as usize);
 }
 
 #[cold] #[inline(never)]
 pub fn panic_fmt(fmt: fmt::Arguments, file_line_col: &(&'static str, u32, u32)) -> ! {
-    panic_dispatch(fmt, file_line_col, &(panic_fmt as usize));
+    panic_dispatch(fmt, file_line_col, panic_fmt as usize);
 }
 
 #[cold]
+#[inline(never)]
+#[cfg_attr(not(stage0), notail_when_called)]
 fn panic_dispatch(fmt: fmt::Arguments,
                  file_line_col: &(&'static str, u32, u32),
-                 entry_point: &usize) -> ! {
+                 entry_point: usize) -> ! {
     #[allow(improper_ctypes)]
     extern {
         #[lang = "panic_fmt"]
@@ -78,7 +80,7 @@ fn panic_dispatch(fmt: fmt::Arguments,
                       file: &'static str,
                       line: u32,
                       col: u32,
-                      entry_point: &usize) -> !;
+                      entry_point: usize) -> !;
     }
     let (file, line, col) = *file_line_col;
     unsafe { panic_impl(fmt, file, line, col, entry_point) }

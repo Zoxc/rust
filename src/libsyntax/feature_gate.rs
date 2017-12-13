@@ -431,6 +431,9 @@ declare_features! (
     // generic associated types (RFC 1598)
     (active, generic_associated_types, "1.23.0", Some(44265)),
 
+    // Allow the use of `#[notail_when_called]` on functions.
+    (active, notail_when_called, "1.24.0", None),
+
     // Resolve absolute paths as paths from other crates
     (active, extern_absolute_paths, "1.24.0", Some(44660)),
 );
@@ -860,6 +863,12 @@ pub const BUILTIN_ATTRIBUTES: &'static [(&'static str, AttributeType, AttributeG
     ("link", Whitelisted, Ungated),
     ("link_name", Whitelisted, Ungated),
     ("link_section", Whitelisted, Ungated),
+    ("notail_when_called", Whitelisted, Gated(Stability::Unstable,
+                                            "notail_when_called",
+                                            "the `#[notail_when_called]` \
+                                             attribute is used to ensure panic \
+                                             functions appear on the backtrace in libstd",
+                                            cfg_fn!(notail_when_called))),
     ("no_builtins", Whitelisted, Ungated),
     ("no_mangle", Whitelisted, Ungated),
     ("no_debug", Whitelisted, Gated(
@@ -1041,7 +1050,7 @@ impl<'a> Context<'a> {
                             gate_feature!(self, external_doc, attr.span,
                                 "#[doc(include = \"...\")] is experimental"
                             );
-                        }
+                }
                     }
                 }
                 debug!("check_attribute: {:?} is builtin, {:?}, {:?}", attr.path, ty, gateage);
@@ -1626,9 +1635,9 @@ impl<'a> Visitor<'a> for PostExpansionVisitor<'a> {
                 // We use two if statements instead of something like match guards so that both
                 // of these errors can be emitted if both cases apply.
                 if default.is_some() {
-                    gate_feature_post!(&self, associated_type_defaults, ti.span,
-                                       "associated type defaults are unstable");
-                }
+                gate_feature_post!(&self, associated_type_defaults, ti.span,
+                                  "associated type defaults are unstable");
+            }
                 if ti.generics.is_parameterized() {
                     gate_feature_post!(&self, generic_associated_types, ti.span,
                                        "generic associated types are unstable");

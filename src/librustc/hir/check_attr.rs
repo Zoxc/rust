@@ -50,15 +50,16 @@ impl<'a> CheckAttrVisitor<'a> {
     fn check_attribute(&self, attr: &ast::Attribute, item: &ast::Item, target: Target) {
         if let Some(name) = attr.name() {
             match &*name.as_str() {
-                "inline" => self.check_inline(attr, item, target),
+                "inline" => self.check_target_function(attr, item, target),
+                "notail_when_called" => self.check_target_function(attr, item, target),
                 "repr" => self.check_repr(attr, item, target),
                 _ => (),
             }
         }
     }
 
-    /// Check if an `#[inline]` is applied to a function.
-    fn check_inline(&self, attr: &ast::Attribute, item: &ast::Item, target: Target) {
+    /// Check if the attribute is applied to a function.
+    fn check_target_function(&self, attr: &ast::Attribute, item: &ast::Item, target: Target) {
         if target != Target::Fn {
             struct_span_err!(self.sess, attr.span, E0518, "attribute should be applied to function")
                 .span_label(item.span, "not a function")

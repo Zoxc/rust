@@ -496,7 +496,7 @@ pub extern fn rust_begin_panic(msg: fmt::Arguments,
                                file: &'static str,
                                line: u32,
                                col: u32,
-                               entry_point: &usize) -> ! {
+                               entry_point: usize) -> ! {
     rust_panic_fmt(&msg, &(file, line, col), entry_point)
 }
 
@@ -511,13 +511,15 @@ pub extern fn rust_begin_panic(msg: fmt::Arguments,
            issue = "0")]
 #[inline(never)] #[cold]
 pub fn begin_panic_fmt(msg: &fmt::Arguments, file_line_col: &(&'static str, u32, u32)) -> ! {
-    rust_panic_fmt(msg, file_line_col, &(begin_panic_fmt as usize))
+    rust_panic_fmt(msg, file_line_col, begin_panic_fmt as usize);
 }
 
 #[cold]
+#[inline(never)]
+#[cfg_attr(not(stage0), notail_when_called)]
 fn rust_panic_fmt(msg: &fmt::Arguments,
                   file_line_col: &(&'static str, u32, u32),
-                  entry_point: &usize) -> ! {
+                  entry_point: usize) -> ! {
     use fmt::Write;
 
     // We do two allocations here, unfortunately. But (a) they're
@@ -543,7 +545,7 @@ pub fn begin_panic<M: Any + Send>(msg: M, file_line_col: &(&'static str, u32, u3
     // be performed in the parent of this thread instead of the thread that's
     // panicking.
 
-    rust_panic_with_hook(Box::new(msg), file_line_col, &(begin_panic::<M> as usize))
+    rust_panic_with_hook(Box::new(msg), file_line_col, begin_panic::<M> as usize)
 }
 
 /// Executes the primary logic for a panic, including checking for recursive
@@ -553,10 +555,11 @@ pub fn begin_panic<M: Any + Send>(msg: M, file_line_col: &(&'static str, u32, u3
 /// `Box<Any>` panics. Here we'll verify that we're not panicking recursively,
 /// run panic hooks, and then delegate to the actual implementation of panics.
 #[inline(never)]
+#[cfg_attr(not(stage0), notail_when_called)]
 #[cold]
 fn rust_panic_with_hook(msg: Box<Any + Send>,
                         file_line_col: &(&'static str, u32, u32),
-                        entry_point: &usize) -> ! {
+                        entry_point: usize) -> ! {
     let (file, line, col) = *file_line_col;
 
     let panics = update_panic_count(1);
@@ -580,7 +583,7 @@ fn rust_panic_with_hook(msg: Box<Any + Send>,
                 line,
                 col,
             },
-            entry_point: *entry_point,
+            entry_point,
         };
         HOOK_LOCK.read();
         match HOOK {

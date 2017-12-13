@@ -1150,6 +1150,7 @@ extern "C" {
                              Bundle: OperandBundleDefRef,
                              Name: *const c_char)
                              -> ValueRef;
+    pub fn LLVMRustSetCallNoTail(Call: ValueRef);
     pub fn LLVMBuildSelect(B: BuilderRef,
                            If: ValueRef,
                            Then: ValueRef,

@@ -321,6 +321,7 @@
 #![feature(doc_cfg)]
 #![feature(doc_masked)]
 #![feature(doc_spotlight)]
+#![cfg_attr(not(stage0), feature(notail_when_called))]
 #![cfg_attr(test, feature(update_panic_count))]
 #![cfg_attr(windows, feature(used))]
 
