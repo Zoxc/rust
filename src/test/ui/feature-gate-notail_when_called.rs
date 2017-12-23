@@ -8,5 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![feature(notail_when_called)]
+
 #[notail_when_called]
 fn main() {}
