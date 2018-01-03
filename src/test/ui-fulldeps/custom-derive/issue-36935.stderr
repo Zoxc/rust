@@ -6,3 +6,5 @@ error: proc-macro derive panicked
    |
    = help: message: lolnope
 
+error: aborting due to previous error
+

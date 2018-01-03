@@ -22,3 +22,5 @@ error: compilation successful
 28 | | }
    | |_^
 
+error: aborting due to previous error
+

@@ -9,3 +9,5 @@ error: recursion limit reached while expanding the macro `recurse`
    |
    = help: consider adding a `#![recursion_limit="20"]` attribute to your crate
 
+error: aborting due to previous error
+

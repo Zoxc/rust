@@ -4,3 +4,5 @@ error: compilation successful
 22 | fn main() {} //~ ERROR compilation successful
    | ^^^^^^^^^^^^
 
+error: aborting due to previous error
+

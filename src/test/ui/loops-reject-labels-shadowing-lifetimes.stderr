@@ -108,3 +108,5 @@ error: compilation successful
 119 | | }
     | |_^
 
+error: aborting due to previous error
+

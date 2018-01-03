@@ -36,3 +36,5 @@ error: compilation successful
 26 | | }
    | |_^
 
+error: aborting due to previous error
+

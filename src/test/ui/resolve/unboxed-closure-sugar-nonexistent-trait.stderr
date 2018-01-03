@@ -10,5 +10,5 @@ error[E0404]: expected trait, found type alias `Typedef`
 16 | fn g<F:Typedef(isize) -> isize>(x: F) {}
    |        ^^^^^^^^^^^^^^^^^^^^^^^ type aliases cannot be used for traits
 
-error: cannot continue compilation due to previous error
+error: aborting due to 2 previous errors
 

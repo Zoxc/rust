@@ -8,5 +8,5 @@ help: possible candidate is found in another module, you can import it into scop
 18 | use issue_21221_3::outer::OuterTrait;
    |
 
-error: cannot continue compilation due to previous error
+error: aborting due to previous error
 
