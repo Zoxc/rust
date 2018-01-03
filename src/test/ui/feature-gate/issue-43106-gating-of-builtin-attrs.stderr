@@ -1316,3 +1316,5 @@ error: compilation successful
 860 | | }
     | |_^
 
+error: aborting due to previous error
+

@@ -10,5 +10,5 @@ help: possible better candidate is found in another module, you can import it in
 
 error[E0601]: main function not found
 
-error: cannot continue compilation due to previous error
+error: aborting due to 2 previous errors
 

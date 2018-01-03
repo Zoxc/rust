@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// ignore-test
+
 #![feature(generic_associated_types)]
 
 // Checking the interaction with this other feature

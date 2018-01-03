@@ -6,3 +6,5 @@ error: compilation successful
 31 | | }
    | |_^
 
+error: aborting due to previous error
+
