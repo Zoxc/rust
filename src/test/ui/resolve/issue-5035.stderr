@@ -13,5 +13,5 @@ error[E0404]: expected trait, found type alias `K`
    |      did you mean `I`?
    |      type aliases cannot be used for traits
 
-error: cannot continue compilation due to previous error
+error: aborting due to 2 previous errors
 

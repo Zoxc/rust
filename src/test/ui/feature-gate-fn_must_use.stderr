@@ -20,3 +20,5 @@ error: compilation successful
 31 | fn main() {} //~ ERROR compilation successful
    | ^^^^^^^^^^^^
 
+error: aborting due to previous error
+

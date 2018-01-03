@@ -73,3 +73,5 @@ error: compilation successful
 54 | | }
    | |_^
 
+error: aborting due to previous error
+
