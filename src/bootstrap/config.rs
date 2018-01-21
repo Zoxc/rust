@@ -470,7 +470,7 @@ impl Config {
             set(&mut config.quiet_tests, rust.quiet_tests);
             set(&mut config.test_miri, rust.test_miri);
             set(&mut config.wasm_syscall, rust.wasm_syscall);
-            config.rustc_parallel_queries = rust.experimental_parallel_queries.unwrap_or(false);
+            config.rustc_parallel_queries = rust.experimental_parallel_queries.unwrap_or(true);
             config.rustc_default_linker = rust.default_linker.clone();
             config.musl_root = rust.musl_root.clone().map(PathBuf::from);
             config.save_toolstates = rust.save_toolstates.clone().map(PathBuf::from);
