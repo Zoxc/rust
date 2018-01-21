@@ -2594,6 +2594,10 @@ fn def_span<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId) -> Span {
     tcx.hir.span_if_local(def_id).unwrap()
 }
 
+fn dummy_query<'a, 'tcx>(_: TyCtxt<'a, 'tcx, 'tcx>, _: DefId) -> usize {
+    0
+}
+
 /// If the given def ID describes an item belonging to a trait,
 /// return the ID of the trait that the trait item belongs to.
 /// Otherwise, return `None`.
@@ -2687,6 +2691,7 @@ pub fn provide(providers: &mut ty::maps::Providers) {
         crate_disambiguator,
         original_crate_name,
         crate_hash,
+        dummy_query,
         trait_impls_of: trait_def::trait_impls_of_provider,
         instance_def_size_estimate,
         ..*providers

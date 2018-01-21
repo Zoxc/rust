@@ -1128,6 +1128,18 @@ pub fn phase_3_run_analysis_passes<'tcx, F, R>(trans: &TransCrate,
         // tcx available.
         rustc_incremental::dep_graph_tcx_init(tcx);
 
+        for _ in 0..6 {
+            time(time_passes,
+                &format!("parallel dummy queries ({})", tcx.hir.krate().body_ids.len()),
+                || tcx.par_body_owners(|def_id| { tcx.dummy_query(def_id); }));
+        }
+
+        for _ in 0..6 {
+            time(time_passes,
+                "serial dummy queries",
+                || for def_id in tcx.body_owners() { tcx.dummy_query(def_id); });
+        }
+
         time(sess.time_passes(), "attribute checking", || {
             hir::check_attr::check_crate(tcx)
         });
