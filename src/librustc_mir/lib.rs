@@ -38,6 +38,8 @@ Rust MIR: a lowered representation of Rust. Also: an experiment!
 #![feature(nonzero)]
 #![feature(underscore_lifetimes)]
 
+#![recursion_limit="256"]
+
 #[macro_use]
 extern crate bitflags;
 #[macro_use] extern crate log;
