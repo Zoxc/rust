@@ -1053,6 +1053,7 @@ pub fn force_from_dep_node<'a, 'gcx, 'lcx>(tcx: TyCtxt<'a, 'gcx, 'lcx>,
             force!(object_lifetime_defaults_map, def_id!().index);
         }
 
+        DepKind::DummyNode => { force!(dummy_query, def_id!()); }
         DepKind::Visibility => { force!(visibility, def_id!()); }
         DepKind::DepKind => { force!(dep_kind, krate!()); }
         DepKind::CrateName => { force!(crate_name, krate!()); }
