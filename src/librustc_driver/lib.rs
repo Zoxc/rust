@@ -34,6 +34,7 @@ extern crate env_logger;
 #[cfg(unix)]
 extern crate libc;
 extern crate rayon;
+extern crate rayon_core;
 extern crate rustc;
 extern crate rustc_allocator;
 extern crate rustc_back;
