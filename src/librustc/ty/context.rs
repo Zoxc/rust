@@ -73,18 +73,19 @@ use syntax::attr;
 use syntax::codemap::MultiSpan;
 use syntax::symbol::{Symbol, keywords};
 use syntax_pos::Span;
+use util::common::ThreadLocal;
 
 use hir;
 
 pub struct AllArenas<'tcx> {
-    pub global: GlobalArenas<'tcx>,
+    pub global: ThreadLocal<GlobalArenas<'tcx>>,
     pub interner: DroplessArena,
 }
 
 impl<'tcx> AllArenas<'tcx> {
     pub fn new() -> Self {
         AllArenas {
-            global: GlobalArenas::new(),
+            global: ThreadLocal::new(|| GlobalArenas::new()),
             interner: DroplessArena::new(),
         }
     }
@@ -796,7 +797,7 @@ impl<'a, 'gcx, 'tcx> Deref for TyCtxt<'a, 'gcx, 'tcx> {
 }
 
 pub struct GlobalCtxt<'tcx> {
-    global_arenas: &'tcx GlobalArenas<'tcx>,
+    global_arenas: &'tcx ThreadLocal<GlobalArenas<'tcx>>,
     global_interners: CtxtInterners<'tcx>,
 
     cstore: &'tcx (CrateStore + Sync),
@@ -992,23 +993,23 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     }
 
     pub fn alloc_generics(self, generics: ty::Generics) -> &'gcx ty::Generics {
-        self.global_arenas.generics.alloc(generics)
+        self.global_arenas.current().generics.alloc(generics)
     }
 
     pub fn alloc_steal_mir(self, mir: Mir<'gcx>) -> &'gcx Steal<Mir<'gcx>> {
-        self.global_arenas.steal_mir.alloc(Steal::new(mir))
+        self.global_arenas.current().steal_mir.alloc(Steal::new(mir))
     }
 
     pub fn alloc_mir(self, mir: Mir<'gcx>) -> &'gcx Mir<'gcx> {
-        self.global_arenas.mir.alloc(mir)
+        self.global_arenas.current().mir.alloc(mir)
     }
 
     pub fn alloc_tables(self, tables: ty::TypeckTables<'gcx>) -> &'gcx ty::TypeckTables<'gcx> {
-        self.global_arenas.tables.alloc(tables)
+        self.global_arenas.current().tables.alloc(tables)
     }
 
     pub fn alloc_trait_def(self, def: ty::TraitDef) -> &'gcx ty::TraitDef {
-        self.global_arenas.trait_def.alloc(def)
+        self.global_arenas.current().trait_def.alloc(def)
     }
 
     pub fn alloc_adt_def(self,
@@ -1018,7 +1019,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                          repr: ReprOptions)
                          -> &'gcx ty::AdtDef {
         let def = ty::AdtDef::new(self, did, kind, variants, repr);
-        self.global_arenas.adt_def.alloc(def)
+        self.global_arenas.current().adt_def.alloc(def)
     }
 
     pub fn alloc_byte_array(self, bytes: &[u8]) -> &'gcx [u8] {
@@ -1055,7 +1056,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             return alloc;
         }
 
-        let interned = self.global_arenas.const_allocs.alloc(alloc);
+        let interned = self.global_arenas.current().const_allocs.alloc(alloc);
         if let Some(prev) = self.interpret_interner.borrow_mut().allocs.replace(interned) {
             bug!("Tried to overwrite interned Allocation: {:#?}", prev)
         }
@@ -1101,7 +1102,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             return layout;
         }
 
-        let interned = self.global_arenas.layout.alloc(layout);
+        let interned = self.global_arenas.current().layout.alloc(layout);
         if let Some(prev) = layout_interner.replace(interned) {
             bug!("Tried to overwrite interned Layout: {:?}", prev)
         }
