@@ -20,11 +20,53 @@ use std::hash::{Hash, BuildHasher};
 use std::iter::repeat;
 use std::path::Path;
 use std::time::{Duration, Instant};
+use std::cell::UnsafeCell;
 
 use std::sync::mpsc::{Sender};
 use syntax_pos::{SpanData};
 use ty::maps::{QueryMsg};
 use dep_graph::{DepNode};
+use rayon_core::registry::Registry;
+
+scoped_thread_local!(pub static THREAD_INDEX: usize);
+
+#[repr(align(64))]
+struct CacheAligned<T>(T);
+
+// FIXME: Find a way to ensure this isn't transferred between multiple thread pools
+// Thread pools should be the only thing that has a valid THREAD_INDEX.
+// Make it contain a Arc<rayon::Registry> and get the index based on the current worker?
+pub struct ThreadLocal<T>(Vec<CacheAligned<UnsafeCell<T>>>);
+
+unsafe impl<T> Send for ThreadLocal<T> {}
+unsafe impl<T> Sync for ThreadLocal<T> {}
+
+impl<T> ThreadLocal<T> {
+    pub fn new<F>(f: F) -> ThreadLocal<T>
+        where F: Fn() -> T,
+    {
+        let n = Registry::current_num_threads();
+        ThreadLocal((0..(1 + n)).map(|_| CacheAligned(UnsafeCell::new(f()))).collect())
+    }
+
+    pub fn into_inner(self) -> Vec<T> {
+        self.0.into_iter().map(|c| c.0.into_inner()).collect()
+    }
+
+    pub fn current(&self) -> &mut T {
+        use std::ops::Index;
+
+        unsafe {
+            &mut *(self.0.index(THREAD_INDEX.with(|t| *t)).0.get())
+        }
+    }
+}
+
+impl<T> ThreadLocal<Vec<T>> {
+    pub fn collect(self) -> Vec<T> {
+        self.into_inner().into_iter().flat_map(|v| v).collect()
+    }
+}
 
 // The name of the associated type for `Fn` return types
 pub const FN_OUTPUT_NAME: &'static str = "Output";

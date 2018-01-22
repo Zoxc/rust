@@ -41,6 +41,7 @@
 #![deny(warnings)]
 
 #![feature(asm)]
+#![feature(attr_literals)]
 #![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(conservative_impl_trait)]
@@ -64,6 +65,7 @@
 #![feature(nonzero)]
 #![feature(quote)]
 #![feature(refcell_replace_swap)]
+#![cfg_attr(stage0, feature(repr_align))]
 #![feature(rustc_diagnostic_macros)]
 #![feature(set_stdio)]
 #![feature(slice_patterns)]

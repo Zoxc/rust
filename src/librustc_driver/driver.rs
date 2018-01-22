@@ -68,7 +68,11 @@ use profile;
 
 #[cfg(not(parallel_queries))]
 pub fn spawn_thread_pool<F: FnOnce(Arc<Mutex<usize>>) -> R, R>(_: &Session, f: F) -> R {
-    f(Arc::new(Mutex::new(0)))
+    use rustc::util::common::THREAD_INDEX;
+
+    THREAD_INDEX.set(&0, || {
+        f(Arc::new(Mutex::new(0)))
+    })
 }
 
 #[cfg(parallel_queries)]
@@ -78,6 +82,8 @@ pub fn spawn_thread_pool<F: FnOnce(Arc<Mutex<usize>>) -> R, R>(sess: &Session, f
     use syntax_pos;
     use scoped_tls::ScopedKey;
     use rayon::{Configuration, ThreadPool};
+    use rayon_core;
+    use rustc::util::common::THREAD_INDEX;
 
     let gcx_ptr = Arc::new(Mutex::new(0));
 
@@ -90,7 +96,9 @@ pub fn spawn_thread_pool<F: FnOnce(Arc<Mutex<usize>>) -> R, R>(sess: &Session, f
 
     let with_pool = move |pool: &ThreadPool| {
         pool.with_global_registry(|| {
-            f(arg_gcx_ptr)
+            THREAD_INDEX.set(&0, || {
+                f(arg_gcx_ptr)
+            })
         })
     };
 
@@ -119,11 +127,16 @@ pub fn spawn_thread_pool<F: FnOnce(Arc<Mutex<usize>>) -> R, R>(sess: &Session, f
         try_with(&syntax::GLOBALS, |syntax_globals| {
             try_with(&syntax_pos::GLOBALS, |syntax_pos_globals| {
                 let main_handler = move |worker: &mut FnMut()| {
-                    maybe_set(&PROFQ_CHAN, prof_chan, || {
-                        maybe_set(&syntax::GLOBALS, syntax_globals, || {
-                            maybe_set(&syntax_pos::GLOBALS, syntax_pos_globals, || {
-                                ty::tls::with_thread_locals(|| {
-                                    worker()
+                    let idx = unsafe {
+                        1 + (*rayon_core::registry::WorkerThread::current()).index()
+                    };
+                    THREAD_INDEX.set(&idx, || {
+                        maybe_set(&PROFQ_CHAN, prof_chan, || {
+                            maybe_set(&syntax::GLOBALS, syntax_globals, || {
+                                maybe_set(&syntax_pos::GLOBALS, syntax_pos_globals, || {
+                                    ty::tls::with_thread_locals(|| {
+                                        worker()
+                                    })
                                 })
                             })
                         })

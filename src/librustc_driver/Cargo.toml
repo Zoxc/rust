@@ -14,6 +14,7 @@ graphviz = { path = "../libgraphviz" }
 log = "0.4"
 env_logger = { version = "0.4", default-features = false }
 rayon = { git = "https://github.com/Zoxc/rayon.git", branch = "fiber" }
+rayon-core = { git = "https://github.com/Zoxc/rayon.git", branch = "fiber" }
 scoped-tls = { git = "https://github.com/Zoxc/scoped-tls.git", features=["nightly"] }
 rustc = { path = "../librustc" }
 rustc_allocator = { path = "../librustc_allocator" }
