@@ -33,6 +33,7 @@ extern crate graphviz;
 extern crate env_logger;
 #[cfg(unix)]
 extern crate libc;
+extern crate rayon;
 extern crate rustc;
 extern crate rustc_allocator;
 extern crate rustc_back;
@@ -51,6 +52,7 @@ extern crate rustc_resolve;
 extern crate rustc_save_analysis;
 extern crate rustc_trans_utils;
 extern crate rustc_typeck;
+extern crate scoped_tls;
 extern crate serialize;
 #[macro_use]
 extern crate log;
@@ -502,30 +504,51 @@ fn run_compiler_impl<'a>(args: &[String],
     target_features::add_configuration(&mut cfg, &sess, &*trans);
     sess.parse_sess.config = cfg;
 
-    let plugins = sess.opts.debugging_opts.extra_plugins.clone();
+    struct OnDrop<F: Fn()>(F);
 
-    let cstore = CStore::new(trans.metadata_loader());
+    impl<F: Fn()> Drop for OnDrop<F> {
+        fn drop(&mut self) {
+            (self.0)();
+        }
+    }
 
-    do_or_return!(callbacks.late_callback(&*trans,
-                                          &matches,
-                                          &sess,
-                                          &cstore,
-                                          &input,
-                                          &odir,
-                                          &ofile), Some(sess));
+    let result = {
+        let plugins = sess.opts.debugging_opts.extra_plugins.clone();
 
-    let control = callbacks.build_controller(&sess, &matches);
+        let cstore = CStore::new(trans.metadata_loader());
 
-    (driver::compile_input(trans,
-                           &sess,
-                           &cstore,
-                           &input_file_path,
-                           &input,
-                           &odir,
-                           &ofile,
-                           Some(plugins),
-                           &control),
-     Some(sess))
+        do_or_return!(callbacks.late_callback(&*trans,
+                                              &matches,
+                                              &sess,
+                                              &cstore,
+                                              &input,
+                                              &odir,
+                                              &ofile), Some(sess));
+
+        let _sess_abort_error = OnDrop(|| {
+            let s = match sess.err_count() {
+                0 => { return }
+                1 => "aborting due to previous error".to_string(),
+                _ => format!("aborting due to {} previous errors", sess.err_count())
+            };
+
+            let _ = sess.diagnostic().fatal(&s);
+        });
+
+        let control = callbacks.build_controller(&sess, &matches);
+
+        driver::compile_input(trans,
+                              &sess,
+                              &cstore,
+                              &input_file_path,
+                              &input,
+                              &odir,
+                              &ofile,
+                              Some(plugins),
+                              &control)
+    };
+
+    (result, Some(sess))
 }
 
 // Extract output directory and file from matches.
@@ -863,6 +886,7 @@ impl<'a> CompilerCalls<'a> for RustcDefaultCalls {
                                                      state.arenas.unwrap(),
                                                      state.output_filenames.unwrap(),
                                                      opt_uii.clone(),
+                                                     state.gcx_ptr.clone(),
                                                      state.out_file);
                 };
             } else {

@@ -15,6 +15,8 @@ fmt_macros = { path = "../libfmt_macros" }
 graphviz = { path = "../libgraphviz" }
 jobserver = "0.1"
 log = { version = "0.4", features = ["release_max_level_info", "std"] }
+rayon = { git = "https://github.com/Zoxc/rayon.git", branch = "fiber" }
+rayon-core = { git = "https://github.com/Zoxc/rayon.git", branch = "fiber", features=["tlv"] }
 scoped-tls = { git = "https://github.com/Zoxc/scoped-tls.git", features=["nightly"] }
 rustc_apfloat = { path = "../librustc_apfloat" }
 rustc_back = { path = "../librustc_back" }
@@ -24,6 +26,7 @@ rustc_errors = { path = "../librustc_errors" }
 serialize = { path = "../libserialize" }
 syntax = { path = "../libsyntax" }
 syntax_pos = { path = "../libsyntax_pos" }
+lazy_static = "1.0.0"
 backtrace = "0.3.3"
 byteorder = { version = "1.1", features = ["i128"]}
 
@@ -55,3 +58,7 @@ byteorder = { version = "1.1", features = ["i128"]}
 #        later crate stop compiling. If you can remove this and everything
 #        compiles, then please feel free to do so!
 flate2 = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+kernel32-sys = "0.2.2"
+winapi = "0.2.8"

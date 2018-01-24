@@ -39,8 +39,8 @@ use rustc_data_structures::sync::{Lrc, Lock, LockCell, Send, Sync};
 use rustc_data_structures::fx::FxHashSet;
 use rustc_data_structures::stable_hasher::StableHasher;
 
+use std::cell::Cell;
 use std::borrow::Cow;
-use std::mem;
 use std::{error, fmt};
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
@@ -265,7 +265,6 @@ pub struct Handler {
     emitter: Lock<Box<Emitter + Send>>,
     continue_after_error: LockCell<bool>,
     delayed_span_bug: Lock<Option<Diagnostic>>,
-    tracked_diagnostics: Lock<Option<Vec<Diagnostic>>>,
 
     // This set contains the `DiagnosticId` of all emitted diagnostics to avoid
     // emitting the same diagnostic with extended help (`--teach`) twice, which
@@ -277,6 +276,11 @@ pub struct Handler {
     // twice.
     emitted_diagnostics: Lock<FxHashSet<u128>>,
 }
+
+fn default_track_diagnostic(_: &Diagnostic) {}
+
+thread_local!(pub static TRACK_DIAGNOSTICS: Cell<fn(&Diagnostic)> =
+                Cell::new(default_track_diagnostic));
 
 #[derive(Default)]
 pub struct HandlerFlags {
@@ -329,7 +333,6 @@ impl Handler {
             emitter: Lock::new(e),
             continue_after_error: LockCell::new(true),
             delayed_span_bug: Lock::new(None),
-            tracked_diagnostics: Lock::new(None),
             tracked_diagnostic_codes: Lock::new(FxHashSet()),
             emitted_diagnostics: Lock::new(FxHashSet()),
         }
@@ -553,21 +556,14 @@ impl Handler {
         self.err_count() > 0
     }
     pub fn abort_if_errors(&self) {
-        let s;
-        match self.err_count() {
-            0 => {
-                if let Some(bug) = self.delayed_span_bug.borrow_mut().take() {
-                    DiagnosticBuilder::new_diagnostic(self, bug).emit();
-                }
-                return;
+        if self.err_count() == 0 {
+            if let Some(bug) = self.delayed_span_bug.borrow_mut().take() {
+                DiagnosticBuilder::new_diagnostic(self, bug).emit();
             }
-            1 => s = "aborting due to previous error".to_string(),
-            _ => {
-                s = format!("aborting due to {} previous errors", self.err_count());
-            }
+            return;
         }
 
-        self.fatal(&s).raise();
+        FatalError.raise();
     }
     pub fn emit(&self, msp: &MultiSpan, msg: &str, lvl: Level) {
         if lvl == Warning && !self.flags.can_emit_warnings {
@@ -592,17 +588,6 @@ impl Handler {
         }
     }
 
-    pub fn track_diagnostics<F, R>(&self, f: F) -> (R, Vec<Diagnostic>)
-        where F: FnOnce() -> R
-    {
-        let prev = mem::replace(&mut *self.tracked_diagnostics.borrow_mut(),
-                                Some(Vec::new()));
-        let ret = f();
-        let diagnostics = mem::replace(&mut *self.tracked_diagnostics.borrow_mut(), prev)
-            .unwrap();
-        (ret, diagnostics)
-    }
-
     /// `true` if a diagnostic with this code has already been emitted in this handler.
     ///
     /// Used to suppress emitting the same error multiple times with extended explanation when
@@ -614,9 +599,9 @@ impl Handler {
     fn emit_db(&self, db: &DiagnosticBuilder) {
         let diagnostic = &**db;
 
-        if let Some(ref mut list) = *self.tracked_diagnostics.borrow_mut() {
-            list.push(diagnostic.clone());
-        }
+        TRACK_DIAGNOSTICS.with(|track_diagnostics| {
+            track_diagnostics.get()(diagnostic);
+        });
 
         if let Some(ref code) = diagnostic.code {
             self.tracked_diagnostic_codes.borrow_mut().insert(code.clone());

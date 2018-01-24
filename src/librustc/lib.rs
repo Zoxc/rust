@@ -40,6 +40,7 @@
        html_root_url = "https://doc.rust-lang.org/nightly/")]
 #![deny(warnings)]
 
+#![feature(asm)]
 #![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(conservative_impl_trait)]
@@ -54,6 +55,7 @@
 #![feature(i128_type)]
 #![feature(inclusive_range)]
 #![feature(inclusive_range_syntax)]
+#![feature(iterator_step_by)]
 #![cfg_attr(windows, feature(libc))]
 #![feature(macro_vis_matcher)]
 #![feature(match_default_bindings)]
@@ -63,6 +65,7 @@
 #![feature(quote)]
 #![feature(refcell_replace_swap)]
 #![feature(rustc_diagnostic_macros)]
+#![feature(set_stdio)]
 #![feature(slice_patterns)]
 #![feature(specialization)]
 #![feature(unboxed_closures)]
@@ -71,6 +74,7 @@
 #![feature(trace_macros)]
 #![feature(catch_expr)]
 #![feature(test)]
+#![feature(vec_remove_item)]
 
 #![recursion_limit="512"]
 
@@ -82,11 +86,17 @@ extern crate getopts;
 extern crate graphviz;
 #[cfg(windows)]
 extern crate libc;
+#[cfg(windows)]
+extern crate kernel32;
+#[cfg(windows)]
+extern crate winapi;
 extern crate rustc_back;
 #[macro_use] extern crate rustc_data_structures;
 extern crate serialize;
 extern crate rustc_const_math;
 extern crate rustc_errors as errors;
+extern crate rayon;
+extern crate rayon_core;
 #[macro_use] extern crate log;
 #[macro_use] extern crate syntax;
 extern crate syntax_pos;

@@ -48,6 +48,7 @@ extern crate parking_lot;
 #[macro_use]
 extern crate cfg_if;
 extern crate stable_deref_trait;
+extern crate rayon;
 
 pub use rustc_serialize::hex::ToHex;
 

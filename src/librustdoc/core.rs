@@ -151,13 +151,14 @@ pub fn run_core(search_paths: SearchPaths,
         sessopts, cpath, diagnostic_handler, codemap,
     );
     let trans = rustc_driver::get_trans(&sess);
-    let cstore = Rc::new(CStore::new(trans.metadata_loader()));
+    let cstore = CStore::new(trans.metadata_loader());
     rustc_lint::register_builtins(&mut sess.lint_store.borrow_mut(), Some(&sess));
 
     let mut cfg = config::build_configuration(&sess, config::parse_cfgspecs(cfgs));
     target_features::add_configuration(&mut cfg, &sess, &*trans);
     sess.parse_sess.config = cfg;
 
+    driver::spawn_thread_pool(&sess, |gcx_ptr| {
     let control = &driver::CompileController::basic();
 
     let krate = panictry!(driver::phase_1_parse_input(control, &sess, &input));
@@ -220,6 +221,7 @@ pub fn run_core(search_paths: SearchPaths,
                                                      &arenas,
                                                      &name,
                                                      &output_filenames,
+                                                     gcx_ptr,
                                                      |tcx, analysis, _, result| {
         if let Err(_) = result {
             sess.fatal("Compilation failed, aborting rustdoc");
@@ -257,4 +259,5 @@ pub fn run_core(search_paths: SearchPaths,
 
         (krate, ctxt.renderinfo.into_inner())
     }), &sess)
+    })
 }
