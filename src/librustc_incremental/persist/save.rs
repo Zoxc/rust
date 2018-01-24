@@ -13,6 +13,7 @@ use rustc::session::Session;
 use rustc::ty::TyCtxt;
 use rustc::util::common::time;
 use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::sync::join;
 use rustc_serialize::Encodable as RustcEncodable;
 use rustc_serialize::opaque::Encoder;
 use std::io::{self, Cursor};
@@ -33,13 +34,15 @@ pub fn save_dep_graph<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
             return;
         }
 
-        time(sess.time_passes(), "persist query result cache", || {
-            save_in(sess,
-                    query_cache_path(sess),
-                    |e| encode_query_cache(tcx, e));
-        });
-
-        if tcx.sess.opts.debugging_opts.incremental_queries {
+        join(|| {
+            if tcx.sess.opts.debugging_opts.incremental_queries {
+                time(sess.time_passes(), "persist query result cache", || {
+                    save_in(sess,
+                            query_cache_path(sess),
+                            |e| encode_query_cache(tcx, e));
+                });
+            }
+        }, || {
             time(sess.time_passes(), "persist dep-graph", || {
                 save_in(sess,
                         dep_graph_path(sess),
@@ -49,7 +52,7 @@ pub fn save_dep_graph<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
                             })
                         });
             });
-        }
+        });
 
         dirty_clean::check_dirty_clean_annotations(tcx);
     })
