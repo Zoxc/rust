@@ -26,10 +26,10 @@ use std::io::prelude::*;
 use std::io::{self, Cursor};
 use std::fs::File;
 use std::path::Path;
-use std::rc::Rc;
 use std::sync::mpsc;
 
-use rustc_data_structures::owning_ref::{ErasedBoxRef, OwningRef};
+use rustc_data_structures::owning_ref::OwningRef;
+use rustc_data_structures::sync::Lrc;
 use ar::{Archive, Builder, Header};
 use flate2::Compression;
 use flate2::write::DeflateEncoder;
@@ -40,18 +40,20 @@ use rustc::session::{Session, CompileIncomplete};
 use rustc::session::config::{CrateType, OutputFilenames, PrintRequest};
 use rustc::ty::TyCtxt;
 use rustc::ty::maps::Providers;
-use rustc::middle::cstore::EncodedMetadata;
-use rustc::middle::cstore::MetadataLoader;
+use rustc::middle::cstore::{MetadataLoader, EncodedMetadata};
 use rustc::dep_graph::DepGraph;
 use rustc_back::target::Target;
 use rustc_mir::monomorphize::collector;
 use link::{build_link_meta, out_filename};
+use rustc_data_structures::sync::Sync;
+
+pub use rustc_data_structures::sync::MetadataRef;
 
 pub trait TransCrate {
     fn print(&self, _req: PrintRequest, _sess: &Session) {}
     fn target_features(&self, _sess: &Session) -> Vec<Symbol> { vec![] }
 
-    fn metadata_loader(&self) -> Box<MetadataLoader>;
+    fn metadata_loader(&self) -> Box<MetadataLoader + Sync>;
     fn provide(&self, _providers: &mut Providers);
     fn provide_extern(&self, _providers: &mut Providers);
     fn trans_crate<'a, 'tcx>(
@@ -77,7 +79,7 @@ pub trait TransCrate {
 pub struct DummyTransCrate;
 
 impl TransCrate for DummyTransCrate {
-    fn metadata_loader(&self) -> Box<MetadataLoader> {
+    fn metadata_loader(&self) -> Box<MetadataLoader + Sync> {
         box DummyMetadataLoader(())
     }
 
@@ -115,7 +117,7 @@ impl MetadataLoader for DummyMetadataLoader {
         &self,
         _target: &Target,
         _filename: &Path
-    ) -> Result<ErasedBoxRef<[u8]>, String> {
+    ) -> Result<MetadataRef, String> {
         bug!("DummyMetadataLoader::get_rlib_metadata");
     }
 
@@ -123,7 +125,7 @@ impl MetadataLoader for DummyMetadataLoader {
         &self,
         _target: &Target,
         _filename: &Path
-    ) -> Result<ErasedBoxRef<[u8]>, String> {
+    ) -> Result<MetadataRef, String> {
         bug!("DummyMetadataLoader::get_dylib_metadata");
     }
 }
@@ -131,7 +133,7 @@ impl MetadataLoader for DummyMetadataLoader {
 pub struct NoLlvmMetadataLoader;
 
 impl MetadataLoader for NoLlvmMetadataLoader {
-    fn get_rlib_metadata(&self, _: &Target, filename: &Path) -> Result<ErasedBoxRef<[u8]>, String> {
+    fn get_rlib_metadata(&self, _: &Target, filename: &Path) -> Result<MetadataRef, String> {
         let file = File::open(filename)
             .map_err(|e| format!("metadata file open err: {:?}", e))?;
         let mut archive = Archive::new(file);
@@ -154,7 +156,7 @@ impl MetadataLoader for NoLlvmMetadataLoader {
         &self,
         _target: &Target,
         _filename: &Path,
-    ) -> Result<ErasedBoxRef<[u8]>, String> {
+    ) -> Result<MetadataRef, String> {
         // FIXME: Support reading dylibs from llvm enabled rustc
         self.get_rlib_metadata(_target, _filename)
     }
@@ -186,14 +188,14 @@ impl MetadataOnlyTransCrate {
 }
 
 impl TransCrate for MetadataOnlyTransCrate {
-    fn metadata_loader(&self) -> Box<MetadataLoader> {
+    fn metadata_loader(&self) -> Box<MetadataLoader + Sync> {
         box NoLlvmMetadataLoader
     }
 
     fn provide(&self, providers: &mut Providers) {
         ::symbol_names::provide(providers);
         providers.target_features_enabled = |_tcx, _id| {
-            Rc::new(Vec::new()) // Just a dummy
+            Lrc::new(Vec::new()) // Just a dummy
         };
     }
     fn provide_extern(&self, _providers: &mut Providers) {}

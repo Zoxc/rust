@@ -27,6 +27,8 @@
 #![feature(slice_patterns)]
 #![feature(conservative_impl_trait)]
 
+#![recursion_limit="256"]
+
 extern crate ar;
 extern crate flate2;
 #[macro_use]

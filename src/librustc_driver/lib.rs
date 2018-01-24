@@ -25,6 +25,8 @@
 #![feature(rustc_diagnostic_macros)]
 #![feature(set_stdio)]
 
+#![recursion_limit="256"]
+
 extern crate arena;
 extern crate getopts;
 extern crate graphviz;
@@ -90,8 +92,8 @@ use std::iter::repeat;
 use std::panic;
 use std::path::PathBuf;
 use std::process::{self, Command, Stdio};
-use std::rc::Rc;
 use std::str;
+use rustc_data_structures::sync::Lrc;
 use std::thread;
 
 use syntax::ast;
@@ -235,7 +237,7 @@ pub fn get_trans(sess: &Session) -> Box<TransCrate> {
 // The FileLoader provides a way to load files from sources other than the file system.
 pub fn run_compiler<'a>(args: &[String],
                         callbacks: &mut CompilerCalls<'a>,
-                        file_loader: Option<Box<FileLoader + 'static>>,
+                        file_loader: Option<Box<FileLoader + Send + Sync + 'static>>,
                         emitter_dest: Option<Box<Write + Send>>)
                         -> (CompileResult, Option<Session>)
 {
@@ -272,7 +274,7 @@ pub fn run_compiler<'a>(args: &[String],
     };
 
     let loader = file_loader.unwrap_or(box RealFileLoader);
-    let codemap = Rc::new(CodeMap::with_file_loader(loader, sopts.file_path_mapping()));
+    let codemap = Lrc::new(CodeMap::with_file_loader(loader, sopts.file_path_mapping()));
     let mut sess = session::build_session_with_codemap(
         sopts, input_file_path.clone(), descriptions, codemap, emitter_dest,
     );
