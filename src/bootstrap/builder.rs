@@ -251,11 +251,11 @@ impl<'a> Builder<'a> {
                 tool::Compiletest, tool::RemoteTestServer, tool::RemoteTestClient,
                 tool::RustInstaller, tool::Cargo, tool::Rls, tool::Rustdoc, tool::Clippy,
                 native::Llvm, tool::Rustfmt, tool::Miri),
-            Kind::Test => describe!(check::Tidy, check::Bootstrap,
+            Kind::Test => describe!(check::Tidy/*, check::Bootstrap,
                 check::Crate, check::CrateLibrustc, check::Rustdoc,
                 check::Linkcheck, check::Cargotest, check::Cargo, check::Rls, check::Docs,
                 check::ErrorIndex, check::Distcheck, check::Rustfmt, check::Miri, check::Clippy,
-                check::RustdocJS),
+                check::RustdocJS*/),
 
             Kind::Bench => describe!(check::Crate, check::CrateLibrustc),
             Kind::Doc => describe!(doc::UnstableBook, doc::UnstableBookGen, doc::TheBook,
