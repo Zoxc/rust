@@ -11,7 +11,7 @@
 use namespace::Namespace;
 use rustc::hir::def_id::{CrateNum, DefId, LOCAL_CRATE};
 use rustc::hir;
-use rustc::hir::itemlikevisit::ItemLikeVisitor;
+use rustc::hir::itemlikevisit::ParItemLikeVisitor;
 use rustc::traits::{self, IntercrateMode};
 use rustc::ty::TyCtxt;
 
@@ -21,7 +21,7 @@ pub fn crate_inherent_impls_overlap_check<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                                                     crate_num: CrateNum) {
     assert_eq!(crate_num, LOCAL_CRATE);
     let krate = tcx.hir.krate();
-    krate.visit_all_item_likes(&mut InherentOverlapChecker { tcx });
+    krate.par_visit_all_item_likes(&InherentOverlapChecker { tcx });
 }
 
 struct InherentOverlapChecker<'a, 'tcx: 'a> {
@@ -51,14 +51,14 @@ impl<'a, 'tcx> InherentOverlapChecker<'a, 'tcx> {
                         self.tcx.struct_span_lint_node(
                             lint::builtin::INCOHERENT_FUNDAMENTAL_IMPLS,
                             node_id.unwrap(),
-                            self.tcx.span_of_impl(item1).unwrap(),
+                                                   self.tcx.span_of_impl(item1).unwrap(),
                             &format!("duplicate definitions with name `{}` (E0592)", name)
                         )
                     } else {
                         struct_span_err!(self.tcx.sess,
                                          self.tcx.span_of_impl(item1).unwrap(),
-                                         E0592,
-                                         "duplicate definitions with name `{}`",
+                                                   E0592,
+                                                   "duplicate definitions with name `{}`",
                                          name)
                     };
 
@@ -96,23 +96,23 @@ impl<'a, 'tcx> InherentOverlapChecker<'a, 'tcx> {
                 });
 
                 if used_to_be_allowed {
-                    self.tcx.infer_ctxt().enter(|infcx| {
-                        if let Some(overlap) =
+                self.tcx.infer_ctxt().enter(|infcx| {
+                    if let Some(overlap) =
                             traits::overlapping_impls(&infcx, impl1_def_id, impl2_def_id,
                                                       IntercrateMode::Fixed)
                         {
                             self.check_for_common_items_in_impls(
                                 impl1_def_id, impl2_def_id, overlap, true);
-                        }
-                    });
-                }
+                    }
+                });
             }
         }
     }
+    }
 }
 
-impl<'a, 'tcx, 'v> ItemLikeVisitor<'v> for InherentOverlapChecker<'a, 'tcx> {
-    fn visit_item(&mut self, item: &'v hir::Item) {
+impl<'a, 'tcx, 'v> ParItemLikeVisitor<'v> for InherentOverlapChecker<'a, 'tcx> {
+    fn visit_item(&self, item: &'v hir::Item) {
         match item.node {
             hir::ItemEnum(..) |
             hir::ItemStruct(..) |
@@ -125,9 +125,9 @@ impl<'a, 'tcx, 'v> ItemLikeVisitor<'v> for InherentOverlapChecker<'a, 'tcx> {
         }
     }
 
-    fn visit_trait_item(&mut self, _trait_item: &hir::TraitItem) {
+    fn visit_trait_item(&self, _trait_item: &hir::TraitItem) {
     }
 
-    fn visit_impl_item(&mut self, _impl_item: &hir::ImplItem) {
+    fn visit_impl_item(&self, _impl_item: &hir::ImplItem) {
     }
 }

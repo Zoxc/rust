@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! This mdoule defines types which are thread safe if cfg!(parallel_queries) is true.
+//! This module defines types which are thread safe if cfg!(parallel_queries) is true.
 //!
 //! `Lrc` is an alias of either Rc or Arc.
 //!
@@ -35,6 +35,29 @@ use std::fmt::Formatter;
 use std::fmt;
 use owning_ref::{Erased, OwningRef};
 
+pub fn serial_join<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB)
+    where A: FnOnce() -> RA,
+          B: FnOnce() -> RB
+{
+    (oper_a(), oper_b())
+}
+
+pub struct SerialScope;
+
+impl SerialScope {
+    pub fn spawn<F>(&self, f: F)
+        where F: FnOnce(&SerialScope)
+    {
+        f(self)
+    }
+}
+
+pub fn serial_scope<F, R>(f: F) -> R
+    where F: FnOnce(&SerialScope) -> R
+{
+    f(&SerialScope)
+}
+
 cfg_if! {
     if #[cfg(not(parallel_queries))] {
         pub auto trait Send {}
@@ -50,9 +73,19 @@ cfg_if! {
             }
         }
 
+        pub use self::serial_join as join;
+        pub use self::serial_scope as scope;
+
+        pub use std::iter::Iterator as ParallelIterator;
+
+        pub fn par_iter<T: IntoIterator>(t: T) -> T::IntoIter {
+            t.into_iter()
+        }
+
         pub type MetadataRef = OwningRef<Box<Erased>, [u8]>;
 
         pub use std::rc::Rc as Lrc;
+        pub use std::rc::Weak as Weak;
         pub use std::cell::Ref as ReadGuard;
         pub use std::cell::RefMut as WriteGuard;
         pub use std::cell::RefMut as LockGuard;
@@ -157,10 +190,20 @@ cfg_if! {
         use parking_lot;
 
         pub use std::sync::Arc as Lrc;
+        pub use std::sync::Weak as Weak;
 
         pub use self::Lock as MTLock;
 
         use parking_lot::Mutex as InnerLock;
+
+        pub use rayon::{join, scope};
+
+        pub use rayon::iter::ParallelIterator;
+        use rayon::iter::IntoParallelIterator;
+
+        pub fn par_iter<T: IntoParallelIterator>(t: T) -> T::Iter {
+            t.into_par_iter()
+        }
 
         pub type MetadataRef = OwningRef<Box<Erased + Send + Sync>, [u8]>;
 

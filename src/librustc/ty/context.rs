@@ -55,7 +55,7 @@ use rustc_data_structures::stable_hasher::{HashStable, hash_stable_hashmap,
 use arena::{TypedArena, DroplessArena};
 use rustc_const_math::{ConstInt, ConstUsize};
 use rustc_data_structures::indexed_vec::IndexVec;
-use rustc_data_structures::sync::{Sync, Lrc, Lock, LockCell};
+use rustc_data_structures::sync::{Sync, Lrc, Lock};
 use std::any::Any;
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -66,6 +66,7 @@ use std::ops::Deref;
 use std::iter;
 use std::sync::mpsc;
 use std::sync::Arc;
+use std::sync::Mutex;
 use syntax::abi;
 use syntax::ast::{self, Name, NodeId};
 use syntax::attr;
@@ -156,12 +157,12 @@ impl<'gcx: 'tcx, 'tcx> CtxtInterners<'tcx> {
                  -> Ty<'tcx> {
         let ty = {
             let mut interner = self.type_.borrow_mut();
-            let global_interner = global_interners.map(|interners| {
-                interners.type_.borrow_mut()
-            });
             if let Some(&Interned(ty)) = interner.get(&st) {
                 return ty;
             }
+            let global_interner = global_interners.map(|interners| {
+                interners.type_.borrow_mut()
+            });
             if let Some(ref interner) = global_interner {
                 if let Some(&Interned(ty)) = interner.get(&st) {
                     return ty;
@@ -784,7 +785,7 @@ impl<'tcx> CommonTypes<'tcx> {
 #[derive(Copy, Clone)]
 pub struct TyCtxt<'a, 'gcx: 'a+'tcx, 'tcx: 'a> {
     gcx: &'a GlobalCtxt<'gcx>,
-    interners: &'a CtxtInterners<'tcx>
+    interners: &'a CtxtInterners<'tcx>,
 }
 
 impl<'a, 'gcx, 'tcx> Deref for TyCtxt<'a, 'gcx, 'tcx> {
@@ -856,9 +857,6 @@ pub struct GlobalCtxt<'tcx> {
 
     /// Data layout specification for the current target.
     pub data_layout: TargetDataLayout,
-
-    /// Used to prevent layout from recursing too deeply.
-    pub layout_depth: LockCell<usize>,
 
     /// Map from function to the `#[derive]` mode that it's defining. Only used
     /// by `proc-macro` crates.
@@ -983,17 +981,16 @@ impl<'tcx> InterpretInterner<'tcx> {
     }
 }
 
-impl<'tcx> GlobalCtxt<'tcx> {
+impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     /// Get the global TyCtxt.
-    pub fn global_tcx<'a>(&'a self) -> TyCtxt<'a, 'tcx, 'tcx> {
+    #[inline]
+    pub fn global_tcx(self) -> TyCtxt<'a, 'gcx, 'gcx> {
         TyCtxt {
-            gcx: self,
-            interners: &self.global_interners
+            gcx: self.gcx,
+            interners: &self.gcx.global_interners,
         }
     }
-}
 
-impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     pub fn alloc_generics(self, generics: ty::Generics) -> &'gcx ty::Generics {
         self.global_arenas.generics.alloc(generics)
     }
@@ -1086,24 +1083,26 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     }
 
     pub fn intern_stability(self, stab: attr::Stability) -> &'gcx attr::Stability {
-        if let Some(st) = self.stability_interner.borrow().get(&stab) {
+        let mut stability_interner = self.stability_interner.borrow_mut();
+        if let Some(st) = stability_interner.get(&stab) {
             return st;
         }
 
         let interned = self.global_interners.arena.alloc(stab);
-        if let Some(prev) = self.stability_interner.borrow_mut().replace(interned) {
+        if let Some(prev) = stability_interner.replace(interned) {
             bug!("Tried to overwrite interned Stability: {:?}", prev)
         }
         interned
     }
 
     pub fn intern_layout(self, layout: LayoutDetails) -> &'gcx LayoutDetails {
-        if let Some(layout) = self.layout_interner.borrow().get(&layout) {
+        let mut layout_interner = self.layout_interner.borrow_mut();
+        if let Some(layout) = layout_interner.get(&layout) {
             return layout;
         }
 
         let interned = self.global_arenas.layout.alloc(layout);
-        if let Some(prev) = self.layout_interner.borrow_mut().replace(interned) {
+        if let Some(prev) = layout_interner.replace(interned) {
             bug!("Tried to overwrite interned Layout: {:?}", prev)
         }
         interned
@@ -1140,6 +1139,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                                   crate_name: &str,
                                   tx: mpsc::Sender<Box<Any + Send>>,
                                   output_filenames: &OutputFilenames,
+                                  gcx_ptr: Arc<Mutex<usize>>,
                                   f: F) -> R
                                   where F: for<'b> FnOnce(TyCtxt<'b, 'tcx, 'tcx>) -> R
     {
@@ -1193,7 +1193,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                                     Lrc::new(StableVec::new(v)));
         }
 
-        tls::enter_global(GlobalCtxt {
+        let gcx = &GlobalCtxt {
             sess: s,
             cstore,
             global_arenas: &arenas.global,
@@ -1227,14 +1227,15 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             crate_name: Symbol::intern(crate_name),
             data_layout,
             layout_interner: Lock::new(FxHashSet()),
-            layout_depth: LockCell::new(0),
             derive_macros: Lock::new(NodeMap()),
             stability_interner: Lock::new(FxHashSet()),
             interpret_interner: Lock::new(Default::default()),
             all_traits: Lock::new(None),
             tx_to_llvm_workers: Lock::new(tx),
             output_filenames: Arc::new(output_filenames.clone()),
-       }, f)
+        };
+
+        tls::enter_global(gcx, gcx_ptr, f)
     }
 
     pub fn consider_optimizing<T: Fn() -> String>(&self, msg: T) -> bool {
@@ -1373,11 +1374,27 @@ impl<'a, 'tcx> TyCtxt<'a, 'tcx, 'tcx> {
 
 impl<'gcx: 'tcx, 'tcx> GlobalCtxt<'gcx> {
     /// Call the closure with a local `TyCtxt` using the given arena.
-    pub fn enter_local<F, R>(&self, arena: &'tcx DroplessArena, f: F) -> R
+    pub fn enter_local<F, R>(&self,
+                             arena: &'tcx DroplessArena,
+                             f: F) -> R
         where F: for<'a> FnOnce(TyCtxt<'a, 'gcx, 'tcx>) -> R
     {
         let interners = CtxtInterners::new(arena);
-        tls::enter(self, &interners, f)
+        let tcx = TyCtxt {
+            gcx: self,
+            interners: &interners,
+        };
+        ty::tls::with_related_context(tcx.global_tcx(), |icx| {
+            let new_icx = ty::tls::ImplicitCtxt {
+                tcx,
+                query: icx.query.clone(),
+                task: icx.task,
+                buffer_diagnostics: icx.buffer_diagnostics,
+            };
+            ty::tls::enter_context(&new_icx, |new_icx| {
+                f(new_icx.tcx)
+            })
+        })
     }
 }
 
@@ -1524,21 +1541,25 @@ impl<'a, 'tcx> Lift<'tcx> for &'a Slice<Predicate<'a>> {
 }
 
 pub mod tls {
-    use super::{CtxtInterners, GlobalCtxt, TyCtxt};
+    use super::{GlobalCtxt, TyCtxt};
 
-    use std::cell::Cell;
     use std::fmt;
+    use std::mem;
     use syntax_pos;
+    use ty::maps;
+    use errors::{Diagnostic, TRACK_DIAGNOSTICS};
+    use rayon_core;
+    use dep_graph::OpenTask;
+    use rustc_data_structures::sync::{Lrc, Lock};
+    use std::sync::Arc;
+    use std::sync::Mutex;
 
-    /// Marker types used for the scoped TLS slot.
-    /// The type context cannot be used directly because the scoped TLS
-    /// in libstd doesn't allow types generic over lifetimes.
-    enum ThreadLocalGlobalCtxt {}
-    enum ThreadLocalInterners {}
-
-    thread_local! {
-        static TLS_TCX: Cell<Option<(*const ThreadLocalGlobalCtxt,
-                                     *const ThreadLocalInterners)>> = Cell::new(None)
+    #[derive(Clone)]
+    pub struct ImplicitCtxt<'a, 'gcx: 'a+'tcx, 'tcx: 'a> {
+        pub tcx: TyCtxt<'a, 'gcx, 'tcx>,
+        pub query: Lrc<maps::QueryJob<'gcx>>,
+        pub task: &'a Lock<OpenTask>,
+        pub buffer_diagnostics: bool,
     }
 
     fn span_debug(span: syntax_pos::Span, f: &mut fmt::Formatter) -> fmt::Result {
@@ -1547,59 +1568,156 @@ pub mod tls {
         })
     }
 
-    pub fn enter_global<'gcx, F, R>(gcx: GlobalCtxt<'gcx>, f: F) -> R
-        where F: for<'a> FnOnce(TyCtxt<'a, 'gcx, 'gcx>) -> R
+    fn track_diagnostic(diagnostic: &Diagnostic) {
+        with_context(|context| {
+            if context.query.track_diagnostics {
+                context.query.diagnostics.lock().push(diagnostic.clone());
+            }
+        })
+    }
+
+    struct OnDrop<F: Fn()>(F);
+
+    impl<F: Fn()> Drop for OnDrop<F> {
+        fn drop(&mut self) {
+            (self.0)();
+        }
+    }
+
+    pub fn with_thread_locals<F, R>(f: F) -> R
+        where F: FnOnce() -> R
     {
         syntax_pos::SPAN_DEBUG.with(|span_dbg| {
             let original_span_debug = span_dbg.get();
             span_dbg.set(span_debug);
-            let result = enter(&gcx, &gcx.global_interners, f);
-            span_dbg.set(original_span_debug);
-            result
+
+            let _on_drop = OnDrop(move || {
+                span_dbg.set(original_span_debug);
+            });
+
+            TRACK_DIAGNOSTICS.with(|current| {
+                let original = current.get();
+                current.set(track_diagnostic);
+
+                let _on_drop = OnDrop(move || {
+                    current.set(original);
+                });
+
+                f()
+            })
         })
     }
 
-    pub fn enter<'a, 'gcx: 'tcx, 'tcx, F, R>(gcx: &'a GlobalCtxt<'gcx>,
-                                             interners: &'a CtxtInterners<'tcx>,
-                                             f: F) -> R
-        where F: FnOnce(TyCtxt<'a, 'gcx, 'tcx>) -> R
+    pub fn enter_global<'gcx, F, R>(gcx: &GlobalCtxt<'gcx>, gcx_ptr: Arc<Mutex<usize>>, f: F) -> R
+        where F: for<'a> FnOnce(TyCtxt<'a, 'gcx, 'gcx>) -> R
     {
-        let gcx_ptr = gcx as *const _ as *const ThreadLocalGlobalCtxt;
-        let interners_ptr = interners as *const _ as *const ThreadLocalInterners;
-        TLS_TCX.with(|tls| {
-            let prev = tls.get();
-            tls.set(Some((gcx_ptr, interners_ptr)));
-            let ret = f(TyCtxt {
-                gcx,
-                interners,
+        with_thread_locals(|| {
+            let global_query = Lrc::new(maps::QueryJob::new(None, false, 0, None));
+
+            *gcx_ptr.lock().unwrap() = gcx as *const _ as usize;
+
+            let _on_drop = OnDrop(move || {
+                *gcx_ptr.lock().unwrap() = 0;
             });
-            tls.set(prev);
-            ret
+
+            let tcx = TyCtxt {
+                gcx,
+                interners: &gcx.global_interners,
+            };
+            let icx = ImplicitCtxt {
+                tcx,
+                buffer_diagnostics: false,
+                query: global_query,
+                task: &Lock::new(OpenTask::Ignore),
+            };
+            enter_context(&icx, |_| {
+                f(tcx)
+            })
         })
+    }
+
+    pub fn enter_context<'a, 'gcx: 'tcx, 'tcx, F, R>(context: &ImplicitCtxt<'a, 'gcx, 'tcx>,
+                                                     f: F) -> R
+        where F: FnOnce(&ImplicitCtxt<'a, 'gcx, 'tcx>) -> R
+    {
+        rayon_core::fiber::tlv::set(context as *const _ as usize, || {
+            f(&context)
+        })
+    }
+
+    pub unsafe fn with_global_query<F, R>(gcx_ptr: usize, f: F) -> R
+        where F: for<'a, 'gcx, 'tcx> FnOnce(TyCtxt<'a, 'gcx, 'tcx>) -> R
+    {
+        let gcx = &*(gcx_ptr as *const GlobalCtxt<'static>);
+        let tcx = TyCtxt {
+            gcx,
+            interners: &gcx.global_interners,
+        };
+        let global_query = Lrc::new(maps::QueryJob::new(None, false, 0, None));
+        let icx = ImplicitCtxt {
+            query: global_query,
+            buffer_diagnostics: false,
+            tcx,
+            task: &Lock::new(OpenTask::Ignore),
+        };
+        enter_context(&icx, |_| f(tcx))
+    }
+
+    pub fn with_context_opt<F, R>(f: F) -> R
+        where F: for<'a, 'gcx, 'tcx> FnOnce(Option<&ImplicitCtxt<'a, 'gcx, 'tcx>>) -> R
+    {
+        let context = rayon_core::fiber::tlv::get();
+        if context == 0 {
+            f(None)
+        } else {
+            unsafe { f(Some(&*(context as *const ImplicitCtxt))) }
+        }
+    }
+
+    pub fn with_fully_related_context<'a, 'gcx, 'tcx, F, R>(tcx: TyCtxt<'a, 'gcx, 'tcx>, f: F) -> R
+        where F: for<'b> FnOnce(&ImplicitCtxt<'b, 'gcx, 'tcx>) -> R
+    {
+        with_context(|context| {
+            unsafe {
+                let gcx = tcx.gcx as *const _ as usize;
+                let interners = tcx.interners as *const _ as usize;
+                assert!(context.tcx.gcx as *const _ as usize == gcx);
+                assert!(context.tcx.interners as *const _ as usize == interners);
+                let context: &ImplicitCtxt = mem::transmute(context);
+                f(context)
+            }
+        })
+    }
+
+    pub fn with_related_context<'a, 'gcx, 'tcx1, F, R>(tcx: TyCtxt<'a, 'gcx, 'tcx1>, f: F) -> R
+        where F: for<'b, 'tcx2> FnOnce(&ImplicitCtxt<'b, 'gcx, 'tcx2>) -> R
+    {
+        with_context(|context| {
+            unsafe {
+                let gcx = tcx.gcx as *const _ as usize;
+                assert!(context.tcx.gcx as *const _ as usize == gcx);
+                let context: &ImplicitCtxt = mem::transmute(context);
+                f(context)
+            }
+        })
+    }
+
+    pub fn with_context<F, R>(f: F) -> R
+        where F: for<'a, 'gcx, 'tcx> FnOnce(&ImplicitCtxt<'a, 'gcx, 'tcx>) -> R
+    {
+        with_context_opt(|opt_context| f(opt_context.expect("no ImplicitCtxt stored in tls")))
     }
 
     pub fn with<F, R>(f: F) -> R
         where F: for<'a, 'gcx, 'tcx> FnOnce(TyCtxt<'a, 'gcx, 'tcx>) -> R
     {
-        TLS_TCX.with(|tcx| {
-            let (gcx, interners) = tcx.get().unwrap();
-            let gcx = unsafe { &*(gcx as *const GlobalCtxt) };
-            let interners = unsafe { &*(interners as *const CtxtInterners) };
-            f(TyCtxt {
-                gcx,
-                interners,
-            })
-        })
+        with_context(|context| f(context.tcx))
     }
 
     pub fn with_opt<F, R>(f: F) -> R
         where F: for<'a, 'gcx, 'tcx> FnOnce(Option<TyCtxt<'a, 'gcx, 'tcx>>) -> R
     {
-        if TLS_TCX.with(|tcx| tcx.get().is_some()) {
-            with(|v| f(Some(v)))
-        } else {
-            f(None)
-        }
+        with_context_opt(|opt_context| f(opt_context.map(|context| context.tcx)))
     }
 }
 
@@ -1769,28 +1887,31 @@ macro_rules! intern_method {
                                             $needs_infer:expr) -> $ty:ty) => {
         impl<'a, 'gcx, $lt_tcx> TyCtxt<'a, 'gcx, $lt_tcx> {
             pub fn $method(self, v: $alloc) -> &$lt_tcx $ty {
-                {
-                    let key = ($alloc_to_key)(&v);
-                    if let Some(i) = self.interners.$name.borrow().get(key) {
+                let key = ($alloc_to_key)(&v);
+                let mut interner = self.interners.$name.borrow_mut();
+                if let Some(i) = interner.get(key) {
+                    return i.0;
+                }
+                let global_interner = if !self.is_global() {
+                    let global_interner = self.global_interners.$name.borrow_mut();
+                    if let Some(i) = global_interner.get(key) {
                         return i.0;
                     }
-                    if !self.is_global() {
-                        if let Some(i) = self.global_interners.$name.borrow().get(key) {
-                            return i.0;
-                        }
-                    }
-                }
+                    Some(global_interner)
+                } else {
+                    None
+                };
 
                 // HACK(eddyb) Depend on flags being accurate to
                 // determine that all contents are in the global tcx.
                 // See comments on Lift for why we can't use that.
                 if !($needs_infer)(&v) {
-                    if !self.is_global() {
+                    if let Some(mut global_interners) = global_interner {
                         let v = unsafe {
                             mem::transmute(v)
                         };
                         let i = ($alloc_to_ret)(self.global_interners.arena.$alloc_method(v));
-                        self.global_interners.$name.borrow_mut().insert(Interned(i));
+                        global_interners.insert(Interned(i));
                         return i;
                     }
                 } else {
@@ -1804,7 +1925,7 @@ macro_rules! intern_method {
                 }
 
                 let i = ($alloc_to_ret)(self.interners.arena.$alloc_method(v));
-                self.interners.$name.borrow_mut().insert(Interned(i));
+                interner.insert(Interned(i));
                 i
             }
         }

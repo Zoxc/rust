@@ -46,6 +46,7 @@ use std::option;
 use std::path::Path;
 use std::str::FromStr;
 use std::mem;
+use std::sync::{Arc, Mutex};
 
 use rustc::hir::map as hir_map;
 use rustc::hir::map::blocks;
@@ -206,6 +207,7 @@ impl PpSourceMode {
                                                resolutions: &Resolutions,
                                                arenas: &'tcx AllArenas<'tcx>,
                                                output_filenames: &OutputFilenames,
+                                               gcx_ptr: Arc<Mutex<usize>>,
                                                id: &str,
                                                f: F)
                                                -> A
@@ -239,6 +241,7 @@ impl PpSourceMode {
                                                                  arenas,
                                                                  id,
                                                                  output_filenames,
+                                                                 gcx_ptr,
                                                                  |tcx, _, _, _| {
                     let empty_tables = ty::TypeckTables::empty(None);
                     let annotation = TypedAnnotation {
@@ -916,6 +919,7 @@ pub fn print_after_hir_lowering<'tcx, 'a: 'tcx>(sess: &'a Session,
                                                 arenas: &'tcx AllArenas<'tcx>,
                                                 output_filenames: &OutputFilenames,
                                                 opt_uii: Option<UserIdentifiedItem>,
+                                                gcx_ptr: Arc<Mutex<usize>>,
                                                 ofile: Option<&Path>) {
     if ppm.needs_analysis() {
         print_with_analysis(sess,
@@ -928,6 +932,7 @@ pub fn print_after_hir_lowering<'tcx, 'a: 'tcx>(sess: &'a Session,
                             output_filenames,
                             ppm,
                             opt_uii,
+                            gcx_ptr,
                             ofile);
         return;
     }
@@ -964,6 +969,7 @@ pub fn print_after_hir_lowering<'tcx, 'a: 'tcx>(sess: &'a Session,
                                            resolutions,
                                            arenas,
                                            output_filenames,
+                                           gcx_ptr,
                                            crate_name,
                                            move |annotation, krate| {
                     debug!("pretty printing source code {:?}", s);
@@ -988,6 +994,7 @@ pub fn print_after_hir_lowering<'tcx, 'a: 'tcx>(sess: &'a Session,
                                            resolutions,
                                            arenas,
                                            output_filenames,
+                                           gcx_ptr,
                                            crate_name,
                                            move |_annotation, krate| {
                     debug!("pretty printing source code {:?}", s);
@@ -1004,6 +1011,7 @@ pub fn print_after_hir_lowering<'tcx, 'a: 'tcx>(sess: &'a Session,
                                            resolutions,
                                            arenas,
                                            output_filenames,
+                                           gcx_ptr,
                                            crate_name,
                                            move |annotation, _| {
                     debug!("pretty printing source code {:?}", s);
@@ -1038,6 +1046,7 @@ pub fn print_after_hir_lowering<'tcx, 'a: 'tcx>(sess: &'a Session,
                                            resolutions,
                                            arenas,
                                            output_filenames,
+                                           gcx_ptr,
                                            crate_name,
                                            move |_annotation, _krate| {
                     debug!("pretty printing source code {:?}", s);
@@ -1070,6 +1079,7 @@ fn print_with_analysis<'tcx, 'a: 'tcx>(sess: &'a Session,
                                        output_filenames: &OutputFilenames,
                                        ppm: PpMode,
                                        uii: Option<UserIdentifiedItem>,
+                                       gcx_ptr: Arc<Mutex<usize>>,
                                        ofile: Option<&Path>) {
     let nodeid = if let Some(uii) = uii {
         debug!("pretty printing for {:?}", uii);
@@ -1092,6 +1102,7 @@ fn print_with_analysis<'tcx, 'a: 'tcx>(sess: &'a Session,
                                                      arenas,
                                                      crate_name,
                                                      output_filenames,
+                                                     gcx_ptr,
                                                      |tcx, _, _, _| {
         match ppm {
             PpmMir | PpmMirCFG => {

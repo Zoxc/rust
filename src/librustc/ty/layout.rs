@@ -888,17 +888,12 @@ fn layout_raw<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
     let (param_env, ty) = query.into_parts();
 
     let rec_limit = tcx.sess.recursion_limit.get();
-    let depth = tcx.layout_depth.get();
+    let depth = ty::tls::with_context(|context| context.query.layout_depth);
     if depth > rec_limit {
         tcx.sess.fatal(
             &format!("overflow representing the type `{}`", ty));
     }
-
-    tcx.layout_depth.set(depth+1);
-    let layout = LayoutDetails::compute_uncached(tcx, param_env, ty);
-    tcx.layout_depth.set(depth);
-
-    layout
+    LayoutDetails::compute_uncached(tcx, param_env, ty)
 }
 
 pub fn provide(providers: &mut ty::maps::Providers) {
