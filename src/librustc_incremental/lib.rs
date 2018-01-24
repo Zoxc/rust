@@ -21,6 +21,8 @@
 #![feature(inclusive_range_syntax)]
 #![feature(specialization)]
 
+#![recursion_limit="256"]
+
 extern crate graphviz;
 #[macro_use] extern crate rustc;
 extern crate rustc_data_structures;
