@@ -16,7 +16,7 @@ use symbol::keywords;
 use syntax_pos::{BytePos, Span, DUMMY_SP};
 use tokenstream;
 
-use std::rc::Rc;
+use rustc_data_structures::sync::Lrc;
 
 /// Contains the sub-token-trees of a "delimited" token tree, such as the contents of `(`. Note
 /// that the delimiter itself might be `NoDelim`.
@@ -85,9 +85,9 @@ pub enum KleeneOp {
 #[derive(Debug, Clone, PartialEq, Eq, RustcEncodable, RustcDecodable, Hash)]
 pub enum TokenTree {
     Token(Span, token::Token),
-    Delimited(Span, Rc<Delimited>),
+    Delimited(Span, Lrc<Delimited>),
     /// A kleene-style repetition sequence
-    Sequence(Span, Rc<SequenceRepetition>),
+    Sequence(Span, Lrc<SequenceRepetition>),
     /// E.g. `$var`
     MetaVar(Span, ast::Ident),
     /// E.g. `$var:expr`. This is only used in the left hand side of MBE macros.
@@ -267,7 +267,7 @@ where
                 let name_captures = macro_parser::count_names(&sequence);
                 TokenTree::Sequence(
                     span,
-                    Rc::new(SequenceRepetition {
+                    Lrc::new(SequenceRepetition {
                         tts: sequence,
                         separator,
                         op,
@@ -313,7 +313,7 @@ where
         // descend into the delimited set and further parse it.
         tokenstream::TokenTree::Delimited(span, delimited) => TokenTree::Delimited(
             span,
-            Rc::new(Delimited {
+            Lrc::new(Delimited {
                 delim: delimited.delim,
                 tts: parse(delimited.tts.into(), expect_matchers, sess),
             }),

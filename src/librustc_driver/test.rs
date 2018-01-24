@@ -29,6 +29,7 @@ use rustc::hir::map as hir_map;
 use rustc::session::{self, config};
 use rustc::session::config::{OutputFilenames, OutputTypes};
 use std::rc::Rc;
+use rustc_data_structures::sync::{Send, Lrc};
 use syntax::ast;
 use syntax::abi::Abi;
 use syntax::codemap::{CodeMap, FilePathMapping, FileName};
@@ -105,7 +106,7 @@ fn test_env<F>(source_string: &str,
     let sess = session::build_session_(options,
                                        None,
                                        diagnostic_handler,
-                                       Rc::new(CodeMap::new(FilePathMapping::empty())));
+                                       Lrc::new(CodeMap::new(FilePathMapping::empty())));
     let cstore = Rc::new(CStore::new(::get_trans(&sess).metadata_loader()));
     rustc_lint::register_builtins(&mut sess.lint_store.borrow_mut(), Some(&sess));
     let input = config::Input::Str {

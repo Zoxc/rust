@@ -18,6 +18,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;
 use std::rc::Rc;
 use std::str;
+use rustc_data_structures::sync::Lrc;
 use std::sync::{Arc, Mutex};
 
 use testing;
@@ -74,7 +75,7 @@ pub fn run(input_path: &Path,
         ..config::basic_options().clone()
     };
 
-    let codemap = Rc::new(CodeMap::new(sessopts.file_path_mapping()));
+    let codemap = Lrc::new(CodeMap::new(sessopts.file_path_mapping()));
     let handler =
         errors::Handler::with_tty_emitter(ColorConfig::Auto,
                                           true, false,
@@ -122,7 +123,7 @@ pub fn run(input_path: &Path,
                                        linker);
 
     {
-        let map = hir::map::map_crate(&sess, &*cstore, &mut hir_forest, &defs);
+        let map = hir::map::map_crate(&sess, &cstore, &mut hir_forest, &defs);
         let krate = map.krate();
         let mut hir_collector = HirCollector {
             sess: &sess,
@@ -233,7 +234,7 @@ fn run_test(test: &str, cratename: &str, filename: &FileName, line: usize,
         }
     }
     let data = Arc::new(Mutex::new(Vec::new()));
-    let codemap = Rc::new(CodeMap::new_doctest(
+    let codemap = Lrc::new(CodeMap::new_doctest(
         sessopts.file_path_mapping(), filename.clone(), line as isize - line_offset as isize
     ));
     let emitter = errors::emitter::EmitterWriter::new(box Sink(data.clone()),
@@ -466,7 +467,7 @@ pub struct Collector {
     opts: TestOptions,
     maybe_sysroot: Option<PathBuf>,
     position: Span,
-    codemap: Option<Rc<CodeMap>>,
+    codemap: Option<Lrc<CodeMap>>,
     filename: Option<PathBuf>,
     // to be removed when hoedown will be removed as well
     pub render_type: RenderType,
@@ -476,7 +477,7 @@ pub struct Collector {
 impl Collector {
     pub fn new(cratename: String, cfgs: Vec<String>, libs: SearchPaths, externs: Externs,
                use_headers: bool, opts: TestOptions, maybe_sysroot: Option<PathBuf>,
-               codemap: Option<Rc<CodeMap>>, filename: Option<PathBuf>,
+               codemap: Option<Lrc<CodeMap>>, filename: Option<PathBuf>,
                render_type: RenderType, linker: Option<PathBuf>) -> Collector {
         Collector {
             tests: Vec::new(),

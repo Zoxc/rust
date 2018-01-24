@@ -13,10 +13,9 @@ use rustc_data_structures::stable_hasher::{HashStable, StableHasher,
                                            StableHashingContextProvider};
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::indexed_vec::{Idx, IndexVec};
-use std::cell::{Ref, RefCell};
+use rustc_data_structures::sync::{Lrc, RwLock, ReadGuard, Lock};
 use std::env;
 use std::hash::Hash;
-use std::rc::Rc;
 use ty::TyCtxt;
 use util::common::{ProfileQueriesMsg, profq_msg};
 
@@ -32,13 +31,13 @@ use super::prev::PreviousDepGraph;
 
 #[derive(Clone)]
 pub struct DepGraph {
-    data: Option<Rc<DepGraphData>>,
+    data: Option<Lrc<DepGraphData>>,
 
     // A vector mapping depnodes from the current graph to their associated
     // result value fingerprints. Do not rely on the length of this vector
     // being the same as the number of nodes in the graph. The vector can
     // contain an arbitrary number of zero-entries at the end.
-    fingerprints: Rc<RefCell<IndexVec<DepNodeIndex, Fingerprint>>>
+    fingerprints: Lrc<Lock<IndexVec<DepNodeIndex, Fingerprint>>>
 }
 
 
@@ -68,27 +67,27 @@ struct DepGraphData {
     /// tracking. The `current` field is the dependency graph of only the
     /// current compilation session: We don't merge the previous dep-graph into
     /// current one anymore.
-    current: RefCell<CurrentDepGraph>,
+    current: Lock<CurrentDepGraph>,
 
     /// The dep-graph from the previous compilation session. It contains all
     /// nodes and edges as well as all fingerprints of nodes that have them.
     previous: PreviousDepGraph,
 
-    colors: RefCell<FxHashMap<DepNode, DepNodeColor>>,
+    colors: Lock<FxHashMap<DepNode, DepNodeColor>>,
 
     /// When we load, there may be `.o` files, cached mir, or other such
     /// things available to us. If we find that they are not dirty, we
     /// load the path to the file storing those work-products here into
     /// this map. We can later look for and extract that data.
-    previous_work_products: RefCell<FxHashMap<WorkProductId, WorkProduct>>,
+    previous_work_products: RwLock<FxHashMap<WorkProductId, WorkProduct>>,
 
     /// Work-products that we generate in this run.
-    work_products: RefCell<FxHashMap<WorkProductId, WorkProduct>>,
+    work_products: RwLock<FxHashMap<WorkProductId, WorkProduct>>,
 
-    dep_node_debug: RefCell<FxHashMap<DepNode, String>>,
+    dep_node_debug: Lock<FxHashMap<DepNode, String>>,
 
     // Used for testing, only populated when -Zquery-dep-graph is specified.
-    loaded_from_cache: RefCell<FxHashMap<DepNodeIndex, bool>>,
+    loaded_from_cache: Lock<FxHashMap<DepNodeIndex, bool>>,
 }
 
 impl DepGraph {
@@ -100,23 +99,23 @@ impl DepGraph {
         let fingerprints = IndexVec::from_elem_n(Fingerprint::ZERO,
                                                  (prev_graph.node_count() * 115) / 100);
         DepGraph {
-            data: Some(Rc::new(DepGraphData {
-                previous_work_products: RefCell::new(FxHashMap()),
-                work_products: RefCell::new(FxHashMap()),
-                dep_node_debug: RefCell::new(FxHashMap()),
-                current: RefCell::new(CurrentDepGraph::new()),
+            data: Some(Lrc::new(DepGraphData {
+                previous_work_products: RwLock::new(FxHashMap()),
+                work_products: RwLock::new(FxHashMap()),
+                dep_node_debug: Lock::new(FxHashMap()),
+                current: Lock::new(CurrentDepGraph::new()),
                 previous: prev_graph,
-                colors: RefCell::new(FxHashMap()),
-                loaded_from_cache: RefCell::new(FxHashMap()),
+                colors: Lock::new(FxHashMap()),
+                loaded_from_cache: Lock::new(FxHashMap()),
             })),
-            fingerprints: Rc::new(RefCell::new(fingerprints)),
+            fingerprints: Lrc::new(Lock::new(fingerprints)),
         }
     }
 
     pub fn new_disabled() -> DepGraph {
         DepGraph {
             data: None,
-            fingerprints: Rc::new(RefCell::new(IndexVec::new())),
+            fingerprints: Lrc::new(Lock::new(IndexVec::new())),
         }
     }
 
@@ -206,8 +205,8 @@ impl DepGraph {
                                     cx: C,
                                     arg: A,
                                     task: fn(C, A) -> R,
-                                    push: fn(&RefCell<CurrentDepGraph>, DepNode),
-                                    pop: fn(&RefCell<CurrentDepGraph>, DepNode) -> DepNodeIndex)
+                                    push: fn(&Lock<CurrentDepGraph>, DepNode),
+                                    pop: fn(&Lock<CurrentDepGraph>, DepNode) -> DepNodeIndex)
                                     -> (R, DepNodeIndex)
         where C: DepGraphSafe + StableHashingContextProvider<ContextType=HCX>,
               R: HashStable<HCX>,
@@ -418,13 +417,13 @@ impl DepGraph {
 
     /// Access the map of work-products created during this run. Only
     /// used during saving of the dep-graph.
-    pub fn work_products(&self) -> Ref<FxHashMap<WorkProductId, WorkProduct>> {
+    pub fn work_products(&self) -> ReadGuard<FxHashMap<WorkProductId, WorkProduct>> {
         self.data.as_ref().unwrap().work_products.borrow()
     }
 
     /// Access the map of work-products created during the cached run. Only
     /// used during saving of the dep-graph.
-    pub fn previous_work_products(&self) -> Ref<FxHashMap<WorkProductId, WorkProduct>> {
+    pub fn previous_work_products(&self) -> ReadGuard<FxHashMap<WorkProductId, WorkProduct>> {
         self.data.as_ref().unwrap().previous_work_products.borrow()
     }
 

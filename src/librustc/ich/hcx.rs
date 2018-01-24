@@ -20,7 +20,6 @@ use session::Session;
 use std::cmp::Ord;
 use std::hash as std_hash;
 use std::collections::HashMap;
-use std::cell::RefCell;
 
 use syntax::ast;
 
@@ -348,6 +347,8 @@ impl<'gcx> HashStable<StableHashingContext<'gcx>> for Span {
             // Since the same expansion context is usually referenced many
             // times, we cache a stable hash of it and hash that instead of
             // recursing every time.
+            use std::cell::RefCell;
+            // FIXME: Move this to Session or a syntax_pos global
             thread_local! {
                 static CACHE: RefCell<FxHashMap<hygiene::Mark, u64>> =
                     RefCell::new(FxHashMap());
