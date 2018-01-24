@@ -85,11 +85,12 @@ pub fn run(input_path: &Path,
         sessopts, Some(input_path.to_owned()), handler, codemap.clone(),
     );
     let trans = rustc_driver::get_trans(&sess);
-    let cstore = Rc::new(CStore::new(trans.metadata_loader()));
+    let cstore = CStore::new(trans.metadata_loader());
     rustc_lint::register_builtins(&mut sess.lint_store.borrow_mut(), Some(&sess));
     sess.parse_sess.config =
         config::build_configuration(&sess, config::parse_cfgspecs(cfgs.clone()));
 
+    driver::spawn_thread_pool(&sess, |_| {
     let krate = panictry!(driver::phase_1_parse_input(&driver::CompileController::basic(),
                                                       &sess,
                                                       &input));
@@ -141,6 +142,7 @@ pub fn run(input_path: &Path,
                        collector.tests.into_iter().collect(),
                        testing::Options::new().display_output(display_warnings));
     0
+    })
 }
 
 // Look for #![doc(test(no_crate_inject))], used by crates in the std facade

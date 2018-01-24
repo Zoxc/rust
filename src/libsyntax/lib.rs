@@ -100,7 +100,7 @@ pub fn with_globals<F, R>(t: &Globals, f: F) -> R
     })
 }
 
-scoped_thread_local!(static GLOBALS: Globals);
+scoped_thread_local!(pub static GLOBALS: Globals);
 
 #[macro_use]
 pub mod diagnostics {
