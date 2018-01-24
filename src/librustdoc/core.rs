@@ -197,7 +197,7 @@ pub fn run_core(search_paths: SearchPaths,
         maybe_unused_extern_crates: resolver.maybe_unused_extern_crates.clone(),
     };
     let analysis = ty::CrateAnalysis {
-        access_levels: Rc::new(AccessLevels::default()),
+        access_levels: Lrc::new(AccessLevels::default()),
         name: name.to_string(),
         glob_map: if resolver.make_glob_map { Some(resolver.glob_map.clone()) } else { None },
     };
