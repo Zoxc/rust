@@ -34,6 +34,7 @@ use rustc_data_structures::stable_hasher::{HashStable, StableHashingContextProvi
                                            ToStableHashKey};
 use rustc_data_structures::accumulate_vec::AccumulateVec;
 use rustc_data_structures::fx::{FxHashSet, FxHashMap};
+use rustc_data_structures::sync::{Sync};
 
 pub fn compute_ignored_attr_names() -> FxHashSet<Symbol> {
     debug_assert!(ich::IGNORED_ATTRIBUTES.len() > 0);
@@ -48,7 +49,7 @@ pub fn compute_ignored_attr_names() -> FxHashSet<Symbol> {
 pub struct StableHashingContext<'gcx> {
     sess: &'gcx Session,
     definitions: &'gcx Definitions,
-    cstore: &'gcx CrateStore,
+    cstore: &'gcx (CrateStore + Sync),
     body_resolver: BodyResolver<'gcx>,
     hash_spans: bool,
     hash_bodies: bool,
@@ -87,7 +88,7 @@ impl<'gcx> StableHashingContext<'gcx> {
     pub fn new(sess: &'gcx Session,
                krate: &'gcx hir::Crate,
                definitions: &'gcx Definitions,
-               cstore: &'gcx CrateStore)
+               cstore: &'gcx (CrateStore + Sync))
                -> Self {
         let hash_spans_initial = !sess.opts.debugging_opts.incremental_ignore_spans;
 

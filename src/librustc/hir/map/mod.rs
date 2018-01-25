@@ -10,7 +10,7 @@
 
 pub use self::Node::*;
 use self::MapEntry::*;
-use self::collector::NodeCollector;
+use self::collector::SharedNodeCollector;
 pub use self::def_collector::{DefCollector, MacroInvocationData};
 pub use self::definitions::{Definitions, DefKey, DefPath, DefPathData,
                             DisambiguatedDefPathData, DefPathHash};
@@ -32,7 +32,7 @@ use util::nodemap::{DefIdMap, FxHashMap};
 use arena::TypedArena;
 use std::io;
 
-use rustc_data_structures::sync::Lock;
+use rustc_data_structures::sync::{Sync, Lock};
 
 pub mod blocks;
 mod collector;
@@ -1049,24 +1049,27 @@ impl Named for TraitItem { fn name(&self) -> Name { self.name } }
 impl Named for ImplItem { fn name(&self) -> Name { self.name } }
 
 pub fn map_crate<'hir>(sess: &::session::Session,
-                       cstore: &::middle::cstore::CrateStore,
+                       cstore: &(::middle::cstore::CrateStore + Sync),
                        forest: &'hir mut Forest,
                        definitions: &'hir Definitions)
                        -> Map<'hir> {
     let (map, crate_hash) = {
         let hcx = ::ich::StableHashingContext::new(sess, &forest.krate, definitions, cstore);
 
-        let mut collector = NodeCollector::root(&forest.krate,
-                                                &forest.dep_graph,
-                                                &definitions,
-                                                hcx);
-        intravisit::walk_crate(&mut collector, &forest.krate);
+        let mut collector = SharedNodeCollector::root(&forest.krate,
+                                                      &forest.dep_graph,
+                                                      &definitions,
+                                                      hcx);
+        intravisit::walk_crate(&mut collector.to_collector(), &forest.krate);
 
         let crate_disambiguator = sess.local_crate_disambiguator();
         let cmdline_args = sess.opts.dep_tracking_hash();
+use util::common::time;
+        time(sess.time_passes(), "finalize_and_compute_crate_hash", || {
         collector.finalize_and_compute_crate_hash(crate_disambiguator,
                                                   cstore,
                                                   cmdline_args)
+        })
     };
 
     if log_enabled!(::log::Level::Debug) {

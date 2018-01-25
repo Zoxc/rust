@@ -43,10 +43,10 @@ unsafe impl<T> Sync for ThreadLocal<T> {}
 
 impl<T> ThreadLocal<T> {
     pub fn new<F>(f: F) -> ThreadLocal<T>
-        where F: Fn() -> T,
+        where F: Fn(usize) -> T,
     {
         let n = Registry::current_num_threads();
-        ThreadLocal((0..(1 + n)).map(|_| CacheAligned(UnsafeCell::new(f()))).collect())
+        ThreadLocal((0..(1 + n)).map(|i| CacheAligned(UnsafeCell::new(f(i)))).collect())
     }
 
     pub fn into_inner(self) -> Vec<T> {

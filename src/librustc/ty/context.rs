@@ -85,7 +85,7 @@ pub struct AllArenas<'tcx> {
 impl<'tcx> AllArenas<'tcx> {
     pub fn new() -> Self {
         AllArenas {
-            global: ThreadLocal::new(|| GlobalArenas::new()),
+            global: ThreadLocal::new(|_| GlobalArenas::new()),
             interner: DroplessArena::new(),
         }
     }

@@ -18,16 +18,37 @@ use session::CrateDisambiguator;
 use std::iter::repeat;
 use syntax::ast::{NodeId, CRATE_NODE_ID};
 use syntax_pos::Span;
+use util::common::ThreadLocal;
+use std::ops::Deref;
 
 use ich::StableHashingContext;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StableHasherResult};
+use rustc_data_structures::sync::join;
 
-/// A Visitor that walks over the HIR and collects Nodes into a HIR map
-pub(super) struct NodeCollector<'a, 'hir> {
+pub(super) struct SharedNodeCollector<'a, 'hir: 'a> {
     /// The crate
     krate: &'hir Crate,
     /// The node map
-    map: Vec<MapEntry<'hir>>,
+    map: ThreadLocal<Vec<MapEntry<'hir>>>,
+
+    dep_graph: &'a DepGraph,
+    definitions: &'a definitions::Definitions,
+
+    hcx: StableHashingContext<'a>,
+
+    root_mod_sig_dep_index: DepNodeIndex,
+    root_mod_full_dep_index: DepNodeIndex,
+
+    // We are collecting DepNode::HirBody hashes here so we can compute the
+    // crate hash from then later on.
+    hir_body_nodes: ThreadLocal<Vec<(DefPathHash, DepNodeIndex)>>,
+}
+
+/// A Visitor that walks over the HIR and collects Nodes into a HIR map
+#[derive(Clone)]
+pub(super) struct NodeCollector<'a, 'hir: 'a> {
+    shared: &'a SharedNodeCollector<'a, 'hir>,
+
     /// The parent of this node
     parent_node: NodeId,
 
@@ -37,23 +58,22 @@ pub(super) struct NodeCollector<'a, 'hir> {
     current_signature_dep_index: DepNodeIndex,
     current_full_dep_index: DepNodeIndex,
     currently_in_body: bool,
-
-    dep_graph: &'a DepGraph,
-    definitions: &'a definitions::Definitions,
-
-    hcx: StableHashingContext<'a>,
-
-    // We are collecting DepNode::HirBody hashes here so we can compute the
-    // crate hash from then later on.
-    hir_body_nodes: Vec<(DefPathHash, DepNodeIndex)>,
 }
 
-impl<'a, 'hir> NodeCollector<'a, 'hir> {
+impl<'a, 'hir> Deref for NodeCollector<'a, 'hir> {
+    type Target = SharedNodeCollector<'a, 'hir>;
+
+    fn deref(&self) -> &SharedNodeCollector<'a, 'hir> {
+        self.shared
+    }
+}
+
+impl<'a, 'hir> SharedNodeCollector<'a, 'hir> {
     pub(super) fn root(krate: &'hir Crate,
                        dep_graph: &'a DepGraph,
                        definitions: &'a definitions::Definitions,
                        hcx: StableHashingContext<'a>)
-                -> NodeCollector<'a, 'hir> {
+                -> Self {
         let root_mod_def_path_hash = definitions.def_path_hash(CRATE_DEF_INDEX);
 
         // Allocate DepNodes for the root module
@@ -97,24 +117,36 @@ impl<'a, 'hir> NodeCollector<'a, 'hir> {
             );
         }
 
-        let hir_body_nodes = vec![(root_mod_def_path_hash, root_mod_full_dep_index)];
+        let hir_body_nodes = ThreadLocal::new(|i| if i == 0 {
+            vec![(root_mod_def_path_hash, root_mod_full_dep_index)]
+        } else {
+            vec![]
+        });
 
-        let mut collector = NodeCollector {
+        let collector = SharedNodeCollector {
             krate,
-            map: vec![],
-            parent_node: CRATE_NODE_ID,
-            current_signature_dep_index: root_mod_sig_dep_index,
-            current_full_dep_index: root_mod_full_dep_index,
-            current_dep_node_owner: CRATE_DEF_INDEX,
-            currently_in_body: false,
+            map: ThreadLocal::new(|_| vec![]),
+            root_mod_sig_dep_index,
+            root_mod_full_dep_index,
             dep_graph,
             definitions,
             hcx,
             hir_body_nodes,
         };
-        collector.insert_entry(CRATE_NODE_ID, RootCrate(root_mod_sig_dep_index));
+        collector.to_collector().insert_entry(CRATE_NODE_ID, RootCrate(root_mod_sig_dep_index));
 
         collector
+    }
+
+    pub(super) fn to_collector(&'a self) -> NodeCollector<'a, 'hir> {
+        NodeCollector {
+            shared: self,
+            parent_node: CRATE_NODE_ID,
+            current_signature_dep_index: self.root_mod_sig_dep_index,
+            current_full_dep_index: self.root_mod_full_dep_index,
+            current_dep_node_owner: CRATE_DEF_INDEX,
+            currently_in_body: false,
+        }
     }
 
     pub(super) fn finalize_and_compute_crate_hash(self,
@@ -122,11 +154,12 @@ impl<'a, 'hir> NodeCollector<'a, 'hir> {
                                                   cstore: &CrateStore,
                                                   commandline_args_hash: u64)
                                                   -> (Vec<MapEntry<'hir>>, Svh) {
-        let mut node_hashes: Vec<_> = self
-            .hir_body_nodes
+        let dep_graph = self.dep_graph;
+        let mut node_hashes: Vec<_> = self.hir_body_nodes
+            .collect()
             .iter()
             .map(|&(def_path_hash, dep_node_index)| {
-                (def_path_hash, self.dep_graph.fingerprint_of(dep_node_index))
+                (def_path_hash, dep_graph.fingerprint_of(dep_node_index))
             })
             .collect();
 
@@ -155,16 +188,39 @@ impl<'a, 'hir> NodeCollector<'a, 'hir> {
         let svh = Svh::new(self.dep_graph
                                .fingerprint_of(crate_dep_node_index)
                                .to_smaller_hash());
-        (self.map, svh)
-    }
 
+        // Combine the separate thread local maps into one
+        let mut maps = self.map.into_inner();
+        // Take the last map and extend it to fit all entries
+        let mut map = maps.pop().unwrap();
+        let max_len = maps.iter().map(|m| m.len()).max().unwrap_or(0);
+        if max_len > map.len() {
+            let count = max_len - map.len();
+            map.extend(repeat(NotPresent).take(count));
+        }
+        // Write the rest of the maps into it
+        for m in maps {
+            for (i, e) in m.into_iter().enumerate() {
+                match e {
+                    NotPresent => {},
+                    e => map[i] = e,
+                }
+            }
+        }
+
+        (map, svh)
+    }
+}
+
+impl<'a, 'hir> NodeCollector<'a, 'hir> {
     fn insert_entry(&mut self, id: NodeId, entry: MapEntry<'hir>) {
         debug!("hir_map: {:?} => {:?}", id, entry);
-        let len = self.map.len();
+        let map = self.map.current();
+        let len = map.len();
         if id.as_usize() >= len {
-            self.map.extend(repeat(NotPresent).take(id.as_usize() - len + 1));
+            map.extend(repeat(NotPresent).take(id.as_usize() - len + 1));
         }
-        self.map[id.as_usize()] = entry;
+        map[id.as_usize()] = entry;
     }
 
     fn insert(&mut self, id: NodeId, node: Node<'hir>) {
@@ -255,7 +311,7 @@ impl<'a, 'hir> NodeCollector<'a, 'hir> {
             HirItemLike { item_like, hash_bodies: true },
         ).1;
 
-        self.hir_body_nodes.push((def_path_hash, self.current_full_dep_index));
+        self.hir_body_nodes.current().push((def_path_hash, self.current_full_dep_index));
 
         self.current_dep_node_owner = dep_node_owner;
         self.currently_in_body = false;
@@ -276,23 +332,34 @@ impl<'a, 'hir> Visitor<'hir> for NodeCollector<'a, 'hir> {
         panic!("visit_nested_xxx must be manually implemented in this visitor")
     }
 
+    fn visit_mod(&mut self, module: &'hir Mod, _: Span, _: NodeId) {
+        let (l, r) = module.item_ids.split_at(module.item_ids.len() / 2);
+        let visit_ids = |ids: &[ItemId]| {
+            let mut visitor = self.clone();
+            ids.iter().for_each(|&item_id| {
+                visitor.visit_nested_item(item_id);
+            })
+        };
+        join(|| visit_ids(l), || visit_ids(r));
+    }
+
     fn visit_nested_item(&mut self, item: ItemId) {
         debug!("visit_nested_item: {:?}", item);
-        self.visit_item(self.krate.item(item.id));
+        self.visit_item(self.shared.krate.item(item.id));
     }
 
     fn visit_nested_trait_item(&mut self, item_id: TraitItemId) {
-        self.visit_trait_item(self.krate.trait_item(item_id));
+        self.visit_trait_item(self.shared.krate.trait_item(item_id));
     }
 
     fn visit_nested_impl_item(&mut self, item_id: ImplItemId) {
-        self.visit_impl_item(self.krate.impl_item(item_id));
+        self.visit_impl_item(self.shared.krate.impl_item(item_id));
     }
 
     fn visit_nested_body(&mut self, id: BodyId) {
         let prev_in_body = self.currently_in_body;
         self.currently_in_body = true;
-        self.visit_body(self.krate.body(id));
+        self.visit_body(self.shared.krate.body(id));
         self.currently_in_body = prev_in_body;
     }
 
