@@ -800,7 +800,7 @@ impl Session {
     /// Returns the number of query threads that should be used for this
     /// compilation
     pub fn query_threads(&self) -> usize {
-        self.opts.debugging_opts.query_threads.unwrap_or(1)
+        8/*self.opts.debugging_opts.query_threads.unwrap_or(1)*/
     }
 
     /// Returns the number of codegen threads that should be used for this
