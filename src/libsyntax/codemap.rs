@@ -24,7 +24,7 @@ pub use self::ExpnFormat::*;
 
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::stable_hasher::StableHasher;
-use std::cell::{RefCell, Ref};
+use rustc_data_structures::sync::{Lrc, Lock, LockGuard};
 use std::cmp;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
@@ -125,12 +125,12 @@ impl StableFilemapId {
 //
 
 pub struct CodeMap {
-    pub(super) files: RefCell<Vec<Rc<FileMap>>>,
+    pub(super) files: Lock<Vec<Lrc<FileMap>>>,
     file_loader: Box<FileLoader + Sync + Send>,
     // This is used to apply the file path remapping as specified via
     // -Zremap-path-prefix to all FileMaps allocated within this CodeMap.
     path_mapping: FilePathMapping,
-    stable_id_to_filemap: RefCell<FxHashMap<StableFilemapId, Rc<FileMap>>>,
+    stable_id_to_filemap: Lock<FxHashMap<StableFilemapId, Lrc<FileMap>>>,
     /// In case we are in a doctest, replace all file names with the PathBuf,
     /// and add the given offsets to the line info
     doctest_offset: Option<(FileName, isize)>,
@@ -139,10 +139,10 @@ pub struct CodeMap {
 impl CodeMap {
     pub fn new(path_mapping: FilePathMapping) -> CodeMap {
         CodeMap {
-            files: RefCell::new(Vec::new()),
+            files: Lock::new(Vec::new()),
             file_loader: Box::new(RealFileLoader),
             path_mapping,
-            stable_id_to_filemap: RefCell::new(FxHashMap()),
+            stable_id_to_filemap: Lock::new(FxHashMap()),
             doctest_offset: None,
         }
     }
@@ -160,10 +160,10 @@ impl CodeMap {
                             path_mapping: FilePathMapping)
                             -> CodeMap {
         CodeMap {
-            files: RefCell::new(Vec::new()),
-            file_loader,
+            files: Lock::new(Vec::new()),
+            file_loader: file_loader,
             path_mapping,
-            stable_id_to_filemap: RefCell::new(FxHashMap()),
+            stable_id_to_filemap: Lock::new(FxHashMap()),
             doctest_offset: None,
         }
     }
@@ -186,7 +186,7 @@ impl CodeMap {
         Ok(self.new_filemap(filename, src))
     }
 
-    pub fn files(&self) -> Ref<Vec<Rc<FileMap>>> {
+    pub fn files(&self) -> LockGuard<Vec<Lrc<FileMap>>> {
         self.files.borrow()
     }
 
@@ -296,12 +296,12 @@ impl CodeMap {
             crate_of_origin,
             src: None,
             src_hash,
-            external_src: RefCell::new(ExternalSource::AbsentOk),
+            external_src: Lock::new(ExternalSource::AbsentOk),
             start_pos,
             end_pos,
-            lines: RefCell::new(file_local_lines),
-            multibyte_chars: RefCell::new(file_local_multibyte_chars),
-            non_narrow_chars: RefCell::new(file_local_non_narrow_chars),
+            lines: Lock::new(file_local_lines),
+            multibyte_chars: Lock::new(file_local_multibyte_chars),
+            non_narrow_chars: Lock::new(file_local_non_narrow_chars),
             name_hash,
         });
 

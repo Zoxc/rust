@@ -10,6 +10,7 @@
 
 //! The main parser interface
 
+use rustc_data_structures::sync::{Lrc, Lock};
 use ast::{self, CrateConfig};
 use codemap::{CodeMap, FilePathMapping};
 use syntax_pos::{self, Span, FileMap, NO_EXPANSION, FileName};
@@ -21,7 +22,6 @@ use str::char_at;
 use symbol::Symbol;
 use tokenstream::{TokenStream, TokenTree};
 
-use std::cell::RefCell;
 use std::collections::HashSet;
 use std::iter;
 use std::path::{Path, PathBuf};
@@ -45,12 +45,12 @@ pub struct ParseSess {
     pub span_diagnostic: Handler,
     pub unstable_features: UnstableFeatures,
     pub config: CrateConfig,
-    pub missing_fragment_specifiers: RefCell<HashSet<Span>>,
+    pub missing_fragment_specifiers: Lock<HashSet<Span>>,
     // Spans where a `mod foo;` statement was included in a non-mod.rs file.
     // These are used to issue errors if the non_modrs_mods feature is not enabled.
-    pub non_modrs_mods: RefCell<Vec<(ast::Ident, Span)>>,
+    pub non_modrs_mods: Lock<Vec<(ast::Ident, Span)>>,
     /// Used to determine and report recursive mod inclusions
-    included_mod_stack: RefCell<Vec<PathBuf>>,
+    included_mod_stack: Lock<Vec<PathBuf>>,
     code_map: Lrc<CodeMap>,
 }
 
@@ -69,10 +69,10 @@ impl ParseSess {
             span_diagnostic: handler,
             unstable_features: UnstableFeatures::from_environment(),
             config: HashSet::new(),
-            missing_fragment_specifiers: RefCell::new(HashSet::new()),
-            included_mod_stack: RefCell::new(vec![]),
+            missing_fragment_specifiers: Lock::new(HashSet::new()),
+            included_mod_stack: Lock::new(vec![]),
             code_map,
-            non_modrs_mods: RefCell::new(vec![]),
+            non_modrs_mods: Lock::new(vec![]),
         }
     }
 

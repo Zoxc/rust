@@ -14,6 +14,7 @@ use cstore::{self, CStore, CrateSource, MetadataBlob};
 use locator::{self, CratePaths};
 use native_libs::relevant_lib;
 use schema::CrateRoot;
+use rustc_data_structures::sync::{Lrc, RwLock, Lock, LockCell};
 
 use rustc::hir::def_id::{CrateNum, CRATE_DEF_INDEX};
 use rustc::hir::svh::Svh;
@@ -29,7 +30,6 @@ use rustc::util::common::record_time;
 use rustc::util::nodemap::FxHashSet;
 use rustc::hir::map::Definitions;
 
-use std::cell::{RefCell, Cell};
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::{cmp, fs};
@@ -235,7 +235,7 @@ impl<'a> CrateLoader<'a> {
 
         let mut cmeta = cstore::CrateMetadata {
             name,
-            extern_crate: Cell::new(None),
+            extern_crate: LockCell::new(None),
             def_path_table: Lrc::new(def_path_table),
             exported_symbols,
             trait_impls,
@@ -244,11 +244,11 @@ impl<'a> CrateLoader<'a> {
             }),
             root: crate_root,
             blob: metadata,
-            cnum_map: RefCell::new(cnum_map),
+            cnum_map: Lock::new(cnum_map),
             cnum,
-            codemap_import_info: RefCell::new(vec![]),
-            attribute_cache: RefCell::new([Vec::new(), Vec::new()]),
-            dep_kind: Cell::new(dep_kind),
+            codemap_import_info: RwLock::new(vec![]),
+            attribute_cache: Lock::new([Vec::new(), Vec::new()]),
+            dep_kind: LockCell::new(dep_kind),
             source: cstore::CrateSource {
                 dylib,
                 rlib,

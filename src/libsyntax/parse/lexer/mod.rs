@@ -1743,10 +1743,10 @@ mod tests {
     use errors;
     use feature_gate::UnstableFeatures;
     use parse::token;
-    use std::cell::RefCell;
     use std::collections::HashSet;
     use std::io;
     use std::path::PathBuf;
+    use rustc_data_structures::sync::{Lrc, Lock};
     fn mk_sess(cm: Lrc<CodeMap>) -> ParseSess {
         let emitter = errors::emitter::EmitterWriter::new(Box::new(io::sink()),
                                                           Some(cm.clone()),
@@ -1756,10 +1756,10 @@ mod tests {
             span_diagnostic: errors::Handler::with_emitter(true, false, Box::new(emitter)),
             unstable_features: UnstableFeatures::from_environment(),
             config: CrateConfig::new(),
-            included_mod_stack: RefCell::new(Vec::new()),
+            included_mod_stack: Lock::new(Vec::new()),
             code_map: cm,
-            missing_fragment_specifiers: RefCell::new(HashSet::new()),
-            non_modrs_mods: RefCell::new(vec![]),
+            missing_fragment_specifiers: Lock::new(HashSet::new()),
+            non_modrs_mods: Lock::new(vec![]),
         }
     }
 

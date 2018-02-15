@@ -13,6 +13,7 @@
 use cstore::{self, CrateMetadata, MetadataBlob, NativeLibrary};
 use schema::*;
 
+use rustc_data_structures::sync::{Lrc, ReadGuard};
 use rustc::hir::map::{DefKey, DefPath, DefPathData, DefPathHash};
 use rustc::hir;
 use rustc::middle::cstore::{LinkagePreference, ExternConstBody,
@@ -29,7 +30,6 @@ use rustc::ty::codec::TyDecoder;
 use rustc::util::nodemap::DefIdSet;
 use rustc::mir::Mir;
 
-use std::cell::Ref;
 use std::collections::BTreeMap;
 use std::io;
 use std::mem;
@@ -1098,7 +1098,7 @@ impl<'a, 'tcx> CrateMetadata {
     /// for items inlined from other crates.
     pub fn imported_filemaps(&'a self,
                              local_codemap: &codemap::CodeMap)
-                             -> Ref<'a, Vec<cstore::ImportedFileMap>> {
+                             -> ReadGuard<'a, Vec<cstore::ImportedFileMap>> {
         {
             let filemaps = self.codemap_import_info.borrow();
             if !filemaps.is_empty() {

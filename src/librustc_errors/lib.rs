@@ -35,11 +35,11 @@ use self::Level::*;
 
 use emitter::{Emitter, EmitterWriter};
 
+use rustc_data_structures::sync::{Lrc, Lock, LockCell, Send, Sync};
 use rustc_data_structures::fx::FxHashSet;
 use rustc_data_structures::stable_hasher::StableHasher;
 
 use std::borrow::Cow;
-use std::cell::{RefCell, Cell};
 use std::mem;
 use std::{error, fmt};
 use std::sync::atomic::AtomicUsize;
@@ -262,20 +262,20 @@ pub struct Handler {
     pub flags: HandlerFlags,
 
     err_count: AtomicUsize,
-    emitter: RefCell<Box<Emitter>>,
-    continue_after_error: Cell<bool>,
-    delayed_span_bug: RefCell<Option<Diagnostic>>,
-    tracked_diagnostics: RefCell<Option<Vec<Diagnostic>>>,
+    emitter: Lock<Box<Emitter + Send>>,
+    continue_after_error: LockCell<bool>,
+    delayed_span_bug: Lock<Option<Diagnostic>>,
+    tracked_diagnostics: Lock<Option<Vec<Diagnostic>>>,
 
     // This set contains the `DiagnosticId` of all emitted diagnostics to avoid
     // emitting the same diagnostic with extended help (`--teach`) twice, which
     // would be uneccessary repetition.
-    tracked_diagnostic_codes: RefCell<FxHashSet<DiagnosticId>>,
+    tracked_diagnostic_codes: Lock<FxHashSet<DiagnosticId>>,
 
     // This set contains a hash of every diagnostic that has been emitted by
     // this handler. These hashes is used to avoid emitting the same error
     // twice.
-    emitted_diagnostics: RefCell<FxHashSet<u128>>,
+    emitted_diagnostics: Lock<FxHashSet<u128>>,
 }
 
 #[derive(Default)]
@@ -326,12 +326,12 @@ impl Handler {
         Handler {
             flags,
             err_count: AtomicUsize::new(0),
-            emitter: RefCell::new(e),
-            continue_after_error: Cell::new(true),
-            delayed_span_bug: RefCell::new(None),
-            tracked_diagnostics: RefCell::new(None),
-            tracked_diagnostic_codes: RefCell::new(FxHashSet()),
-            emitted_diagnostics: RefCell::new(FxHashSet()),
+            emitter: Lock::new(e),
+            continue_after_error: LockCell::new(true),
+            delayed_span_bug: Lock::new(None),
+            tracked_diagnostics: Lock::new(None),
+            tracked_diagnostic_codes: Lock::new(FxHashSet()),
+            emitted_diagnostics: Lock::new(FxHashSet()),
         }
     }
 
@@ -345,7 +345,7 @@ impl Handler {
     /// tools that want to reuse a `Parser` cleaning the previously emitted diagnostics as well as
     /// the overall count of emitted error diagnostics.
     pub fn reset_err_count(&self) {
-        self.emitted_diagnostics.replace(FxHashSet());
+        *self.emitted_diagnostics.borrow_mut() = FxHashSet();
         self.err_count.store(0, SeqCst);
     }
 
