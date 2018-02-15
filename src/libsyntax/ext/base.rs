@@ -643,16 +643,16 @@ impl Resolver for DummyResolver {
     fn is_whitelisted_legacy_custom_derive(&self, _name: Name) -> bool { false }
 
     fn visit_expansion(&mut self, _invoc: Mark, _expansion: &Expansion, _derives: &[Mark]) {}
-    fn add_builtin(&mut self, _ident: ast::Ident, _ext: Rc<SyntaxExtension>) {}
+    fn add_builtin(&mut self, _ident: ast::Ident, _ext: Lrc<SyntaxExtension>) {}
 
     fn resolve_imports(&mut self) {}
     fn find_legacy_attr_invoc(&mut self, _attrs: &mut Vec<Attribute>) -> Option<Attribute> { None }
     fn resolve_invoc(&mut self, _invoc: &mut Invocation, _scope: Mark, _force: bool)
-                     -> Result<Option<Rc<SyntaxExtension>>, Determinacy> {
+                     -> Result<Option<Lrc<SyntaxExtension>>, Determinacy> {
         Err(Determinacy::Determined)
     }
     fn resolve_macro(&mut self, _scope: Mark, _path: &ast::Path, _kind: MacroKind,
-                     _force: bool) -> Result<Rc<SyntaxExtension>, Determinacy> {
+                     _force: bool) -> Result<Lrc<SyntaxExtension>, Determinacy> {
         Err(Determinacy::Determined)
     }
     fn check_unused_macros(&self) {}
