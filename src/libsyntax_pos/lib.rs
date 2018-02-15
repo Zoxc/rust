@@ -36,6 +36,7 @@ use std::path::PathBuf;
 
 use rustc_data_structures::stable_hasher::StableHasher;
 
+#[macro_use]
 extern crate rustc_data_structures;
 
 use serialize::{Encodable, Decodable, Encoder, Decoder};
