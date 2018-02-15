@@ -51,7 +51,7 @@ extern crate rustc_apfloat;
 extern crate rustc_back;
 extern crate rustc_binaryen;
 extern crate rustc_const_math;
-extern crate rustc_data_structures;
+#[macro_use] extern crate rustc_data_structures;
 extern crate rustc_demangle;
 extern crate rustc_incremental;
 extern crate rustc_llvm as llvm;
@@ -74,6 +74,7 @@ pub use llvm_util::target_features;
 use std::any::Any;
 use std::path::PathBuf;
 use std::sync::mpsc;
+use rustc_data_structures::sync::{self, Lrc};
 
 use rustc::dep_graph::DepGraph;
 use rustc::hir::def_id::CrateNum;
@@ -202,7 +203,7 @@ impl TransCrate for LlvmTransCrate {
         target_features(sess)
     }
 
-    fn metadata_loader(&self) -> Box<MetadataLoader> {
+    fn metadata_loader(&self) -> Box<MetadataLoader + sync::Sync> {
         box metadata::LlvmMetadataLoader
     }
 

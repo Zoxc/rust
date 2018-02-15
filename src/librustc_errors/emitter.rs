@@ -12,7 +12,7 @@ use self::Destination::*;
 
 use syntax_pos::{DUMMY_SP, FileMap, Span, MultiSpan};
 
-use {Level, CodeSuggestion, DiagnosticBuilder, SubDiagnostic, CodeMapper, DiagnosticId};
+use {Level, CodeSuggestion, DiagnosticBuilder, SubDiagnostic, CodeMapperDyn, DiagnosticId};
 use snippet::{Annotation, AnnotationType, Line, MultilineAnnotation, StyledString, Style};
 use styled_buffer::StyledBuffer;
 
@@ -104,7 +104,7 @@ impl ColorConfig {
 
 pub struct EmitterWriter {
     dst: Destination,
-    cm: Option<Rc<CodeMapper>>,
+    cm: Option<Lrc<CodeMapperDyn>>,
     short_message: bool,
     teach: bool,
 }
@@ -117,7 +117,7 @@ struct FileWithAnnotatedLines {
 
 impl EmitterWriter {
     pub fn stderr(color_config: ColorConfig,
-                  code_map: Option<Rc<CodeMapper>>,
+                  code_map: Option<Lrc<CodeMapperDyn>>,
                   short_message: bool,
                   teach: bool)
                   -> EmitterWriter {
@@ -140,7 +140,7 @@ impl EmitterWriter {
     }
 
     pub fn new(dst: Box<Write + Send>,
-               code_map: Option<Rc<CodeMapper>>,
+               code_map: Option<Lrc<CodeMapperDyn>>,
                short_message: bool,
                teach: bool)
                -> EmitterWriter {
@@ -1164,8 +1164,6 @@ impl EmitterWriter {
                                level: &Level,
                                max_line_num_len: usize)
                                -> io::Result<()> {
-        use std::borrow::Borrow;
-
         if let Some(ref cm) = self.cm {
             let mut buffer = StyledBuffer::new();
 
@@ -1179,7 +1177,7 @@ impl EmitterWriter {
                                Some(Style::HeaderMsg));
 
             // Render the replacements for each suggestion
-            let suggestions = suggestion.splice_lines(cm.borrow());
+            let suggestions = suggestion.splice_lines(&**cm);
 
             let mut row_num = 2;
             for &(ref complete, ref parts) in suggestions.iter().take(MAX_SUGGESTIONS) {

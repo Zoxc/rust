@@ -23,7 +23,6 @@ use rustc_data_structures::indexed_vec::IndexVec;
 use rustc::util::nodemap::{FxHashMap, FxHashSet, NodeMap};
 
 use std::cell::{RefCell, Cell};
-use rustc_data_structures::owning_ref::ErasedBoxRef;
 use syntax::{ast, attr};
 use syntax::ext::base::SyntaxExtension;
 use syntax::symbol::Symbol;
@@ -41,7 +40,9 @@ pub use cstore_impl::{provide, provide_extern};
 // own crate numbers.
 pub type CrateNumMap = IndexVec<CrateNum, CrateNum>;
 
-pub struct MetadataBlob(pub ErasedBoxRef<[u8]>);
+pub use rustc_data_structures::sync::MetadataRef;
+
+pub struct MetadataBlob(pub MetadataRef);
 
 /// Holds information about a syntax_pos::FileMap imported from another crate.
 /// See `imported_filemaps()` for more information.
@@ -93,11 +94,11 @@ pub struct CStore {
     metas: RefCell<IndexVec<CrateNum, Option<Rc<CrateMetadata>>>>,
     /// Map from NodeId's of local extern crate statements to crate numbers
     extern_mod_crate_map: RefCell<NodeMap<CrateNum>>,
-    pub metadata_loader: Box<MetadataLoader>,
+    pub metadata_loader: Box<MetadataLoader + Sync>,
 }
 
 impl CStore {
-    pub fn new(metadata_loader: Box<MetadataLoader>) -> CStore {
+    pub fn new(metadata_loader: Box<MetadataLoader + Sync>) -> CStore {
         CStore {
             metas: RefCell::new(IndexVec::new()),
             extern_mod_crate_map: RefCell::new(FxHashMap()),

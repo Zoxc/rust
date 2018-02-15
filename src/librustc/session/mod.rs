@@ -906,7 +906,7 @@ pub fn build_session_with_codemap(sopts: config::Options,
 
     let external_macro_backtrace = sopts.debugging_opts.external_macro_backtrace;
 
-    let emitter: Box<Emitter> = match (sopts.error_format, emitter_dest) {
+    let emitter: Box<Emitter + sync::Send> = match (sopts.error_format, emitter_dest) {
         (config::ErrorOutputType::HumanReadable(color_config), None) => {
             Box::new(EmitterWriter::stderr(color_config,
                                            Some(codemap.clone()),
@@ -1102,7 +1102,7 @@ pub enum IncrCompSession {
 }
 
 pub fn early_error(output: config::ErrorOutputType, msg: &str) -> ! {
-    let emitter: Box<Emitter> = match output {
+    let emitter: Box<Emitter + sync::Send> = match output {
         config::ErrorOutputType::HumanReadable(color_config) => {
             Box::new(EmitterWriter::stderr(color_config, None, false, false))
         }
@@ -1117,7 +1117,7 @@ pub fn early_error(output: config::ErrorOutputType, msg: &str) -> ! {
 }
 
 pub fn early_warn(output: config::ErrorOutputType, msg: &str) {
-    let emitter: Box<Emitter> = match output {
+    let emitter: Box<Emitter + sync::Send> = match output {
         config::ErrorOutputType::HumanReadable(color_config) => {
             Box::new(EmitterWriter::stderr(color_config, None, false, false))
         }

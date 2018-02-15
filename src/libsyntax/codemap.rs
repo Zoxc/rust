@@ -126,7 +126,7 @@ impl StableFilemapId {
 
 pub struct CodeMap {
     pub(super) files: RefCell<Vec<Rc<FileMap>>>,
-    file_loader: Box<FileLoader>,
+    file_loader: Box<FileLoader + Sync + Send>,
     // This is used to apply the file path remapping as specified via
     // -Zremap-path-prefix to all FileMaps allocated within this CodeMap.
     path_mapping: FilePathMapping,
@@ -156,7 +156,7 @@ impl CodeMap {
 
     }
 
-    pub fn with_file_loader(file_loader: Box<FileLoader>,
+    pub fn with_file_loader(file_loader: Box<FileLoader + Sync + Send>,
                             path_mapping: FilePathMapping)
                             -> CodeMap {
         CodeMap {

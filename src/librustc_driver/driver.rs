@@ -49,6 +49,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::iter;
 use std::path::{Path, PathBuf};
+use rustc_data_structures::sync::{Sync, Lrc};
 use std::sync::mpsc;
 use syntax::{self, ast, attr, diagnostics, visit};
 use syntax::ext::base::ExtCtxt;
@@ -938,7 +939,7 @@ pub fn default_provide_extern(providers: &mut ty::maps::Providers) {
 pub fn phase_3_run_analysis_passes<'tcx, F, R>(trans: &TransCrate,
                                                control: &CompileController,
                                                sess: &'tcx Session,
-                                               cstore: &'tcx CrateStore,
+                                               cstore: &'tcx (CrateStore + Sync),
                                                hir_map: hir_map::Map<'tcx>,
                                                mut analysis: ty::CrateAnalysis,
                                                resolutions: Resolutions,

@@ -102,6 +102,8 @@ pub struct SubstitutionPart {
     pub snippet: String,
 }
 
+pub type CodeMapperDyn = CodeMapper + Send + Sync;
+
 pub trait CodeMapper {
     fn lookup_char_pos(&self, pos: BytePos) -> Loc;
     fn span_to_lines(&self, sp: Span) -> FileLinesResult;
@@ -115,7 +117,8 @@ pub trait CodeMapper {
 
 impl CodeSuggestion {
     /// Returns the assembled code suggestions and whether they should be shown with an underline.
-    pub fn splice_lines(&self, cm: &CodeMapper) -> Vec<(String, Vec<SubstitutionPart>)> {
+    pub fn splice_lines(&self, cm: &CodeMapperDyn)
+                        -> Vec<(String, Vec<SubstitutionPart>)> {
         use syntax_pos::{CharPos, Loc, Pos};
 
         fn push_trailing(buf: &mut String,
@@ -286,7 +289,7 @@ impl Handler {
     pub fn with_tty_emitter(color_config: ColorConfig,
                             can_emit_warnings: bool,
                             treat_err_as_bug: bool,
-                            cm: Option<Rc<CodeMapper>>)
+                            cm: Option<Lrc<CodeMapperDyn>>)
                             -> Handler {
         Handler::with_tty_emitter_and_flags(
             color_config,
@@ -299,7 +302,7 @@ impl Handler {
     }
 
     pub fn with_tty_emitter_and_flags(color_config: ColorConfig,
-                                      cm: Option<Rc<CodeMapper>>,
+                                      cm: Option<Lrc<CodeMapperDyn>>,
                                       flags: HandlerFlags)
                                       -> Handler {
         let emitter = Box::new(EmitterWriter::stderr(color_config, cm, false, false));
@@ -308,7 +311,7 @@ impl Handler {
 
     pub fn with_emitter(can_emit_warnings: bool,
                         treat_err_as_bug: bool,
-                        e: Box<Emitter>)
+                        e: Box<Emitter + Send>)
                         -> Handler {
         Handler::with_emitter_and_flags(
             e,
@@ -319,7 +322,7 @@ impl Handler {
             })
     }
 
-    pub fn with_emitter_and_flags(e: Box<Emitter>, flags: HandlerFlags) -> Handler {
+    pub fn with_emitter_and_flags(e: Box<Emitter + Send>, flags: HandlerFlags) -> Handler {
         Handler {
             flags,
             err_count: AtomicUsize::new(0),

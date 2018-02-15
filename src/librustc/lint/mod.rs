@@ -31,6 +31,7 @@
 pub use self::Level::*;
 pub use self::LintSource::*;
 
+use rustc_data_structures::sync::{Send, Sync, Lrc};
 
 use errors::{DiagnosticBuilder, DiagnosticId};
 use hir::def_id::{CrateNum, LOCAL_CRATE};
@@ -257,8 +258,8 @@ pub trait EarlyLintPass: LintPass {
 }
 
 /// A lint pass boxed up as a trait object.
-pub type EarlyLintPassObject = Box<EarlyLintPass + 'static>;
-pub type LateLintPassObject = Box<for<'a, 'tcx> LateLintPass<'a, 'tcx> + 'static>;
+pub type EarlyLintPassObject = Box<EarlyLintPass + Send + Sync + 'static>;
+pub type LateLintPassObject = Box<for<'a, 'tcx> LateLintPass<'a, 'tcx> + Send + Sync + 'static>;
 
 /// Identifies a lint known to the compiler.
 #[derive(Clone, Copy, Debug)]
