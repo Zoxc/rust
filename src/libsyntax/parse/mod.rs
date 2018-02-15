@@ -51,7 +51,7 @@ pub struct ParseSess {
     pub non_modrs_mods: RefCell<Vec<(ast::Ident, Span)>>,
     /// Used to determine and report recursive mod inclusions
     included_mod_stack: RefCell<Vec<PathBuf>>,
-    code_map: Rc<CodeMap>,
+    code_map: Lrc<CodeMap>,
 }
 
 impl ParseSess {
