@@ -33,7 +33,6 @@ use std::fmt;
 use std::hash::{Hasher, Hash};
 use std::ops::{Add, Sub};
 use std::path::PathBuf;
-use std::rc::Rc;
 
 use rustc_data_structures::stable_hasher::StableHasher;
 
@@ -672,7 +671,7 @@ pub struct FileMap {
     /// Indicates which crate this FileMap was imported from.
     pub crate_of_origin: u32,
     /// The complete source code
-    pub src: Option<Rc<String>>,
+    pub src: Option<Lrc<String>>,
     /// The source code's hash
     pub src_hash: u128,
     /// The external source code (used for external crates, which will have a `None`
@@ -858,7 +857,7 @@ impl FileMap {
             name_was_remapped,
             unmapped_path: Some(unmapped_path),
             crate_of_origin: 0,
-            src: Some(Rc::new(src)),
+            src: Some(Lrc::new(src)),
             src_hash,
             external_src: RefCell::new(ExternalSource::Unneeded),
             start_pos,
@@ -1121,7 +1120,7 @@ impl Sub for CharPos {
 #[derive(Debug, Clone)]
 pub struct Loc {
     /// Information about the original source
-    pub file: Rc<FileMap>,
+    pub file: Lrc<FileMap>,
     /// The (1-based) line number
     pub line: usize,
     /// The (0-based) column offset
@@ -1138,14 +1137,14 @@ pub struct LocWithOpt {
     pub filename: FileName,
     pub line: usize,
     pub col: CharPos,
-    pub file: Option<Rc<FileMap>>,
+    pub file: Option<Lrc<FileMap>>,
 }
 
 // used to be structural records. Better names, anyone?
 #[derive(Debug)]
-pub struct FileMapAndLine { pub fm: Rc<FileMap>, pub line: usize }
+pub struct FileMapAndLine { pub fm: Lrc<FileMap>, pub line: usize }
 #[derive(Debug)]
-pub struct FileMapAndBytePos { pub fm: Rc<FileMap>, pub pos: BytePos }
+pub struct FileMapAndBytePos { pub fm: Lrc<FileMap>, pub pos: BytePos }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct LineInfo {
@@ -1160,7 +1159,7 @@ pub struct LineInfo {
 }
 
 pub struct FileLines {
-    pub file: Rc<FileMap>,
+    pub file: Lrc<FileMap>,
     pub lines: Vec<LineInfo>
 }
 

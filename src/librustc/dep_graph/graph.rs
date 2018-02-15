@@ -16,7 +16,6 @@ use rustc_data_structures::indexed_vec::{Idx, IndexVec};
 use std::cell::{Ref, RefCell};
 use std::env;
 use std::hash::Hash;
-use std::rc::Rc;
 use ty::TyCtxt;
 use util::common::{ProfileQueriesMsg, profq_msg};
 
@@ -32,7 +31,7 @@ use super::prev::PreviousDepGraph;
 
 #[derive(Clone)]
 pub struct DepGraph {
-    data: Option<Rc<DepGraphData>>,
+    data: Option<Lrc<DepGraphData>>,
 
     // A vector mapping depnodes from the current graph to their associated
     // result value fingerprints. Do not rely on the length of this vector

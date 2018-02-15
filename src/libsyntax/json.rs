@@ -26,7 +26,6 @@ use errors::{DiagnosticBuilder, SubDiagnostic, CodeSuggestion, CodeMapper};
 use errors::DiagnosticId;
 use errors::emitter::{Emitter, EmitterWriter};
 
-use std::rc::Rc;
 use std::io::{self, Write};
 use std::vec;
 use std::sync::{Arc, Mutex};
@@ -44,7 +43,7 @@ pub struct JsonEmitter {
 
 impl JsonEmitter {
     pub fn stderr(registry: Option<Registry>,
-                  code_map: Rc<CodeMap>,
+                  code_map: Lrc<CodeMap>,
                   pretty: bool,
                   approximate_suggestions: bool) -> JsonEmitter {
         JsonEmitter {
@@ -58,13 +57,13 @@ impl JsonEmitter {
 
     pub fn basic(pretty: bool) -> JsonEmitter {
         let file_path_mapping = FilePathMapping::empty();
-        JsonEmitter::stderr(None, Rc::new(CodeMap::new(file_path_mapping)),
+        JsonEmitter::stderr(None, Lrc::new(CodeMap::new(file_path_mapping)),
                             pretty, false)
     }
 
     pub fn new(dst: Box<Write + Send>,
                registry: Option<Registry>,
-               code_map: Rc<CodeMap>,
+               code_map: Lrc<CodeMap>,
                pretty: bool,
                approximate_suggestions: bool) -> JsonEmitter {
         JsonEmitter {

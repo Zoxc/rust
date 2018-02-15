@@ -105,7 +105,7 @@ fn test_env<F>(source_string: &str,
     let sess = session::build_session_(options,
                                        None,
                                        diagnostic_handler,
-                                       Rc::new(CodeMap::new(FilePathMapping::empty())));
+                                       Lrc::new(CodeMap::new(FilePathMapping::empty())));
     let cstore = Rc::new(CStore::new(::get_trans(&sess).metadata_loader()));
     rustc_lint::register_builtins(&mut sess.lint_store.borrow_mut(), Some(&sess));
     let input = config::Input::Str {

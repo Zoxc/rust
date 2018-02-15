@@ -30,7 +30,7 @@ use errors::emitter::ColorConfig;
 
 use std::cell::{RefCell, Cell};
 use std::mem;
-use std::rc::Rc;
+use rustc_data_structures::sync::Lrc;
 use std::path::PathBuf;
 
 use visit_ast::RustdocVisitor;
@@ -141,7 +141,7 @@ pub fn run_core(search_paths: SearchPaths,
         ..config::basic_options().clone()
     };
 
-    let codemap = Rc::new(codemap::CodeMap::new(sessopts.file_path_mapping()));
+    let codemap = Lrc::new(codemap::CodeMap::new(sessopts.file_path_mapping()));
     let diagnostic_handler = errors::Handler::with_tty_emitter(ColorConfig::Auto,
                                                                true,
                                                                false,
@@ -195,13 +195,13 @@ pub fn run_core(search_paths: SearchPaths,
         maybe_unused_extern_crates: resolver.maybe_unused_extern_crates.clone(),
     };
     let analysis = ty::CrateAnalysis {
-        access_levels: Rc::new(AccessLevels::default()),
+        access_levels: Lrc::new(AccessLevels::default()),
         name: name.to_string(),
         glob_map: if resolver.make_glob_map { Some(resolver.glob_map.clone()) } else { None },
     };
 
     let arenas = AllArenas::new();
-    let hir_map = hir_map::map_crate(&sess, &*cstore, &mut hir_forest, &defs);
+    let hir_map = hir_map::map_crate(&sess, &cstore, &mut hir_forest, &defs);
     let output_filenames = driver::build_output_filenames(&input,
                                                           &None,
                                                           &None,
@@ -213,7 +213,7 @@ pub fn run_core(search_paths: SearchPaths,
     abort_on_err(driver::phase_3_run_analysis_passes(&*trans,
                                                      control,
                                                      &sess,
-                                                     &*cstore,
+                                                     &cstore,
                                                      hir_map,
                                                      analysis,
                                                      resolutions,
@@ -250,7 +250,7 @@ pub fn run_core(search_paths: SearchPaths,
         debug!("crate: {:?}", tcx.hir.krate());
 
         let krate = {
-            let mut v = RustdocVisitor::new(&*cstore, &ctxt);
+            let mut v = RustdocVisitor::new(&cstore, &ctxt);
             v.visit(tcx.hir.krate());
             v.clean(&ctxt)
         };

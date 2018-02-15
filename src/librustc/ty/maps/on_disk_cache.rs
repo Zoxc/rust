@@ -24,7 +24,6 @@ use rustc_serialize::{Decodable, Decoder, Encodable, Encoder, opaque,
 use session::{CrateDisambiguator, Session};
 use std::cell::RefCell;
 use std::mem;
-use std::rc::Rc;
 use syntax::ast::NodeId;
 use syntax::codemap::{CodeMap, StableFilemapId};
 use syntax_pos::{BytePos, Span, DUMMY_SP, FileMap};
@@ -427,7 +426,7 @@ struct CacheDecoder<'a, 'tcx: 'a, 'x> {
 }
 
 impl<'a, 'tcx, 'x> CacheDecoder<'a, 'tcx, 'x> {
-    fn file_index_to_file(&mut self, index: FileMapIndex) -> Rc<FileMap> {
+    fn file_index_to_file(&mut self, index: FileMapIndex) -> Lrc<FileMap> {
         let CacheDecoder {
             ref mut file_index_to_file,
             ref file_index_to_stable_id,
@@ -706,7 +705,7 @@ struct CacheEncoder<'enc, 'a, 'tcx, E>
 impl<'enc, 'a, 'tcx, E> CacheEncoder<'enc, 'a, 'tcx, E>
     where E: 'enc + ty_codec::TyEncoder
 {
-    fn filemap_index(&mut self, filemap: Rc<FileMap>) -> FileMapIndex {
+    fn filemap_index(&mut self, filemap: Lrc<FileMap>) -> FileMapIndex {
         self.file_to_file_index[&(&*filemap as *const FileMap)]
     }
 
