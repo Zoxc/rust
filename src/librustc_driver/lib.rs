@@ -25,6 +25,8 @@
 #![feature(rustc_diagnostic_macros)]
 #![feature(set_stdio)]
 
+#![recursion_limit="256"]
+
 extern crate arena;
 extern crate getopts;
 extern crate graphviz;
