@@ -1095,7 +1095,8 @@ pub fn build_session_(
     };
     let target_cfg = config::build_target_config(&sopts, &span_diagnostic);
 
-    let p_s = parse::ParseSess::with_span_handler(span_diagnostic, codemap);
+    let mut p_s = parse::ParseSess::with_span_handler(span_diagnostic, codemap);
+    p_s.combine_test_mode = sopts.debugging_opts.submodules_crate_like;
     let default_sysroot = match sopts.maybe_sysroot {
         Some(_) => None,
         None => Some(filesearch::get_or_default_sysroot()),

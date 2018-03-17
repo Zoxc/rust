@@ -12,6 +12,7 @@ pub use self::Mode::*;
 use std::fmt;
 use std::str::FromStr;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use test::ColorConfig;
 
@@ -95,7 +96,7 @@ impl fmt::Display for Mode {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Config {
     /// The library paths required for running the compiler
     pub compile_lib_path: PathBuf,
@@ -136,6 +137,9 @@ pub struct Config {
 
     /// The test mode, compile-fail, run-fail, run-pass
     pub mode: Mode,
+
+    /// Merge tests together to form larger crates
+    pub combine: bool,
 
     /// Run ignored tests
     pub run_ignored: bool,
@@ -222,11 +226,17 @@ pub struct Config {
     pub nodejs: Option<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TestPaths {
     pub file: PathBuf,         // e.g., compile-test/foo/bar/baz.rs
     pub base: PathBuf,         // e.g., compile-test, auxiliary
     pub relative_dir: PathBuf, // e.g., foo/bar
+}
+
+#[derive(Clone, Debug)]
+pub struct CombineTest {
+    pub config: Arc<Config>,
+    pub paths: TestPaths,
 }
 
 /// Used by `ui` tests to generate things like `foo.stderr` from `foo.rs`.

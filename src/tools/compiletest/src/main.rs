@@ -11,7 +11,7 @@
 #![crate_name = "compiletest"]
 #![feature(test)]
 #![feature(slice_rotate)]
-#![deny(warnings)]
+//#![deny(warnings)]
 
 extern crate diff;
 extern crate env_logger;
@@ -26,17 +26,19 @@ extern crate regex;
 extern crate serde_derive;
 extern crate serde_json;
 extern crate test;
+extern crate itertools;
 
 use std::env;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
+use std::sync::Arc;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use filetime::FileTime;
 use getopts::Options;
 use common::{Config, TestPaths};
-use common::{DebugInfoGdb, DebugInfoLldb, Mode, Pretty};
+use common::{CombineTest, DebugInfoGdb, DebugInfoLldb, Mode, Pretty};
 use common::{expected_output_path, UI_EXTENSIONS};
 use test::ColorConfig;
 use util::logv;
@@ -62,7 +64,7 @@ fn main() {
     }
 
     log_config(&config);
-    run_tests(&config);
+    run_tests(config);
 }
 
 pub fn parse_config(args: Vec<String>) -> Config {
@@ -227,6 +229,7 @@ pub fn parse_config(args: Vec<String>) -> Config {
             "path to the remote test client",
             "PATH",
         )
+        .optflag("", "combine", "merge tests together when possible")
         .optflag("h", "help", "show this message");
 
     let (argv0, args_) = args.split_first().unwrap();
@@ -295,6 +298,7 @@ pub fn parse_config(args: Vec<String>) -> Config {
             .parse()
             .expect("invalid mode"),
         run_ignored: matches.opt_present("ignored"),
+        combine: matches.opt_present("combine"),
         filter: matches.free.first().cloned(),
         filter_exact: matches.opt_present("exact"),
         logfile: matches.opt_str("logfile").map(|s| PathBuf::from(&s)),
@@ -400,7 +404,8 @@ pub fn opt_str2(maybestr: Option<String>) -> String {
     }
 }
 
-pub fn run_tests(config: &Config) {
+pub fn run_tests(config: Config) {
+    let config = Arc::new(config);
     if config.target.contains("android") {
         if let DebugInfoGdb = config.mode {
             println!(
@@ -457,8 +462,8 @@ pub fn run_tests(config: &Config) {
         let _ = fs::remove_dir_all("tmp/partitioning-tests");
     }
 
-    let opts = test_opts(config);
-    let tests = make_tests(config);
+    let opts = test_opts(&config);
+    let tests = make_tests(&config);
     // sadly osx needs some file descriptor limits raised for running tests in
     // parallel (especially when we have lots and lots of child processes).
     // For context, see #8904
@@ -472,7 +477,11 @@ pub fn run_tests(config: &Config) {
     // Let tests know which target they're running as
     env::set_var("TARGET", &config.target);
 
-    let res = test::run_tests_console(&opts, tests.into_iter().collect());
+    let res = test::run_tests_console(&opts,
+                                      tests.into_iter().collect(),
+                                      move |tests, cores| {
+        runtest::combine::run_combined(config, tests, cores)
+    });
     match res {
         Ok(true) => {}
         Ok(false) => panic!("Some tests failed"),
@@ -503,7 +512,7 @@ pub fn test_opts(config: &Config) -> test::TestOpts {
     }
 }
 
-pub fn make_tests(config: &Config) -> Vec<test::TestDescAndFn> {
+pub fn make_tests(config: &Arc<Config>) -> Vec<test::TestDescAndFn> {
     debug!("making tests from {:?}", config.src_base.display());
     let mut tests = Vec::new();
     collect_tests_from_dir(
@@ -517,7 +526,7 @@ pub fn make_tests(config: &Config) -> Vec<test::TestDescAndFn> {
 }
 
 fn collect_tests_from_dir(
-    config: &Config,
+    config: &Arc<Config>,
     base: &Path,
     dir: &Path,
     relative_dir_path: &Path,
@@ -599,7 +608,7 @@ pub fn is_test(file_name: &OsString) -> bool {
     !invalid_prefixes.iter().any(|p| file_name.starts_with(p))
 }
 
-pub fn make_test(config: &Config, testpaths: &TestPaths) -> test::TestDescAndFn {
+pub fn make_test(config: &Arc<Config>, testpaths: &TestPaths) -> test::TestDescAndFn {
     let early_props = EarlyProps::from_file(config, &testpaths.file);
 
     // The `should-fail` annotation doesn't apply to pretty tests,
@@ -619,6 +628,12 @@ pub fn make_test(config: &Config, testpaths: &TestPaths) -> test::TestDescAndFn 
         || (config.mode == DebugInfoGdb || config.mode == DebugInfoLldb)
             && config.target.contains("emscripten");
 
+    let combine = config.combine &&
+        early_props.aux.is_empty() &&
+        early_props.revisions.is_empty() &&
+        !early_props.no_combine &&
+        config.mode == Mode::RunPass;
+
     test::TestDescAndFn {
         desc: test::TestDesc {
             name: make_test_name(config, testpaths),
@@ -626,7 +641,14 @@ pub fn make_test(config: &Config, testpaths: &TestPaths) -> test::TestDescAndFn 
             should_panic,
             allow_fail: false,
         },
-        testfn: make_test_closure(config, testpaths),
+        testfn: if combine {
+            test::TestFn::CombineTest(Box::new(CombineTest {
+                config: config.clone(),
+                paths: testpaths.clone(),
+            }))
+        } else {
+            make_test_closure(config, testpaths)
+        },
     }
 }
 
@@ -717,7 +739,7 @@ pub fn make_test_name(config: &Config, testpaths: &TestPaths) -> test::TestName 
     test::DynTestName(format!("[{}] {}", config.mode, path.display()))
 }
 
-pub fn make_test_closure(config: &Config, testpaths: &TestPaths) -> test::TestFn {
+pub fn make_test_closure(config: &Arc<Config>, testpaths: &TestPaths) -> test::TestFn {
     let config = config.clone();
     let testpaths = testpaths.clone();
     test::DynTestFn(Box::new(move || runtest::run(config, &testpaths)))

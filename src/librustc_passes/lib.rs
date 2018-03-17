@@ -38,6 +38,7 @@ use rustc::ty::maps::Providers;
 
 mod diagnostics;
 
+pub mod submodules_crate_like;
 pub mod ast_validation;
 pub mod rvalue_promotion;
 pub mod hir_stats;

@@ -24,6 +24,7 @@ use extract_gdb_version;
 /// the test.
 pub struct EarlyProps {
     pub ignore: bool,
+    pub no_combine: bool,
     pub should_fail: bool,
     pub aux: Vec<String>,
     pub revisions: Vec<String>,
@@ -33,6 +34,7 @@ impl EarlyProps {
     pub fn from_file(config: &Config, testfile: &Path) -> Self {
         let mut props = EarlyProps {
             ignore: false,
+            no_combine: false,
             should_fail: false,
             aux: Vec::new(),
             revisions: vec![],
@@ -41,6 +43,11 @@ impl EarlyProps {
         iter_header(testfile,
                     None,
                     &mut |ln| {
+            if ln.starts_with("compile-flags") ||
+               ln.starts_with("exec-env") ||
+               ln.trim_right() == "no-combine" {
+                props.no_combine = true;
+            }
             // we should check if any only-<platform> exists and if it exists
             // and does not matches the current platform, skip the test
             props.ignore =

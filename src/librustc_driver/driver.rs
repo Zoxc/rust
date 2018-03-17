@@ -521,7 +521,7 @@ pub fn phase_1_parse_input<'a>(control: &CompileController,
         profile::begin(sess);
     }
 
-    let krate = time(sess, "parsing", || {
+    let mut krate = time(sess, "parsing", || {
         match *input {
             Input::File(ref file) => {
                 parse::parse_crate_from_file(file, &sess.parse_sess)
@@ -547,6 +547,17 @@ pub fn phase_1_parse_input<'a>(control: &CompileController,
 
     if let Some(ref s) = sess.opts.debugging_opts.show_span {
         syntax::show_span::run(sess.diagnostic(), s, &krate);
+    }
+
+    if sess.opts.debugging_opts.submodules_crate_like {
+        krate = time(sess,
+            "Pretending submodules are crates",
+            || rustc_passes::submodules_crate_like::modify_crate(sess, krate));
+    }
+
+    if sess.opts.debugging_opts.ast_json_noexpand {
+        println!("\n\n\n\n\n\n\n\n");
+        println!("{}", json::as_json(&krate));
     }
 
     if sess.opts.debugging_opts.hir_stats {

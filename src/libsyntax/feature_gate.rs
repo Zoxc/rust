@@ -1187,12 +1187,17 @@ pub fn feature_err<'a>(sess: &'a ParseSess, feature: &str, span: Span, issue: Ga
 }
 
 fn leveled_feature_err<'a>(sess: &'a ParseSess, feature: &str, span: Span, issue: GateIssue,
-                           explain: &str, level: GateStrength) -> DiagnosticBuilder<'a> {
+                           explain: &str, mut level: GateStrength) -> DiagnosticBuilder<'a> {
     let diag = &sess.span_diagnostic;
 
     let issue = match issue {
         GateIssue::Language => find_lang_feature_issue(feature),
-        GateIssue::Library(lib) => lib,
+        GateIssue::Library(lib) => {
+            if sess.combine_test_mode {
+                level = GateStrength::Soft;
+            }
+            lib
+        },
     };
 
     let explanation = if let Some(n) = issue {

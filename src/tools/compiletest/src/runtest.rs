@@ -28,6 +28,7 @@ use std::env;
 use std::ffi::OsString;
 use std::fs::{self, create_dir_all, File};
 use std::fmt;
+use std::sync::Arc;
 use std::io::prelude::*;
 use std::io::{self, BufReader};
 use std::path::{Path, PathBuf};
@@ -35,6 +36,9 @@ use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::str;
 
 use extract_gdb_version;
+
+#[path="combine.rs"]
+pub mod combine;
 
 /// The name of the environment variable that holds dynamic library locations.
 pub fn dylib_env_var() -> &'static str {
@@ -131,7 +135,7 @@ pub fn make_diff(expected: &str, actual: &str, context_size: usize) -> Vec<Misma
     results
 }
 
-pub fn run(config: Config, testpaths: &TestPaths) {
+pub fn run(config: Arc<Config>, testpaths: &TestPaths) {
     match &*config.target {
         "arm-linux-androideabi" | "armv7-linux-androideabi" | "aarch64-linux-android" => {
             if !config.adb_device_status {
@@ -163,7 +167,7 @@ pub fn run(config: Config, testpaths: &TestPaths) {
     base_cx.init_all();
 
     if base_props.revisions.is_empty() {
-        base_cx.run_revision()
+        base_cx.run_revision();
     } else {
         for revision in &base_props.revisions {
             let revision_props = TestProps::from_file(&testpaths.file, Some(revision), &config);
@@ -308,7 +312,7 @@ impl<'test> TestCx<'test> {
         }
     }
 
-    fn run_rpass_test(&self) {
+    fn compile_rpass_test(&self) {
         let proc_res = self.compile_test();
 
         if !proc_res.status.success() {
@@ -321,7 +325,10 @@ impl<'test> TestCx<'test> {
             expected_errors.is_empty(),
             "run-pass tests with expected warnings should be moved to ui/"
         );
+    }
 
+    fn run_rpass_test(&self) {
+        self.compile_rpass_test();
         let proc_res = self.exec_compiled_test();
         if !proc_res.status.success() {
             self.fatal_proc_rec("test run failed!", &proc_res);

@@ -72,6 +72,7 @@ use std::process::Termination;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::{Instant, Duration};
 use std::borrow::Cow;
 use std::process;
@@ -170,11 +171,13 @@ pub enum TestFn {
     StaticBenchFn(fn(&mut Bencher)),
     DynTestFn(Box<FnBox() + Send>),
     DynBenchFn(Box<TDynBenchFn + 'static>),
+    CombineTest(Box<Any + Send>),
 }
 
 impl TestFn {
     fn padding(&self) -> NamePadding {
         match *self {
+            CombineTest(..) |
             StaticTestFn(..) => PadNone,
             StaticBenchFn(..) => PadOnRight,
             DynTestFn(..) => PadNone,
@@ -190,6 +193,7 @@ impl fmt::Debug for TestFn {
             StaticBenchFn(..) => "StaticBenchFn(..)",
             DynTestFn(..) => "DynTestFn(..)",
             DynBenchFn(..) => "DynBenchFn(..)",
+            CombineTest(..) => "CombineTest(..)",
         })
     }
 }
@@ -283,7 +287,7 @@ pub fn test_main(args: &[String], tests: Vec<TestDescAndFn>, options: Options) {
             process::exit(101);
         }
     } else {
-        match run_tests_console(&opts, tests) {
+        match run_tests_console(&opts, tests, |_, _| None) {
             Ok(true) => {}
             Ok(false) => process::exit(101),
             Err(e) => {
@@ -807,7 +811,7 @@ pub fn list_tests_console(opts: &TestOpts, tests: Vec<TestDescAndFn>) -> io::Res
         } = test;
 
         let fntype = match testfn {
-            StaticTestFn(..) | DynTestFn(..) => {
+            CombineTest(_) | StaticTestFn(..) | DynTestFn(..) => {
                 ntest += 1;
                 "test"
             }
@@ -845,7 +849,12 @@ pub fn list_tests_console(opts: &TestOpts, tests: Vec<TestDescAndFn>) -> io::Res
 }
 
 // A simple console test runner
-pub fn run_tests_console(opts: &TestOpts, tests: Vec<TestDescAndFn>) -> io::Result<bool> {
+pub fn run_tests_console<F>(opts: &TestOpts,
+                            tests: Vec<TestDescAndFn>,
+                            run_combined: F) -> io::Result<bool>
+where
+    F: FnOnce(Vec<TestDescAndFn>, usize) -> Option<JoinHandle<Vec<TestEvent>>>
+{
     fn callback(
         event: &TestEvent,
         st: &mut ConsoleTestState,
@@ -930,7 +939,7 @@ pub fn run_tests_console(opts: &TestOpts, tests: Vec<TestDescAndFn>) -> io::Resu
         }
     }
 
-    run_tests(opts, tests, |x| callback(&x, &mut st, &mut *out))?;
+    run_tests(opts, tests, |x| callback(&x, &mut st, &mut *out), run_combined)?;
 
     assert!(st.current_test_count() == st.total);
 
@@ -1039,9 +1048,13 @@ impl Write for Sink {
     }
 }
 
-pub fn run_tests<F>(opts: &TestOpts, tests: Vec<TestDescAndFn>, mut callback: F) -> io::Result<()>
+pub fn run_tests<F, C>(opts: &TestOpts,
+                       tests: Vec<TestDescAndFn>,
+                       mut callback: F,
+                       run_combined: C) -> io::Result<()>
 where
     F: FnMut(TestEvent) -> io::Result<()>,
+    C: FnOnce(Vec<TestDescAndFn>, usize) -> Option<JoinHandle<Vec<TestEvent>>>
 {
     use std::collections::HashMap;
     use std::sync::mpsc::RecvTimeoutError;
@@ -1071,11 +1084,21 @@ where
 
     let (filtered_tests, filtered_benchs): (Vec<_>, _) =
         filtered_tests.into_iter().partition(|e| match e.testfn {
-            StaticTestFn(_) | DynTestFn(_) => true,
+            StaticTestFn(_) | DynTestFn(_) | CombineTest(_) => true,
             _ => false,
         });
 
     let concurrency = opts.test_threads.unwrap_or_else(get_concurrency);
+
+    let (combined_tests, filtered_tests) = filtered_tests.into_iter().partition(|test| {
+        match test.testfn {
+            CombineTest(..) => true,
+            _ => false,
+        }
+    });
+
+    let combined = run_combined(combined_tests, concurrency);
+    println!("running {} non-combined tests", filtered_tests.len());
 
     let mut remaining = filtered_tests;
     remaining.reverse();
@@ -1164,6 +1187,13 @@ where
             callback(TeResult(test, result, stdout))?;
         }
     }
+
+    if let Some(combined) = combined {
+        for event in combined.join().unwrap() {
+            callback(event)?;
+        }
+    }
+
     Ok(())
 }
 
@@ -1476,6 +1506,7 @@ pub fn run_test(
             run_test_inner(desc, monitor_ch, opts.nocapture,
                            Box::new(move || __rust_begin_short_backtrace(f)))
         }
+        CombineTest(..) => panic!("Trying to run combine test"),
     }
 }
 
