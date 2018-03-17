@@ -13,6 +13,7 @@
 // directions
 
 // ignore-emscripten no threads support
+// no-combine
 
 #![feature(libc, std_misc)]
 

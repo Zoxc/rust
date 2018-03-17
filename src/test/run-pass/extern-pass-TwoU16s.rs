@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-wasm32-bare no libc for ffi testing
+// no-combine
 
 // Test a foreign function that accepts and returns a struct
 // by value.

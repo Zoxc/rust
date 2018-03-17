@@ -13,6 +13,7 @@
 
 // ignore-cloudabi no env and process
 // ignore-emscripten no processes
+// no-combine
 
 #![feature(unwind_attributes)]
 

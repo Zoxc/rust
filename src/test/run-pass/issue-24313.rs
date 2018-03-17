@@ -10,6 +10,7 @@
 
 // ignore-cloudabi no processes
 // ignore-emscripten no threads
+// no-combine
 
 use std::thread;
 use std::env;

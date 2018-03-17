@@ -14,6 +14,7 @@
 
 // ignore-windows
 // ignore-32bit
+// no-combine
 
 #![feature(i128_type)]
 

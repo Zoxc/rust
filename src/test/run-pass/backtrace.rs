@@ -13,6 +13,7 @@
 // ignore-emscripten spawning processes is not supported
 // ignore-openbsd no support for libbacktrace without filename
 // compile-flags:-g
+// no-combine
 
 use std::env;
 use std::process::{Command, Stdio};

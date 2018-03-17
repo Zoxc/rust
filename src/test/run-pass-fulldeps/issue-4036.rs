@@ -13,6 +13,7 @@
 // byproducts in vtable records.
 
 // pretty-expanded FIXME #23616
+// no-combine
 
 #![feature(rustc_private)]
 

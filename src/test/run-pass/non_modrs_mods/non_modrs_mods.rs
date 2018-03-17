@@ -9,6 +9,7 @@
 // except according to those terms.
 //
 // ignore-pretty issue #37195
+// no-combine
 #![feature(non_modrs_mods)]
 
 pub mod modrs_mod;

@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // pretty-expanded FIXME #23616
+// no-combine
 
 #![allow(unused_imports)]
 #![feature(start, no_core, core)]

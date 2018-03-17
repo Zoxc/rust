@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-wasm32-bare no libc for ffi testing
+// no-combine
 
 #[link(name = "rust_test_helpers", kind = "static")]
 extern {

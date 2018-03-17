@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-wasm32-bare no libc to test ffi with
+// no-combine
 
 #[derive(Copy, Clone)]
 pub struct Quad { a: u64, b: u64, c: u64, d: u64 }

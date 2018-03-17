@@ -12,6 +12,7 @@
 // no-prefer-dynamic
 // ignore-cloudabi no processes
 // ignore-emscripten no processes
+// no-combine
 
 use std::process::Command;
 use std::env;

@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-wasm32-bare always compiled as panic=abort right now
+// no-combine
 
 // Check that values are not leaked when a dtor panics (#14875)
 

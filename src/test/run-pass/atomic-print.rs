@@ -10,6 +10,7 @@
 
 // ignore-cloudabi no process support
 // ignore-emscripten no threads support
+// no-combine
 
 use std::{env, fmt, process, sync, thread};
 

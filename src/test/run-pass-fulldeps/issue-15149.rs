@@ -10,6 +10,7 @@
 
 // no-prefer-dynamic
 // ignore-cross-compile
+// no-combine
 
 use std::env;
 use std::fs;

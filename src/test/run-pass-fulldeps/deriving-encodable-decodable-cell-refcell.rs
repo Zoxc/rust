@@ -11,6 +11,7 @@
 // This briefly tests the capability of `Cell` and `RefCell` to implement the
 // `Encodable` and `Decodable` traits via `#[derive(Encodable, Decodable)]`
 
+// no-combine
 
 #![feature(rustc_private)]
 

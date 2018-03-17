@@ -19,6 +19,7 @@
 // ignore-pretty issue #37195
 // ignore-cloudabi spawning processes is not supported
 // ignore-emscripten spawning processes is not supported
+// no-combine
 
 // note that above `-opt-bisect-limit=0` is used to basically disable
 // optimizations

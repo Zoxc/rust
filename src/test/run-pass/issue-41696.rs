@@ -10,6 +10,8 @@
 
 // this used to cause exponential code-size blowup during LLVM passes.
 
+// no-combine
+
 #![feature(test)]
 
 extern crate test;

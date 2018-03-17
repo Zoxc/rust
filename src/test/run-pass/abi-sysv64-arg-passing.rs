@@ -31,6 +31,7 @@
 // foreign-fn-with-byval
 // issue-28676
 // struct-return
+// no-combine
 
 // ignore-android
 // ignore-arm

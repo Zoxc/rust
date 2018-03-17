@@ -11,6 +11,7 @@
 // Test that the CompilerCalls interface to the compiler works.
 
 // ignore-cross-compile
+// no-combine
 
 #![feature(rustc_private, path)]
 #![feature(core)]

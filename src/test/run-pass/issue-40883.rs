@@ -11,6 +11,8 @@
 // check that we don't have linear stack usage with multiple calls to `push`
 // min-llvm-version 4.0
 
+// no-combine
+
 #![feature(test)]
 
 extern crate test;

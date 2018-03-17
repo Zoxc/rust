@@ -9,6 +9,8 @@
 // except according to those terms.
 
 // ignore-cross-compile
+// no-combine
+
 #![feature(quote, rustc_private)]
 
 extern crate syntax;

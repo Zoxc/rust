@@ -10,6 +10,7 @@
 
 // ignore-cloudabi no processes
 // ignore-emscripten no processes
+// no-combine
 
 #![feature(process_try_wait)]
 

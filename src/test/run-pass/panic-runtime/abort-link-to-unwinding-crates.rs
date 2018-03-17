@@ -13,6 +13,7 @@
 // no-prefer-dynamic
 // ignore-cloudabi no processes
 // ignore-emscripten no processes
+// no-combine
 
 extern crate exit_success_if_unwind;
 

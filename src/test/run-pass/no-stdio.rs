@@ -11,6 +11,7 @@
 // ignore-android
 // ignore-cloudabi no processes
 // ignore-emscripten no processes
+// no-combine
 
 #![feature(libc)]
 

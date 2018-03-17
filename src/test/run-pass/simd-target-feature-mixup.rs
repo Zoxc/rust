@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-emscripten
+// no-combine
 
 #![feature(repr_simd, target_feature, cfg_target_feature)]
 

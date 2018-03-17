@@ -12,6 +12,7 @@
 // ignore-pretty issue #37199
 // ignore-cloudabi no processes
 // ignore-emscripten no processes
+// no-combine
 
 #![feature(process_exec)]
 

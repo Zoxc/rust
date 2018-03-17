@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-wasm32-bare no libc to test ffi with
+// no-combine
 
 #[repr(C)]
 #[derive(Copy, Clone)]

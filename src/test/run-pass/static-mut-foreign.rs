@@ -13,6 +13,7 @@
 // attempted.
 
 // ignore-wasm32-bare no libc to test ffi with
+// no-combine
 
 #![feature(libc)]
 

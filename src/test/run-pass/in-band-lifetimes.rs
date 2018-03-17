@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// no-combine
+
 #![allow(warnings)]
 #![feature(in_band_lifetimes, universal_impl_trait, conservative_impl_trait)]
 

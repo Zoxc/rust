@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-emscripten no no_std executables
+// no-combine
 
 #![feature(lang_items, start, libc, alloc)]
 #![no_std]

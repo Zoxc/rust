@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-emscripten no threads support
+// no-combine
 
 #![feature(libc)]
 

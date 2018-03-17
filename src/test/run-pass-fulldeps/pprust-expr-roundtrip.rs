@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-cross-compile
+// no-combine
 
 
 // The general idea of this test is to enumerate all "interesting" expressions and check that

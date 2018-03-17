@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-cross-compile
+// no-combine
 
 #![feature(rustc_private)]
 

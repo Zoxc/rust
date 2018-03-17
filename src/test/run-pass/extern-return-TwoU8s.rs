@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-wasm32-bare no libc to test ffi with
+// no-combine
 
 pub struct TwoU8s {
     one: u8, two: u8

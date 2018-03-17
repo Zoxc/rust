@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-cross-compile
+// no-combine
 
 use std::env;
 use std::fs::File;

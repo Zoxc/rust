@@ -10,6 +10,7 @@
 
 // ignore-cloudabi spawning processes is not supported
 // ignore-emscripten spawning processes is not supported
+// no-combine
 
 use std::{env, process};
 

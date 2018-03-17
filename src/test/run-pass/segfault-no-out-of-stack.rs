@@ -10,6 +10,7 @@
 
 // ignore-cloudabi can't run commands
 // ignore-emscripten can't run commands
+// no-combine
 
 #![feature(libc)]
 

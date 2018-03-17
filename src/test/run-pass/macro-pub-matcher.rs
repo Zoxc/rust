@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// no-combine
+
 #![allow(dead_code, unused_imports)]
 #![feature(macro_vis_matcher, crate_visibility_modifier)]
 

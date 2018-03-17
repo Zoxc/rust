@@ -18,6 +18,7 @@
 
 // ignore-cloudabi no processes
 // ignore-emscripten no processes
+// no-combine
 
 use std::io::prelude::*;
 use std::io;

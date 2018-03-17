@@ -13,6 +13,7 @@
 // ignore-cloudabi no processes
 // ignore-emscripten no processes
 // ignore-haiku
+// no-combine
 
 #![feature(libc)]
 

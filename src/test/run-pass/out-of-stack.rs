@@ -12,6 +12,7 @@
 // ignore-musl
 // ignore-cloudabi no processes
 // ignore-emscripten no processes
+// no-combine
 
 #![feature(asm)]
 #![feature(libc)]

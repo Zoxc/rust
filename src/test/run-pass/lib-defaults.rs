@@ -11,6 +11,7 @@
 // ignore-wasm32-bare no libc to test ffi with
 
 // compile-flags: -lrust_test_helpers
+// no-combine
 
 #[link(name = "rust_test_helpers", kind = "static")]
 extern "C" {

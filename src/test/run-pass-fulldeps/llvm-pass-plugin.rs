@@ -10,6 +10,7 @@
 
 // aux-build:llvm_pass_plugin.rs
 // ignore-stage1
+// no-combine
 
 #![feature(plugin)]
 #![plugin(llvm_pass_plugin)]

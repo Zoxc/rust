@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// no-combine
+
 mod a {
     pub mod b {
         pub mod c {

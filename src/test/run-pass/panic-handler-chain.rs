@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-emscripten no threads support
+// no-combine
 
 #![feature(panic_handler, std_panic)]
 

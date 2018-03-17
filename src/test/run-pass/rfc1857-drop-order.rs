@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-wasm32-bare compiled with panic=abort by default
+// no-combine
 
 #![allow(dead_code, unreachable_code)]
 

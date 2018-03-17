@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-wasm32-bare no libc for ffi testing
+// no-combine
 
 // Test a function that takes/returns a u8.
 

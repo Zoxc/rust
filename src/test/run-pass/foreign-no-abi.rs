@@ -12,6 +12,7 @@
 
 // ignore-wasm32-bare no libc to test ffi with
 // pretty-expanded FIXME #23616
+// no-combine
 
 #![feature(libc)]
 

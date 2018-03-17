@@ -11,6 +11,7 @@
 // ignore-cloudabi no processes
 // ignore-emscripten no processes
 // ignore-windows
+// no-combine
 
 use std::env;
 use std::process::Command;

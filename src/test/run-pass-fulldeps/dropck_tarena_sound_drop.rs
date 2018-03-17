@@ -16,6 +16,8 @@
 // shows a similar setup, but restricts `f` so that the struct `C<'a>`
 // is force-fed a lifetime equal to that of the borrowed arena.
 
+// no-combine
+
 #![allow(unstable)]
 #![feature(rustc_private)]
 

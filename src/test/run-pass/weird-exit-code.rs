@@ -17,6 +17,8 @@
 // Note that this is disabled on unix as processes exiting with 259 will have
 // their exit status truncated to 3 (only the lower 8 bits are used).
 
+// no-combine
+
 #[cfg(windows)]
 fn main() {
     use std::process::{self, Command};

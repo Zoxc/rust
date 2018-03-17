@@ -11,6 +11,7 @@
 // ignore-windows - this is a unix-specific test
 // ignore-cloudabi no processes
 // ignore-emscripten no processes
+// no-combine
 
 #![feature(process_exec, libc)]
 

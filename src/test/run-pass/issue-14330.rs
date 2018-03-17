@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // pretty-expanded FIXME #23616
+// no-combine
 
 #[macro_use] extern crate std as std2;
 

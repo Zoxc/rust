@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-wasm32-bare seems not important to test here
+// no-combine
 
 #![feature(intrinsics, main)]
 

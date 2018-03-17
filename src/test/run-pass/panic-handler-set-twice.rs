@@ -10,6 +10,7 @@
 #![feature(panic_handler, std_panic)]
 
 // ignore-emscripten no threads support
+// no-combine
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::panic;

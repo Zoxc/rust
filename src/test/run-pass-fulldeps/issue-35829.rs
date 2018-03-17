@@ -10,6 +10,8 @@
 
 // ignore-stage1
 // ignore-cross-compile
+// no-combine
+
 #![feature(quote, rustc_private)]
 
 extern crate syntax;

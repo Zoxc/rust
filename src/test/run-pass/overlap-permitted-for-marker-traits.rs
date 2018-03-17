@@ -12,6 +12,8 @@
 // that is, traits without items. In this case, a type `T` is
 // `MyMarker` if it is either `Debug` or `Display`.
 
+// no-combine
+
 #![feature(overlapping_marker_traits)]
 #![feature(optin_builtin_traits)]
 

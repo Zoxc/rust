@@ -14,6 +14,8 @@
 // `x`.  The lexical checker makes this very painful. The NLL checker
 // does not.
 
+// no-combine
+
 #![feature(match_default_bindings)]
 #![feature(nll)]
 

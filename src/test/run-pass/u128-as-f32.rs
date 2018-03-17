@@ -9,6 +9,7 @@
 // except according to those terms.
 
 // ignore-emscripten u128 not supported
+// no-combine
 
 #![feature(test, i128, i128_type)]
 #![deny(overflowing_literals)]
