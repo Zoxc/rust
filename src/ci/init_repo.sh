@@ -65,7 +65,7 @@ for i in ${!modules[@]}; do
         continue
     fi
     commit="$(git ls-tree HEAD $module | awk '{print $3}')"
-    git rm $module
+    rm -rf $module
     url=${urls[$i]}
     url=${url/\.git/}
     fetch_submodule $module "$url/archive/$commit.tar.gz" &
@@ -74,5 +74,6 @@ retry sh -c "git submodule deinit -f $excluded && \
     git submodule sync && \
     git submodule update -j 8 --init --recursive $excluded"
 wait
+echo Cloned submodules
 travis_fold end init_repo
 travis_time_finish
