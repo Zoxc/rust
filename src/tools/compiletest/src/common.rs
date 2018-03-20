@@ -13,6 +13,8 @@ use std::fmt;
 use std::str::FromStr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
 
 use test::ColorConfig;
 
@@ -224,6 +226,8 @@ pub struct Config {
     pub llvm_components: String,
     pub llvm_cxxflags: String,
     pub nodejs: Option<String>,
+
+    pub stats: Arc<Mutex<Vec<(String, Duration)>>>,
 }
 
 #[derive(Clone, Debug)]

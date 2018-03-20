@@ -253,6 +253,7 @@ pub fn run_combined_instance(config: &Config,
         props: &props,
         testpaths: &paths,
         revision: None,
+        long_compile: true,
     };
 
     //let start = SystemTime::now();

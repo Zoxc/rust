@@ -33,6 +33,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use filetime::FileTime;
@@ -333,6 +334,7 @@ pub fn parse_config(args: Vec<String>) -> Config {
         llvm_components: matches.opt_str("llvm-components").unwrap(),
         llvm_cxxflags: matches.opt_str("llvm-cxxflags").unwrap(),
         nodejs: matches.opt_str("nodejs"),
+        stats: Arc::new(Mutex::new(Vec::new())),
     }
 }
 
@@ -477,10 +479,12 @@ pub fn run_tests(config: Config) {
     // Let tests know which target they're running as
     env::set_var("TARGET", &config.target);
 
+    let config2 = config.clone();
+
     let res = test::run_tests_console(&opts,
                                       tests.into_iter().collect(),
                                       move |tests, cores| {
-        runtest::combine::run_combined(config, tests, cores)
+        runtest::combine::run_combined(config2, tests, cores)
     });
     match res {
         Ok(true) => {}
@@ -488,6 +492,17 @@ pub fn run_tests(config: Config) {
         Err(e) => {
             println!("I/O failure during tests: {:?}", e);
         }
+    }
+    let lock = config.stats.lock().unwrap();
+    let mut times: Vec<_> = lock.iter().filter(|r| r.1.as_secs() > 5).collect();
+    times.sort_by_key(|t| t.1);
+    times.reverse();
+    if !times.is_empty() {
+        println!("Actions taking more than 5 seconds during tests:");
+    }
+    for &(ref action, ref time) in times.into_iter() {
+        let sec = (time.as_secs() as f64) + (time.subsec_nanos() as f64 / 1000_000_000.0);
+        println!("   {} took {:.2} seconds", action, sec);
     }
 }
 
