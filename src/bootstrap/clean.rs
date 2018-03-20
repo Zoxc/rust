@@ -38,7 +38,7 @@ pub fn clean(build: &Build, all: bool) {
     }
 }
 
-fn rm_rf(path: &Path) {
+pub fn rm_rf(path: &Path) {
     match path.symlink_metadata() {
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {

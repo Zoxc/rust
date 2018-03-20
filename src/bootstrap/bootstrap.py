@@ -355,6 +355,10 @@ class RustBuild(object):
             pattern = "rust-std-{}".format(self.build)
             self._download_stage0_helper(filename, pattern)
 
+            #filename = "rustc-{}-src.tar.gz".format(rustc_channel)
+            #pattern = "rustc-{}-src".format(rustc_channel)
+            #self._download_stage0_helper(filename, pattern)
+
             filename = "rustc-{}-{}.tar.gz".format(rustc_channel, self.build)
             self._download_stage0_helper(filename, "rustc")
             self.fix_executable("{}/bin/rustc".format(self.bin_root()))
@@ -378,6 +382,8 @@ class RustBuild(object):
             self.fix_executable("{}/bin/cargo".format(self.bin_root()))
             with output(self.cargo_stamp()) as cargo_stamp:
                 cargo_stamp.write(self.date)
+
+        #shutil.rmtree(os.path.join(self.build_dir, "cache"), ignore_errors=True)
 
     def _download_stage0_helper(self, filename, pattern):
         cache_dst = os.path.join(self.build_dir, "cache")
@@ -464,7 +470,7 @@ class RustBuild(object):
 
         >>> rb = RustBuild()
         >>> rb.build_dir = "build"
-        >>> rb.rustc_stamp() == os.path.join("build", "stage0", ".rustc-stamp")
+        >>> rb.rustc_stamp() == os.path.join("build", "base", ".rustc-stamp")
         True
         """
         return os.path.join(self.bin_root(), '.rustc-stamp')
@@ -474,7 +480,7 @@ class RustBuild(object):
 
         >>> rb = RustBuild()
         >>> rb.build_dir = "build"
-        >>> rb.cargo_stamp() == os.path.join("build", "stage0", ".cargo-stamp")
+        >>> rb.cargo_stamp() == os.path.join("build", "base", ".cargo-stamp")
         True
         """
         return os.path.join(self.bin_root(), '.cargo-stamp')
@@ -491,16 +497,19 @@ class RustBuild(object):
 
         >>> rb = RustBuild()
         >>> rb.build_dir = "build"
-        >>> rb.bin_root() == os.path.join("build", "stage0")
+        >>> rb.bin_root() == os.path.join("build", "base")
         True
 
         When the 'build' property is given should be a nested directory:
 
         >>> rb.build = "devel"
-        >>> rb.bin_root() == os.path.join("build", "devel", "stage0")
+        >>> rb.bin_root() == os.path.join("build", "base", "devel")
         True
         """
-        return os.path.join(self.build_dir, self.build, "stage0")
+        if self.build == "":
+            return os.path.join(self.build_dir, "base")
+        else:
+            return os.path.join(self.build_dir, "base", self.build)
 
     def get_toml(self, key, section=None):
         """Returns the value of the given key in config.toml, otherwise returns None

@@ -19,7 +19,6 @@
 extern crate libc;
 #[allow(unused_extern_crates)]
 extern crate serialize as rustc_serialize; // used by deriving
-extern crate proc_macro;
 
 #[macro_use]
 extern crate rustc;

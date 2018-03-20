@@ -37,6 +37,7 @@
 #![feature(core_intrinsics)]
 #![feature(drain_filter)]
 #![cfg_attr(windows, feature(libc))]
+#![cfg_attr(stage0, feature(range_contains))]
 #![feature(never_type)]
 #![feature(exhaustive_patterns)]
 #![feature(extern_types)]
@@ -65,7 +66,6 @@
 #![recursion_limit="512"]
 
 #[macro_use] extern crate bitflags;
-extern crate getopts;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate scoped_tls;
 #[cfg(windows)]
@@ -86,7 +86,7 @@ extern crate serialize as rustc_serialize;
 
 // Use the test crate here so we depend on getopts through it. This allow tools to link to both
 // librustc_driver and libtest.
-#[allow(unused_extern_crates)]
+#[cfg_attr(not(stage0), allow(unused_extern_crates))]
 extern crate test;
 
 #[macro_use]

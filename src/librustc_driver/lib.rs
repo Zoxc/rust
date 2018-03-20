@@ -19,7 +19,8 @@
 #![deny(rust_2018_idioms)]
 #![cfg_attr(not(stage0), deny(internal))]
 
-pub extern crate getopts;
+#[allow(unused_extern_crates)]
+extern crate getopts;
 #[cfg(unix)]
 extern crate libc;
 #[macro_use]

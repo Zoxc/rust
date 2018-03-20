@@ -30,6 +30,7 @@ pub use crate::flags::Subcommand;
 #[derive(Default)]
 pub struct Config {
     pub ccache: Option<String>,
+    pub alt_build: bool,
     pub ninja: bool,
     pub verbose: usize,
     pub submodules: bool,
@@ -195,6 +196,7 @@ struct TomlConfig {
 #[derive(Deserialize, Default, Clone)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 struct Build {
+    alt_build: Option<bool>,
     build: Option<String>,
     #[serde(default)]
     host: Vec<String>,
@@ -461,6 +463,7 @@ impl Config {
         config.nodejs = build.nodejs.map(PathBuf::from);
         config.gdb = build.gdb.map(PathBuf::from);
         config.python = build.python.map(PathBuf::from);
+        set(&mut config.alt_build, build.alt_build);
         set(&mut config.low_priority, build.low_priority);
         set(&mut config.compiler_docs, build.compiler_docs);
         set(&mut config.docs, build.docs);

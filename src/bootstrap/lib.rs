@@ -104,9 +104,10 @@
 //! also check out the `src/bootstrap/README.md` file for more information.
 
 #![deny(rust_2018_idioms)]
-#![deny(warnings)]
+//#![deny(warnings)]
 #![feature(core_intrinsics)]
 #![feature(drain_filter)]
+#![feature(slice_concat_ext)]
 
 #[macro_use]
 extern crate build_helper;
@@ -158,6 +159,8 @@ mod builder;
 mod cache;
 mod tool;
 mod toolstate;
+
+pub mod alt_build;
 
 #[cfg(windows)]
 mod job;

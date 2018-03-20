@@ -11,6 +11,7 @@ path = "rustc.rs"
 [dependencies]
 rustc_target = { path = "../librustc_target" }
 rustc_driver = { path = "../librustc_driver" }
+rustc = { path = "../librustc" }
 
 # Make sure rustc_codegen_ssa ends up in the sysroot, because this
 # crate is intended to be used by codegen backends, which may not be in-tree.
@@ -22,4 +23,6 @@ optional = true
 features = ['unprefixed_malloc_on_supported_platforms']
 
 [features]
+default = []
 jemalloc = ['jemalloc-sys']
+bootstrap_std = ["rustc/bootstrap_std", "rustc_driver/bootstrap_std"]

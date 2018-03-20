@@ -12,6 +12,7 @@
 #![feature(custom_attribute)]
 #![feature(extern_types)]
 #![feature(in_band_lifetimes)]
+#![cfg_attr(stage0, feature(range_contains))]
 #![allow(unused_attributes)]
 #![feature(libc)]
 #![feature(nll)]

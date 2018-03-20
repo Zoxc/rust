@@ -15,8 +15,6 @@
 
 #![recursion_limit="256"]
 
-extern crate proc_macro;
-
 mod diagnostics;
 
 mod asm;

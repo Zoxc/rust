@@ -9,10 +9,14 @@
 
 use std::env;
 
-use bootstrap::{Config, Build};
+use bootstrap::{Config, Build, alt_build};
 
 fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
     let config = Config::parse(&args);
-    Build::new(config).build();
+    if config.alt_build {
+        alt_build::build(config)
+    } else {
+        Build::new(config).build();
+    }
 }

@@ -1260,7 +1260,7 @@ pub fn stream_cargo(
 
 #[derive(Deserialize)]
 pub struct CargoTarget<'a> {
-    crate_types: Vec<Cow<'a, str>>,
+    pub crate_types: Vec<Cow<'a, str>>,
 }
 
 #[derive(Deserialize)]

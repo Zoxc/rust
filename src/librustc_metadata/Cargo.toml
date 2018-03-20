@@ -15,6 +15,7 @@ log = "0.4"
 memmap = "0.6"
 rustc = { path = "../librustc" }
 rustc_data_structures = { path = "../librustc_data_structures" }
+proc_macro = { path = "../libproc_macro" }
 errors = { path = "../librustc_errors", package = "rustc_errors" }
 rustc_target = { path = "../librustc_target" }
 serialize = { path = "../libserialize" }
