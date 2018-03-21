@@ -163,8 +163,9 @@ declare_features! (
 
     (active, link_llvm_intrinsics, "1.0.0", Some(29602), None),
     (active, linkage, "1.0.0", Some(29603), None),
-    (active, [modular], quote, "1.0.0", Some(29601), None),
 
+    // This imports the quote! macro, so it affects the whole crate
+    (active, [crate], quote, "1.0.0", Some(29601), None),
 
     // rustc internal
     (active, rustc_diagnostic_macros, "1.0.0", None, None),
@@ -259,7 +260,7 @@ declare_features! (
     (active, [modular], repr_simd, "1.4.0", Some(27731), None),
 
     // Allows cfg(target_feature = "...").
-    (active, cfg_target_feature, "1.4.0", Some(29717), None),
+    (active, [modular], cfg_target_feature, "1.4.0", Some(29717), None),
 
     // allow `extern "platform-intrinsic" { ... }`
     (active, [modular], platform_intrinsics, "1.4.0", Some(27731), None),
@@ -279,7 +280,7 @@ declare_features! (
     (active, omit_gdb_pretty_printer_section, "1.5.0", None, None),
 
     // Allows cfg(target_vendor = "...").
-    (active, cfg_target_vendor, "1.5.0", Some(29718), None),
+    (active, [modular], cfg_target_vendor, "1.5.0", Some(29718), None),
 
     // Allow attributes on expressions and non-item statements
     (active, stmt_expr_attributes, "1.6.0", Some(15701), None),
@@ -288,7 +289,7 @@ declare_features! (
     (active, type_ascription, "1.6.0", Some(23416), None),
 
     // Allows cfg(target_thread_local)
-    (active, cfg_target_thread_local, "1.7.0", Some(29594), None),
+    (active, [modular], cfg_target_thread_local, "1.7.0", Some(29594), None),
 
     // rustc internal
     (active, [modular], abi_vectorcall, "1.7.0", None, None),
@@ -300,7 +301,7 @@ declare_features! (
     (active, [crate], specialization, "1.7.0", Some(31844), None),
 
     // Allows cfg(target_has_atomic = "...").
-    (active, cfg_target_has_atomic, "1.9.0", Some(32976), None),
+    (active, [modular], cfg_target_has_atomic, "1.9.0", Some(32976), None),
 
     // Allows `impl Trait` in function return types.
     (active, conservative_impl_trait, "1.12.0", Some(34511), None),
