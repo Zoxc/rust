@@ -51,7 +51,7 @@ pub fn expand_asm<'cx>(cx: &'cx mut ExtCtxt,
                        sp: Span,
                        tts: &[tokenstream::TokenTree])
                        -> Box<base::MacResult + 'cx> {
-    if !cx.ecfg.enable_asm() {
+    if !cx.current_expansion.enable_asm() {
         feature_gate::emit_feature_err(&cx.parse_sess,
                                        "asm",
                                        sp,

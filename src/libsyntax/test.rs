@@ -19,6 +19,7 @@ use std::iter;
 use std::slice;
 use std::mem;
 use std::vec;
+use std::rc::Rc;
 use attr::{self, HasAttrs};
 use syntax_pos::{self, DUMMY_SP, NO_EXPANSION, Span, FileMap, BytePos};
 
@@ -40,6 +41,7 @@ use ast::{self, Ident};
 use ptr::P;
 use symbol::{self, Symbol, keywords};
 use util::small_vector::SmallVector;
+use rustc_data_structures::fx::FxHashMap;
 
 enum ShouldPanic {
     No,
@@ -276,13 +278,18 @@ fn generate_test_harness(sess: &ParseSess,
     let krate = cleaner.fold_crate(krate);
 
     let mark = Mark::fresh(Mark::root());
+    let mut map = FxHashMap();
 
-    let mut econfig = ExpansionConfig::default("test".to_string());
-    econfig.features = Some(features);
+    let econfig = ExpansionConfig::default("test".to_string());
 
     let cx = TestCtxt {
         span_diagnostic: sd,
-        ext_cx: ExtCtxt::new(sess, econfig, resolver),
+        ext_cx: ExtCtxt::new(
+            sess,
+            econfig,
+            Some(Rc::new(features.clone())),
+            &mut map,
+            resolver),
         path: Vec::new(),
         testfns: Vec::new(),
         reexport_test_harness_main,

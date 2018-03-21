@@ -23,6 +23,7 @@ use syntax::symbol::Symbol;
 use syntax_pos::{Span, MultiSpan, DUMMY_SP};
 use syntax::ast;
 use syntax::ast::{NodeId, Attribute};
+use syntax::ast::CRATE_NODE_ID;
 use syntax::feature_gate::{GateIssue, emit_feature_err, find_lang_feature_accepted_version};
 use syntax::attr::{self, Stability, Deprecation};
 use util::nodemap::{FxHashSet, FxHashMap};
@@ -509,6 +510,29 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         }
     }
 
+    fn crate_like_module_has_feature(self, mut id: NodeId, feature: &Symbol) -> bool {
+        if !self.sess.opts.debugging_opts.submodules_crate_like {
+            return false;
+        }
+
+        // Look for the topmost module or return false if it doesn't exist
+        let starting_id = id;
+        loop {
+            let parent_id = self.hir.as_local_node_id(self.hir.get_module_parent(id)).unwrap();
+            if parent_id == CRATE_NODE_ID {
+                if id == starting_id {
+                    // No previous module
+                    return false;
+                }
+                break;
+            }
+            assert!(parent_id != id);
+            id = parent_id;
+        }
+
+        self.sess.module_lib_features.lock().get(&id).unwrap().contains(feature)
+    }
+
     pub fn check_stability(self, def_id: DefId, id: NodeId, span: Span) {
         if span.allows_unstable() {
             debug!("stability: \
@@ -577,6 +601,10 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         match stability {
             Some(&Stability { level: attr::Unstable {ref reason, issue}, ref feature, .. }) => {
                 if self.stability().active_features.contains(feature) {
+                    return
+                }
+
+                if self.crate_like_module_has_feature(id, feature) {
                     return
                 }
 

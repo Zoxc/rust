@@ -29,8 +29,10 @@ use std::iter;
 use std::path::PathBuf;
 use std::rc::Rc;
 use rustc_data_structures::sync::Lrc;
+use rustc_data_structures::fx::FxHashMap;
 use std::default::Default;
 use tokenstream::{self, TokenStream};
+use feature_gate::Features;
 
 
 #[derive(Debug,Clone)]
@@ -668,6 +670,7 @@ pub struct ModuleData {
 
 #[derive(Clone)]
 pub struct ExpansionData {
+    pub features: Option<Rc<Features>>,
     pub mark: Mark,
     pub depth: usize,
     pub module: Rc<ModuleData>,
@@ -675,13 +678,41 @@ pub struct ExpansionData {
     pub crate_span: Option<Span>,
 }
 
+macro_rules! feature_tests {
+    ($( fn $getter:ident = $field:ident, )*) => {
+        $(
+            pub fn $getter(&self) -> bool {
+                match self.features.as_ref() {
+                    Some(features) => features.$field,
+                    _ => false,
+                }
+            }
+        )*
+    }
+}
+
+impl ExpansionData {
+    feature_tests! {
+        fn enable_quotes = quote,
+        fn enable_asm = asm,
+        fn enable_global_asm = global_asm,
+        fn enable_log_syntax = log_syntax,
+        fn enable_concat_idents = concat_idents,
+        fn enable_trace_macros = trace_macros,
+        fn enable_allow_internal_unstable = allow_internal_unstable,
+        fn enable_custom_derive = custom_derive,
+        fn proc_macro_enabled = proc_macro,
+    }
+}
+
 /// One of these is made during expansion and incrementally updated as we go;
 /// when a macro expansion occurs, the resulting nodes have the `backtrace()
 /// -> expn_info` of their expansion context stored into their span.
 pub struct ExtCtxt<'a> {
     pub parse_sess: &'a parse::ParseSess,
-    pub ecfg: expand::ExpansionConfig<'a>,
+    pub ecfg: expand::ExpansionConfig,
     pub root_path: PathBuf,
+    pub module_features: &'a mut FxHashMap<Ident, Features>,
     pub resolver: &'a mut Resolver,
     pub resolve_err_count: usize,
     pub current_expansion: ExpansionData,
@@ -690,16 +721,20 @@ pub struct ExtCtxt<'a> {
 
 impl<'a> ExtCtxt<'a> {
     pub fn new(parse_sess: &'a parse::ParseSess,
-               ecfg: expand::ExpansionConfig<'a>,
+               ecfg: expand::ExpansionConfig,
+               features: Option<Rc<Features>>,
+               module_features: &'a mut FxHashMap<Ident, Features>,
                resolver: &'a mut Resolver)
                -> ExtCtxt<'a> {
         ExtCtxt {
+            module_features,
             parse_sess,
             ecfg,
             root_path: PathBuf::new(),
             resolver,
             resolve_err_count: 0,
             current_expansion: ExpansionData {
+                features,
                 mark: Mark::root(),
                 depth: 0,
                 module: Rc::new(ModuleData { mod_path: Vec::new(), directory: PathBuf::new() }),

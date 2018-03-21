@@ -35,7 +35,7 @@ pub const MACRO: &'static str = "global_asm";
 pub fn expand_global_asm<'cx>(cx: &'cx mut ExtCtxt,
                               sp: Span,
                               tts: &[tokenstream::TokenTree]) -> Box<base::MacResult + 'cx> {
-    if !cx.ecfg.enable_global_asm() {
+    if !cx.current_expansion.enable_global_asm() {
         feature_gate::emit_feature_err(&cx.parse_sess,
                                        MACRO,
                                        sp,

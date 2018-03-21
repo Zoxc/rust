@@ -9,12 +9,13 @@
 // except according to those terms.
 
 use attr::HasAttrs;
-use feature_gate::{feature_err, EXPLAIN_STMT_ATTR_SYNTAX, Features, get_features, GateIssue};
+use feature_gate::{feature_err, EXPLAIN_STMT_ATTR_SYNTAX, Features, extend_features, GateIssue};
 use {fold, attr};
 use ast;
 use codemap::Spanned;
 use epoch::Epoch;
 use parse::{token, ParseSess};
+use std::rc::Rc;
 
 use ptr::P;
 use util::small_vector::SmallVector;
@@ -23,13 +24,13 @@ use util::small_vector::SmallVector;
 pub struct StripUnconfigured<'a> {
     pub should_test: bool,
     pub sess: &'a ParseSess,
-    pub features: Option<&'a Features>,
+    pub features: Option<Rc<Features>>,
 }
 
 // `cfg_attr`-process the crate's attributes and compute the crate's features.
 pub fn features(mut krate: ast::Crate, sess: &ParseSess, should_test: bool, epoch: Epoch)
                 -> (ast::Crate, Features) {
-    let features;
+    let mut features = Features::new();
     {
         let mut strip_unconfigured = StripUnconfigured {
             should_test,
@@ -47,11 +48,16 @@ pub fn features(mut krate: ast::Crate, sess: &ParseSess, should_test: bool, epoc
             return (krate, Features::new());
         }
 
-        features = get_features(&sess.span_diagnostic, &krate.attrs, epoch);
+        extend_features(
+            &mut features,
+            &sess.span_diagnostic,
+            &krate.attrs,
+            Some(epoch),
+            false);
 
         // Avoid reconfiguring malformed `cfg_attr`s
         if err_count == sess.span_diagnostic.err_count() {
-            strip_unconfigured.features = Some(&features);
+            strip_unconfigured.features = Some(Rc::new(features.clone()));
             strip_unconfigured.configure(unconfigured_attrs);
         }
     }
@@ -101,7 +107,7 @@ impl<'a> StripUnconfigured<'a> {
             }
         };
 
-        if attr::cfg_matches(&cfg, self.sess, self.features) {
+        if attr::cfg_matches(&cfg, self.sess, self.features.as_ref().map(|f| &**f)) {
             self.process_cfg_attr(ast::Attribute {
                 id: attr::mk_attr_id(),
                 style: attr.style,
@@ -141,7 +147,10 @@ impl<'a> StripUnconfigured<'a> {
                 return true;
             }
 
-            attr::cfg_matches(mis[0].meta_item().unwrap(), self.sess, self.features)
+            attr::cfg_matches(
+                mis[0].meta_item().unwrap(),
+                self.sess,
+                self.features.as_ref().map(|f| &**f))
         })
     }
 
@@ -149,7 +158,9 @@ impl<'a> StripUnconfigured<'a> {
     fn visit_expr_attrs(&mut self, attrs: &[ast::Attribute]) {
         // flag the offending attributes
         for attr in attrs.iter() {
-            if !self.features.map(|features| features.stmt_expr_attributes).unwrap_or(true) {
+            if !self.features.as_ref().map(|features| {
+                features.stmt_expr_attributes
+            }).unwrap_or(true) {
                 let mut err = feature_err(self.sess,
                                           "stmt_expr_attributes",
                                           attr.span,

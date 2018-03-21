@@ -24,7 +24,7 @@ use syntax::parse::ParseSess;
 use syntax::ptr::P;
 use syntax::symbol::Symbol;
 use syntax::visit::{self, Visitor};
-
+use rustc_data_structures::fx::FxHashMap;
 use syntax_pos::{Span, DUMMY_SP};
 
 use deriving;
@@ -62,7 +62,8 @@ pub fn modify(sess: &ParseSess,
               num_crate_types: usize,
               handler: &errors::Handler) -> ast::Crate {
     let ecfg = ExpansionConfig::default("proc_macro".to_string());
-    let mut cx = ExtCtxt::new(sess, ecfg, resolver);
+    let mut map = FxHashMap();
+    let mut cx = ExtCtxt::new(sess, ecfg, None, &mut map, resolver);
 
     let (derives, attr_macros, bang_macros) = {
         let mut collect = CollectProcMacros {

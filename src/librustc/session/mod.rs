@@ -98,6 +98,8 @@ pub struct Session {
     pub crate_disambiguator: RefCell<Option<CrateDisambiguator>>,
 
     features: RefCell<Option<feature_gate::Features>>,
+    pub module_features: Lock<FxHashMap<ast::Ident, feature_gate::Features>>,
+    pub module_lib_features: Lock<FxHashMap<NodeId, FxHashSet<Symbol>>>,
 
     /// The maximum recursion limit for potentially infinitely recursive
     /// operations such as auto-dereference and monomorphization.
@@ -1143,6 +1145,8 @@ pub fn build_session_(
         dependency_formats: RefCell::new(FxHashMap()),
         crate_disambiguator: RefCell::new(None),
         features: RefCell::new(None),
+        module_features: Lock::new(FxHashMap()),
+        module_lib_features: Lock::new(FxHashMap()),
         recursion_limit: Cell::new(64),
         type_length_limit: Cell::new(1048576),
         const_eval_stack_frame_limit: Cell::new(100),

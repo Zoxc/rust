@@ -228,7 +228,13 @@ pub fn collect_lang_features(base_src_path: &Path) -> Features {
                 Some("accepted") => Status::Stable,
                 _ => return None,
             };
-            let name = parts.next().unwrap().trim();
+            // Skip [] modifiers until we find the name
+            let mut name = loop {
+                let mut part = parts.next().unwrap().trim();
+                if !part.starts_with("[") {
+                    break part;
+                }
+            };
             let since = parts.next().unwrap().trim().trim_matches('"');
             let issue_str = parts.next().unwrap().trim();
             let tracking_issue = if issue_str.starts_with("None") {

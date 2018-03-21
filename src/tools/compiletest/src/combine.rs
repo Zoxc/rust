@@ -160,7 +160,7 @@ pub fn run_combined_instance(config: &Config,
     let mut input = File::create(&file).unwrap();
 
     let mut out = String::new();
-
+/*
     out.push_str("#![feature(cfg_target_vendor, cfg_target_feature, concat_idents)]
 #![feature(asm, global_asm, trace_macros, log_syntax, macro_vis_matcher, no_core, fn_traits)]
 #![feature(macro_at_most_once_rep, macro_lifetime_matcher, mpsc_select, slice_patterns)]
@@ -178,15 +178,15 @@ pub fn run_combined_instance(config: &Config,
 #![feature(process_exitcode_placeholder, unsized_tuple_coercion, match_default_bindings)]
 #![feature(conservative_impl_trait, universal_impl_trait, const_type_id, copy_closures)]
 #![feature(link_args, linkage)]
-
-#![allow(warnings)]
+*/
+    out.push_str("#![allow(warnings)]
 //extern crate core;
 ");
 
     for (i, test) in tests.iter().enumerate() {
         out.push_str("#[path=\"");
         out.push_str(&test.1.to_str().unwrap().to_string().replace("\\", "\\\\"));
-        out.push_str(&format!("\"]\nmod test_{};\n", i));
+        out.push_str(&format!("\"]\nmod _combined_test_{};\n", i));
     }
 
     let mut progress = File::create(&progress_file).unwrap();
@@ -223,7 +223,7 @@ pub fn run_combined_instance(config: &Config,
         out.push_str("{\n    println!(\"Running ");
         out.push_str(&test.1.to_str().unwrap().to_string().replace("\\", "\\\\"));
         out.push_str("\");\n");
-        out.push_str(&format!("    test_{}::main();\n}}\n", i));
+        out.push_str(&format!("    _combined_test_{}::main();\n}}\n", i));
     }
 
     out.push_str(" _ => break }

@@ -84,12 +84,13 @@ impl<'a> Folder for ExpandAllocatorDirectives<'a> {
         });
         let span = item.span.with_ctxt(SyntaxContext::empty().apply_mark(mark));
         let ecfg = ExpansionConfig::default(name.to_string());
+        let mut map = Default::default();
         let mut f = AllocFnFactory {
             span,
             kind: AllocatorKind::Global,
             global: item.ident,
             alloc: Ident::from_str("alloc"),
-            cx: ExtCtxt::new(self.sess, ecfg, self.resolver),
+            cx: ExtCtxt::new(self.sess, ecfg, None, &mut map, self.resolver),
         };
         let super_path = f.cx.path(f.span, vec![
             Ident::from_str("super"),

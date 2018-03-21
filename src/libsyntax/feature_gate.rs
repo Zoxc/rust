@@ -35,6 +35,8 @@ use errors::{DiagnosticBuilder, Handler, FatalError};
 use visit::{self, FnKind, Visitor};
 use parse::ParseSess;
 use symbol::{keywords, Symbol};
+use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::fx::FxHashSet;
 
 use std::{env, path};
 
@@ -54,14 +56,36 @@ macro_rules! set {
     }}
 }
 
+macro_rules! is_modular {
+    () => {{ false }};
+    //(crate$(, $modifiers:ident)*) => {{ false }};
+    (modular$(, $modifiers:ident)*) => {{ true }};
+    ($other:ident$(, $modifiers:ident)*) => {
+        is_modular!($($modifiers),*)
+    };
+}
+
 macro_rules! declare_features {
-    ($((active, $feature: ident, $ver: expr, $issue: expr, $epoch: expr),)+) => {
+    ($((active$(, [$modifiers:ident])*, $feature: ident, $ver: expr, $issue: expr, $epoch: expr),)+) => {
         /// Represents active features that are currently being implemented or
         /// currently being considered for addition/removal.
-        const ACTIVE_FEATURES:
-                &'static [(&'static str, &'static str, Option<u32>,
-                           Option<Epoch>, fn(&mut Features, Span))] =
-            &[$((stringify!($feature), $ver, $issue, $epoch, set!($feature))),+];
+        struct ActiveFeature {
+            name: &'static str,
+            _ver: &'static str,
+            issue: Option<u32>,
+            epoch: Option<Epoch>,
+            modular: bool,
+            set: fn(&mut Features, Span),
+        }
+
+        const ACTIVE_FEATURES: &'static [ActiveFeature] = &[$(ActiveFeature {
+            name: stringify!($feature),
+            _ver: $ver,
+            issue: $issue,
+            epoch: $epoch,
+            modular: is_modular!($($modifiers),*),
+            set: set!($feature),
+        }),+];
 
         /// A set of features to be used by later passes.
         #[derive(Clone)]
@@ -124,11 +148,11 @@ macro_rules! declare_features {
 // source, so take care when modifying it.
 
 declare_features! (
-    (active, asm, "1.0.0", Some(29722), None),
-    (active, concat_idents, "1.0.0", Some(29599), None),
+    (active, [modular], asm, "1.0.0", Some(29722), None),
+    (active, [modular], concat_idents, "1.0.0", Some(29599), None),
     (active, link_args, "1.0.0", Some(29596), None),
     (active, log_syntax, "1.0.0", Some(29598), None),
-    (active, non_ascii_idents, "1.0.0", Some(28979), None),
+    (active, [modular], non_ascii_idents, "1.0.0", Some(28979), None),
     (active, plugin_registrar, "1.0.0", Some(29597), None),
     (active, thread_local, "1.0.0", Some(29594), None),
     (active, trace_macros, "1.0.0", Some(29598), None),
@@ -139,17 +163,19 @@ declare_features! (
 
     (active, link_llvm_intrinsics, "1.0.0", Some(29602), None),
     (active, linkage, "1.0.0", Some(29603), None),
-    (active, quote, "1.0.0", Some(29601), None),
+    (active, [modular], quote, "1.0.0", Some(29601), None),
 
 
     // rustc internal
     (active, rustc_diagnostic_macros, "1.0.0", None, None),
     (active, rustc_const_unstable, "1.0.0", None, None),
-    (active, box_syntax, "1.0.0", Some(27779), None),
+    (active, [modular], box_syntax, "1.0.0", Some(27779), None),
     (active, placement_in_syntax, "1.0.0", Some(27779), None),
-    (active, unboxed_closures, "1.0.0", Some(29625), None),
 
-    (active, fundamental, "1.0.0", Some(29635), None),
+    // Enables the rustc_paren_sugar attribute which is not modular
+    (active, [crate], unboxed_closures, "1.0.0", Some(29625), None),
+
+    (active, [modular], fundamental, "1.0.0", Some(29635), None),
     (active, main, "1.0.0", Some(29634), None),
     (active, needs_allocator, "1.4.0", Some(27389), None),
     (active, on_unimplemented, "1.0.0", Some(29628), None),
@@ -161,7 +187,7 @@ declare_features! (
     (active, needs_panic_runtime, "1.10.0", Some(32837), None),
 
     // OIBIT specific features
-    (active, optin_builtin_traits, "1.0.0", Some(13231), None),
+    (active, [modular], optin_builtin_traits, "1.0.0", Some(13231), None),
 
     // macro re-export needs more discussion and stabilization
     (active, macro_reexport, "1.0.0", Some(29638), None),
@@ -174,14 +200,14 @@ declare_features! (
     (active, no_core, "1.3.0", Some(29639), None),
 
     // Allows using `box` in patterns; RFC 469
-    (active, box_patterns, "1.0.0", Some(29641), None),
+    (active, [modular], box_patterns, "1.0.0", Some(29641), None),
 
     // Allows using the unsafe_destructor_blind_to_params attribute;
     // RFC 1238
-    (active, dropck_parametricity, "1.3.0", Some(28498), None),
+    (active, [modular], dropck_parametricity, "1.3.0", Some(28498), None),
 
     // Allows using the may_dangle attribute; RFC 1327
-    (active, dropck_eyepatch, "1.10.0", Some(34761), None),
+    (active, [modular], dropck_eyepatch, "1.10.0", Some(34761), None),
 
     // Allows the use of custom attributes; RFC 572
     (active, custom_attribute, "1.0.0", Some(29642), None),
@@ -213,10 +239,10 @@ declare_features! (
     (active, allow_internal_unsafe, "1.0.0", None, None),
 
     // #23121. Array patterns have some hazards yet.
-    (active, slice_patterns, "1.0.0", Some(23121), None),
+    (active, [modular], slice_patterns, "1.0.0", Some(23121), None),
 
     // Allows the definition of `const fn` functions.
-    (active, const_fn, "1.2.0", Some(24111), None),
+    (active, [modular], const_fn, "1.2.0", Some(24111), None),
 
     // Allows using #[prelude_import] on glob `use` items.
     //
@@ -230,20 +256,20 @@ declare_features! (
     (active, associated_type_defaults, "1.2.0", Some(29661), None),
 
     // allow `repr(simd)`, and importing the various simd intrinsics
-    (active, repr_simd, "1.4.0", Some(27731), None),
+    (active, [modular], repr_simd, "1.4.0", Some(27731), None),
 
     // Allows cfg(target_feature = "...").
     (active, cfg_target_feature, "1.4.0", Some(29717), None),
 
     // allow `extern "platform-intrinsic" { ... }`
-    (active, platform_intrinsics, "1.4.0", Some(27731), None),
+    (active, [modular], platform_intrinsics, "1.4.0", Some(27731), None),
 
     // allow `#[unwind(..)]`
     // rust runtime internal
     (active, unwind_attributes, "1.4.0", None, None),
 
     // allow the use of `#[naked]` on functions.
-    (active, naked_functions, "1.9.0", Some(32408), None),
+    (active, [modular], naked_functions, "1.9.0", Some(32408), None),
 
     // allow `#[no_debug]`
     (active, no_debug, "1.5.0", Some(29721), None),
@@ -265,13 +291,13 @@ declare_features! (
     (active, cfg_target_thread_local, "1.7.0", Some(29594), None),
 
     // rustc internal
-    (active, abi_vectorcall, "1.7.0", None, None),
+    (active, [modular], abi_vectorcall, "1.7.0", None, None),
 
     // X..Y patterns
     (active, exclusive_range_pattern, "1.11.0", Some(37854), None),
 
     // impl specialization (RFC 1210)
-    (active, specialization, "1.7.0", Some(31844), None),
+    (active, [crate], specialization, "1.7.0", Some(31844), None),
 
     // Allows cfg(target_has_atomic = "...").
     (active, cfg_target_has_atomic, "1.9.0", Some(32976), None),
@@ -289,7 +315,8 @@ declare_features! (
     (active, attr_literals, "1.13.0", Some(34981), None),
 
     // Allows untagged unions `union U { ... }`
-    (active, untagged_unions, "1.13.0", Some(32836), None),
+    // Feature checking of untagged_unions is for the whole crate.
+    (active, [crate], untagged_unions, "1.13.0", Some(32836), None),
 
     // Used to identify the `compiler_builtins` crate
     // rustc internal
@@ -307,7 +334,7 @@ declare_features! (
     (active, target_feature, "1.15.0", None, None),
 
     // `extern "ptx-*" fn()`
-    (active, abi_ptx, "1.15.0", None, None),
+    (active, [modular], abi_ptx, "1.15.0", None, None),
 
     // The `i128` type
     (active, i128_type, "1.16.0", Some(35118), None),
@@ -328,7 +355,7 @@ declare_features! (
     (active, static_nobundle, "1.16.0", Some(37403), None),
 
     // `extern "msp430-interrupt" fn()`
-    (active, abi_msp430_interrupt, "1.16.0", Some(38487), None),
+    (active, [modular], abi_msp430_interrupt, "1.16.0", Some(38487), None),
 
     // Used to identify crates that contain sanitizer runtimes
     // rustc internal
@@ -339,17 +366,17 @@ declare_features! (
     (active, profiler_runtime, "1.18.0", None, None),
 
     // `extern "x86-interrupt" fn()`
-    (active, abi_x86_interrupt, "1.17.0", Some(40180), None),
+    (active, [modular], abi_x86_interrupt, "1.17.0", Some(40180), None),
 
 
     // Allows the `catch {...}` expression
-    (active, catch_expr, "1.17.0", Some(31436), None),
+    (active, [modular], catch_expr, "1.17.0", Some(31436), None),
 
     // Used to preserve symbols (see llvm.used)
     (active, used, "1.18.0", Some(40289), None),
 
     // Allows module-level inline assembly by way of global_asm!()
-    (active, global_asm, "1.18.0", Some(35119), None),
+    (active, [modular], global_asm, "1.18.0", Some(35119), None),
 
     // Allows overlapping impls of marker traits
     (active, overlapping_marker_traits, "1.18.0", Some(29864), None),
@@ -358,7 +385,7 @@ declare_features! (
     (active, macro_vis_matcher, "1.18.0", Some(41022), None),
 
     // rustc internal
-    (active, abi_thiscall, "1.19.0", None, None),
+    (active, [modular], abi_thiscall, "1.19.0", None, None),
 
     // Allows a test to fail without failing the whole suite
     (active, allow_fail, "1.19.0", Some(42219), None),
@@ -367,7 +394,7 @@ declare_features! (
     (active, unsized_tuple_coercion, "1.20.0", Some(42877), None),
 
     // Generators
-    (active, generators, "1.21.0", None, None),
+    (active, [modular], generators, "1.21.0", None, None),
 
     // Trait aliases
     (active, trait_alias, "1.24.0", Some(41517), None),
@@ -438,7 +465,7 @@ declare_features! (
     (active, extern_in_paths, "1.23.0", Some(44660), None),
 
     // Allows `#[repr(transparent)]` attribute on newtype structs
-    (active, repr_transparent, "1.25.0", Some(43036), None),
+    (active, [modular], repr_transparent, "1.25.0", Some(43036), None),
 
     // Use `?` as the Kleene "at most one" operator
     (active, macro_at_most_once_rep, "1.25.0", Some(48075), None),
@@ -1062,7 +1089,7 @@ struct Context<'a> {
 macro_rules! gate_feature_fn {
     ($cx: expr, $has_feature: expr, $span: expr, $name: expr, $explain: expr, $level: expr) => {{
         let (cx, has_feature, span,
-             name, explain, level) = ($cx, $has_feature, $span, $name, $explain, $level);
+             name, explain, level) = (&$cx, $has_feature, $span, $name, $explain, $level);
         let has_feature: bool = has_feature(&$cx.features);
         debug!("gate_feature(feature = {:?}, span = {:?}); has? {}", name, span, has_feature);
         if !has_feature && !span.allows_unstable() {
@@ -1147,8 +1174,8 @@ pub fn find_lang_feature_accepted_version(feature: &str) -> Option<&'static str>
 }
 
 fn find_lang_feature_issue(feature: &str) -> Option<u32> {
-    if let Some(info) = ACTIVE_FEATURES.iter().find(|t| t.0 == feature) {
-        let issue = info.2;
+    if let Some(info) = ACTIVE_FEATURES.iter().find(|t| t.name == feature) {
+        let issue = info.issue;
         // FIXME (#28244): enforce that active features have issue numbers
         // assert!(issue.is_some())
         issue
@@ -1187,17 +1214,12 @@ pub fn feature_err<'a>(sess: &'a ParseSess, feature: &str, span: Span, issue: Ga
 }
 
 fn leveled_feature_err<'a>(sess: &'a ParseSess, feature: &str, span: Span, issue: GateIssue,
-                           explain: &str, mut level: GateStrength) -> DiagnosticBuilder<'a> {
+                           explain: &str, level: GateStrength) -> DiagnosticBuilder<'a> {
     let diag = &sess.span_diagnostic;
 
     let issue = match issue {
         GateIssue::Language => find_lang_feature_issue(feature),
-        GateIssue::Library(lib) => {
-            if sess.combine_test_mode {
-                level = GateStrength::Soft;
-            }
-            lib
-        },
+        GateIssue::Library(lib) => lib,
     };
 
     let explanation = if let Some(n) = issue {
@@ -1282,7 +1304,10 @@ pub const EXPLAIN_MACRO_AT_MOST_ONCE_REP: &'static str =
     "Using the `?` macro Kleene operator for \"at most one\" repetition is unstable";
 
 struct PostExpansionVisitor<'a> {
-    context: &'a Context<'a>,
+    context: Context<'a>,
+    in_module: bool,
+    module_features: &'a FxHashMap<ast::Ident, Features>,
+    module_lib_features: &'a mut FxHashMap<NodeId, FxHashSet<Symbol>>,
 }
 
 macro_rules! gate_feature_post {
@@ -1370,6 +1395,32 @@ fn contains_novel_literal(item: &ast::MetaItem) -> bool {
 }
 
 impl<'a> PostExpansionVisitor<'a> {
+    fn visit_module_item(&mut self, item: &'a ast::Item) {
+        if !self.context.parse_sess.combine_test_mode || self.in_module {
+            visit::walk_item(self, item);
+            return;
+        }
+        let features = self.module_features.get(&item.ident).unwrap();
+
+        // Put the active features into a map for quick lookup
+        let lib_features: FxHashSet<_> = features.declared_lib_features
+                                                 .iter().map(|&(ref s, _)| s.clone()).collect();
+        self.module_lib_features.insert(item.id, lib_features);
+        
+        let ctx = Context {
+            features: &features,
+            parse_sess: self.context.parse_sess,
+            plugin_attributes: self.context.plugin_attributes,
+        };
+        let visitor = &mut PostExpansionVisitor {
+            context: ctx,
+            in_module: true,
+            module_features: self.module_features,
+            module_lib_features: self.module_lib_features,
+        };
+        visit::walk_item(visitor, item);
+    }
+
     fn whole_crate_feature_gates(&mut self, _krate: &ast::Crate) {
         for &(ident, span) in &*self.context.parse_sess.non_modrs_mods.borrow() {
             if !span.allows_unstable() {
@@ -1394,6 +1445,7 @@ impl<'a> PostExpansionVisitor<'a> {
     }
 }
 
+#[allow(warnings)]
 impl<'a> Visitor<'a> for PostExpansionVisitor<'a> {
     fn visit_attribute(&mut self, attr: &ast::Attribute) {
         if !attr.span.allows_unstable() {
@@ -1564,7 +1616,7 @@ impl<'a> Visitor<'a> for PostExpansionVisitor<'a> {
             _ => {}
         }
 
-        visit::walk_item(self, i);
+        self.visit_module_item(i);
     }
 
     fn visit_foreign_item(&mut self, i: &'a ast::ForeignItem) {
@@ -1804,23 +1856,28 @@ impl<'a> Visitor<'a> for PostExpansionVisitor<'a> {
     }
 }
 
-pub fn get_features(span_handler: &Handler, krate_attrs: &[ast::Attribute],
-                    epoch: Epoch) -> Features {
-    let mut features = Features::new();
-
+pub fn extend_features(
+    features: &mut Features,
+    span_handler: &Handler,
+    attrs: &[ast::Attribute],
+    epoch: Option<Epoch>,
+    in_mod: bool)
+{
     let mut feature_checker = FeatureChecker::default();
 
-    for &(.., f_epoch, set) in ACTIVE_FEATURES.iter() {
-        if let Some(f_epoch) = f_epoch {
-            if epoch >= f_epoch {
-                // FIXME(Manishearth) there is currently no way to set
-                // lang features by epoch
-                set(&mut features, DUMMY_SP);
+    if let Some(epoch) = epoch {
+        for feature in ACTIVE_FEATURES.iter() {
+            if let Some(f_epoch) = feature.epoch {
+                if epoch >= f_epoch {
+                    // FIXME(Manishearth) there is currently no way to set
+                    // lang features by epoch
+                    (feature.set)(features, DUMMY_SP);
+                }
             }
         }
     }
 
-    for attr in krate_attrs {
+    for attr in attrs {
         if !attr.check_name("feature") {
             continue
         }
@@ -1840,18 +1897,27 @@ pub fn get_features(span_handler: &Handler, krate_attrs: &[ast::Attribute],
                         continue
                     };
 
-                    if let Some(&(_, _, _, _, set)) = ACTIVE_FEATURES.iter()
-                        .find(|& &(n, ..)| name == n) {
-                        set(&mut features, mi.span);
-                        feature_checker.collect(&features, mi.span);
+                    if let Some(feature) = ACTIVE_FEATURES.iter()
+                        .find(|feature| name == feature.name) {
+
+                        if in_mod && !feature.modular {
+                            span_handler.span_err( 
+                                mi.span,
+                                &format!("feature {} used in a combined test, \
+                                          but it is not modular", name)
+                            );
+                        }
+
+                        (feature.set)(features, mi.span);
+                        feature_checker.collect(features, mi.span);
                     }
-                    else if let Some(&(_, _, _)) = REMOVED_FEATURES.iter()
+                    else if let Some(_) = REMOVED_FEATURES.iter()
                             .find(|& &(n, _, _)| name == n)
                         .or_else(|| STABLE_REMOVED_FEATURES.iter()
                             .find(|& &(n, _, _)| name == n)) {
                         span_err!(span_handler, mi.span, E0557, "feature has been removed");
                     }
-                    else if let Some(&(_, _, _)) = ACCEPTED_FEATURES.iter()
+                    else if let Some(_) = ACCEPTED_FEATURES.iter()
                         .find(|& &(n, _, _)| name == n) {
                         features.declared_stable_lang_features.push((name, mi.span));
                     } else {
@@ -1863,8 +1929,6 @@ pub fn get_features(span_handler: &Handler, krate_attrs: &[ast::Attribute],
     }
 
     feature_checker.check(span_handler);
-
-    features
 }
 
 /// A collector for mutually exclusive and interdependent features and their flag spans.
@@ -1923,6 +1987,8 @@ impl FeatureChecker {
 pub fn check_crate(krate: &ast::Crate,
                    sess: &ParseSess,
                    features: &Features,
+                   module_features: &FxHashMap<ast::Ident, Features>,
+                   module_lib_features: &mut FxHashMap<NodeId, FxHashSet<Symbol>>,
                    plugin_attributes: &[(String, AttributeType)],
                    unstable: UnstableFeatures) {
     maybe_stage_features(&sess.span_diagnostic, krate, unstable);
@@ -1931,9 +1997,15 @@ pub fn check_crate(krate: &ast::Crate,
         parse_sess: sess,
         plugin_attributes,
     };
-    let visitor = &mut PostExpansionVisitor { context: &ctx };
+    let visitor = &mut PostExpansionVisitor {
+        context: ctx,
+        in_module: false,
+        module_features,
+        module_lib_features,
+    };
     visitor.whole_crate_feature_gates(krate);
-    visit::walk_crate(visitor, krate);
+    // Walk the crate's module directly so the crate is not marked as a module
+    visit::walk_mod(visitor, &krate.module);
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

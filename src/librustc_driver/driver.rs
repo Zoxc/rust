@@ -48,6 +48,7 @@ use std::ffi::{OsString, OsStr};
 use std::fs;
 use std::io::{self, Write};
 use std::iter;
+use std::rc::Rc;
 use std::path::{Path, PathBuf};
 use rustc_data_structures::sync::Lrc;
 use std::sync::mpsc;
@@ -793,14 +794,19 @@ pub fn phase_2_configure_and_expand_inner<'a, F>(sess: &'a Session,
         }
         let features = sess.features_untracked();
         let cfg = syntax::ext::expand::ExpansionConfig {
-            features: Some(&features),
             recursion_limit: sess.recursion_limit.get(),
             trace_mac: sess.opts.debugging_opts.trace_macros,
             should_test: sess.opts.test,
             ..syntax::ext::expand::ExpansionConfig::default(crate_name.to_string())
         };
 
-        let mut ecx = ExtCtxt::new(&sess.parse_sess, cfg, &mut resolver);
+        let mut module_features = sess.module_features.lock();
+        let mut ecx = ExtCtxt::new(
+            &sess.parse_sess,
+            cfg,
+            Some(Rc::new(features.clone())),
+            &mut *module_features,
+            &mut resolver);
         let err_count = ecx.parse_sess.span_diagnostic.err_count();
 
         let krate = ecx.monotonic_expander().expand_crate(krate);
@@ -894,6 +900,8 @@ pub fn phase_2_configure_and_expand_inner<'a, F>(sess: &'a Session,
             syntax::feature_gate::check_crate(&krate,
                                               &sess.parse_sess,
                                               &sess.features_untracked(),
+                                              &sess.module_features.lock(),
+                                              &mut sess.module_lib_features.lock(),
                                               &attributes,
                                               sess.opts.unstable_features);
         })

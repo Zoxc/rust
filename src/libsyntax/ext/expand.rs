@@ -18,7 +18,7 @@ use ext::base::*;
 use ext::derive::{add_derived_markers, collect_derives};
 use ext::hygiene::{Mark, SyntaxContext};
 use ext::placeholders::{placeholder, PlaceholderExpander};
-use feature_gate::{self, Features, GateIssue, is_builtin_attr, emit_feature_err};
+use feature_gate::{self, GateIssue, is_builtin_attr, emit_feature_err};
 use fold;
 use fold::*;
 use parse::{DirectoryOwnership, PResult};
@@ -398,7 +398,7 @@ impl<'a, 'b> MacroExpander<'a, 'b> {
                 cfg: StripUnconfigured {
                     should_test: self.cx.ecfg.should_test,
                     sess: self.cx.parse_sess,
-                    features: self.cx.ecfg.features,
+                    features: self.cx.current_expansion.features.clone(),
                 },
                 cx: self.cx,
                 invocations: Vec::new(),
@@ -421,7 +421,7 @@ impl<'a, 'b> MacroExpander<'a, 'b> {
         let mut cfg = StripUnconfigured {
             should_test: self.cx.ecfg.should_test,
             sess: self.cx.parse_sess,
-            features: self.cx.ecfg.features,
+            features: self.cx.current_expansion.features.clone(),
         };
         // Since the item itself has already been configured by the InvocationCollector,
         // we know that fold result vector will contain exactly one element
@@ -547,7 +547,8 @@ impl<'a, 'b> MacroExpander<'a, 'b> {
                 // don't stability-check macros in the same crate
                 // (the only time this is null is for syntax extensions registered as macros)
                 if def_site_span.map_or(false, |def_span| !crate_span.contains(def_span))
-                    && !span.allows_unstable() && this.cx.ecfg.features.map_or(true, |feats| {
+                    && !span.allows_unstable()
+                    && this.cx.current_expansion.features.as_ref().map_or(true, |feats| {
                     // macro features will count as lib features
                     !feats.declared_lib_features.iter().any(|&(feat, _)| feat == feature)
                 }) {
@@ -864,7 +865,7 @@ impl<'a, 'b> InvocationCollector<'a, 'b> {
                 return attrs;
             }
 
-            if self.cx.ecfg.proc_macro_enabled() {
+            if self.cx.current_expansion.proc_macro_enabled() {
                 attr = find_attr_invoc(&mut attrs);
             }
             traits = collect_derives(&mut self.cx, &mut attrs);
@@ -881,14 +882,14 @@ impl<'a, 'b> InvocationCollector<'a, 'b> {
     // Detect use of feature-gated or invalid attributes on macro invocations
     // since they will not be detected after macro expansion.
     fn check_attributes(&mut self, attrs: &[ast::Attribute]) {
-        let features = self.cx.ecfg.features.unwrap();
+        let features = self.cx.current_expansion.features.as_ref().unwrap();
         for attr in attrs.iter() {
             feature_gate::check_attribute(attr, self.cx.parse_sess, features);
         }
     }
 
     fn check_attribute(&mut self, at: &ast::Attribute) {
-        let features = self.cx.ecfg.features.unwrap();
+        let features = self.cx.current_expansion.features.as_ref().unwrap();
         feature_gate::check_attribute(at, self.cx.parse_sess, features);
     }
 }
@@ -1038,11 +1039,33 @@ impl<'a, 'b> Folder for InvocationCollector<'a, 'b> {
                     self.cx.current_expansion.directory_ownership = directory_ownership;
                 }
 
+                let replace_features = self.cx.parse_sess.combine_test_mode &&
+                    self.cx.current_expansion.module.mod_path.len() == 1;
+
+                let orig_features = if replace_features && self.monotonic {
+                    let mut features = (**self.cx
+                                             .current_expansion
+                                             .features.as_ref().unwrap()).clone();
+                    feature_gate::extend_features(
+                        &mut features,
+                        &self.cx.parse_sess.span_diagnostic,
+                        &item.attrs,
+                        None,
+                        true);
+                    self.cx.module_features.insert(item.ident, features.clone());
+                    let features = Some(Rc::new(features));
+                    Some(mem::replace(&mut self.cx.current_expansion.features, features))
+                } else {
+                    None
+                };
                 let orig_module =
                     mem::replace(&mut self.cx.current_expansion.module, Rc::new(module));
                 let result = noop_fold_item(item, self);
                 self.cx.current_expansion.module = orig_module;
                 self.cx.current_expansion.directory_ownership = orig_directory_ownership;
+                if replace_features {
+                    self.cx.current_expansion.features = orig_features.unwrap();
+                }
                 result
             }
             // Ensure that test functions are accessible from the test harness.
@@ -1214,9 +1237,8 @@ impl<'a, 'b> Folder for InvocationCollector<'a, 'b> {
     }
 }
 
-pub struct ExpansionConfig<'feat> {
+pub struct ExpansionConfig {
     pub crate_name: String,
-    pub features: Option<&'feat Features>,
     pub recursion_limit: usize,
     pub trace_mac: bool,
     pub should_test: bool, // If false, strip `#[test]` nodes
@@ -1224,42 +1246,16 @@ pub struct ExpansionConfig<'feat> {
     pub keep_macs: bool,
 }
 
-macro_rules! feature_tests {
-    ($( fn $getter:ident = $field:ident, )*) => {
-        $(
-            pub fn $getter(&self) -> bool {
-                match self.features {
-                    Some(&Features { $field: true, .. }) => true,
-                    _ => false,
-                }
-            }
-        )*
-    }
-}
-
-impl<'feat> ExpansionConfig<'feat> {
-    pub fn default(crate_name: String) -> ExpansionConfig<'static> {
+impl ExpansionConfig {
+    pub fn default(crate_name: String) -> ExpansionConfig {
         ExpansionConfig {
             crate_name,
-            features: None,
             recursion_limit: 1024,
             trace_mac: false,
             should_test: false,
             single_step: false,
             keep_macs: false,
         }
-    }
-
-    feature_tests! {
-        fn enable_quotes = quote,
-        fn enable_asm = asm,
-        fn enable_global_asm = global_asm,
-        fn enable_log_syntax = log_syntax,
-        fn enable_concat_idents = concat_idents,
-        fn enable_trace_macros = trace_macros,
-        fn enable_allow_internal_unstable = allow_internal_unstable,
-        fn enable_custom_derive = custom_derive,
-        fn proc_macro_enabled = proc_macro,
     }
 }
 
