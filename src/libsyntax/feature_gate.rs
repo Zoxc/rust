@@ -1397,7 +1397,11 @@ fn contains_novel_literal(item: &ast::MetaItem) -> bool {
 
 impl<'a> PostExpansionVisitor<'a> {
     fn visit_module_item(&mut self, item: &'a ast::Item) {
-        if !self.context.parse_sess.combine_test_mode || self.in_module {
+        let is_module = match item.node {
+            ast::ItemKind::Mod(..) => true,
+            _ => false,
+        };
+        if !is_module || !self.context.parse_sess.combine_test_mode || self.in_module {
             visit::walk_item(self, item);
             return;
         }
