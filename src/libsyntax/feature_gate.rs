@@ -66,7 +66,8 @@ macro_rules! is_modular {
 }
 
 macro_rules! declare_features {
-    ($((active$(, [$modifiers:ident])*, $feature: ident, $ver: expr, $issue: expr, $epoch: expr),)+) => {
+    ($((active$(, [$modifiers:ident])*, $feature: ident,
+        $ver: expr, $issue: expr, $epoch: expr),)+) => {
         /// Represents active features that are currently being implemented or
         /// currently being considered for addition/removal.
         struct ActiveFeature {
@@ -1411,7 +1412,7 @@ impl<'a> PostExpansionVisitor<'a> {
         let lib_features: FxHashSet<_> = features.declared_lib_features
                                                  .iter().map(|&(ref s, _)| s.clone()).collect();
         self.module_lib_features.insert(item.id, lib_features);
-        
+
         let ctx = Context {
             features: &features,
             parse_sess: self.context.parse_sess,
@@ -1906,7 +1907,7 @@ pub fn extend_features(
                         .find(|feature| name == feature.name) {
 
                         if in_mod && !feature.modular {
-                            span_handler.span_err( 
+                            span_handler.span_err(
                                 mi.span,
                                 &format!("feature {} used in a combined test, \
                                           but it is not modular", name)

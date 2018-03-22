@@ -229,7 +229,7 @@ pub fn collect_lang_features(base_src_path: &Path) -> Features {
                 _ => return None,
             };
             // Skip [] modifiers until we find the name
-            let mut name = loop {
+            let name = loop {
                 let mut part = parts.next().unwrap().trim();
                 if !part.starts_with("[") {
                     break part;
