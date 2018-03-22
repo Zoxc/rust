@@ -28,6 +28,7 @@ pub struct EarlyProps {
     pub should_fail: bool,
     pub aux: Vec<String>,
     pub revisions: Vec<String>,
+    pub features: Vec<String>,
 }
 
 impl EarlyProps {
@@ -38,9 +39,10 @@ impl EarlyProps {
             should_fail: false,
             aux: Vec::new(),
             revisions: vec![],
+            features: Vec::new(),
         };
 
-        iter_header(testfile,
+        props.features = iter_header(testfile,
                     None,
                     &mut |ln| {
             if ln.starts_with("compile-flags") ||
@@ -415,11 +417,48 @@ impl TestProps {
     }
 }
 
-fn iter_header(testfile: &Path, cfg: Option<&str>, it: &mut FnMut(&str)) {
+fn parse_features(line: &str) -> Vec<String> {
+    fn skip_if(pos: &mut &str, str: &str) -> bool {
+        if pos.starts_with(str) {
+            *pos = pos[str.len()..].trim();
+            true
+        } else {
+            false
+        }
+    }
+    println!("Parsing line {} for features", line);
+    let mut pos = line;
+    &mut pos;
+    if !skip_if(&mut pos, "#![") { return Vec::new() }
+    if !skip_if(&mut pos, "feature") { return Vec::new() }
+    if !skip_if(&mut pos, "(") { return Vec::new() }
+
+    let mut end = 0;
+    loop {
+        if end == pos.len() {
+            return Vec::new();
+        }
+        if pos.as_bytes()[end] == ')' as u8 {
+            break;
+        }
+        end += 1;
+    }
+
+    let fs: Vec<_> = pos[0..end].split(",").map(|f| f.trim().to_string()).collect();
+    println!("Parsed {} as {:?}", line, fs);
+    fs
+}
+
+fn iter_header(
+    testfile: &Path,
+    cfg: Option<&str>,
+    it: &mut FnMut(&str)) -> Vec<String>
+{
     if testfile.is_dir() {
-        return;
+        return Vec::new();
     }
     let rdr = BufReader::new(File::open(testfile).unwrap());
+    let mut features = Vec::new();
     for ln in rdr.lines() {
         // Assume that any directives will be found before the first
         // module or function. This doesn't seem to be an optimization
@@ -427,7 +466,9 @@ fn iter_header(testfile: &Path, cfg: Option<&str>, it: &mut FnMut(&str)) {
         let ln = ln.unwrap();
         let ln = ln.trim();
         if ln.starts_with("fn") || ln.starts_with("mod") {
-            return;
+            return features;
+        } else if ln.starts_with("#") {
+            features.extend(parse_features(ln));
         } else if ln.starts_with("//[") {
             // A comment like `//[foo]` is specific to revision `foo`
             if let Some(close_brace) = ln.find(']') {
@@ -447,7 +488,7 @@ fn iter_header(testfile: &Path, cfg: Option<&str>, it: &mut FnMut(&str)) {
             it(ln[2..].trim_left());
         }
     }
-    return;
+    features
 }
 
 impl Config {

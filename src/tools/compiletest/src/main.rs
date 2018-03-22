@@ -34,8 +34,9 @@ use std::fs;
 use std::io;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::str;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use filetime::FileTime;
 use getopts::Options;
 use common::{Config, TestPaths};
@@ -300,6 +301,7 @@ pub fn parse_config(args: Vec<String>) -> Config {
             .expect("invalid mode"),
         run_ignored: matches.opt_present("ignored"),
         combine: matches.opt_present("combine"),
+        modular_features: None,
         filter: matches.free.first().cloned(),
         filter_exact: matches.opt_present("exact"),
         logfile: matches.opt_str("logfile").map(|s| PathBuf::from(&s)),
@@ -406,7 +408,17 @@ pub fn opt_str2(maybestr: Option<String>) -> String {
     }
 }
 
-pub fn run_tests(config: Config) {
+pub fn run_tests(mut config: Config) {
+    if config.combine {
+        let mut rustc = Command::new(&config.rustc_path);
+        rustc.arg("--print").arg("modular-features")
+             .arg("-Z").arg("unstable-options")
+             .stdout(Stdio::piped());
+        let output = rustc.output().expect("failed to discover modular features");
+        config.modular_features = Some(str::from_utf8(&output.stdout)
+            .unwrap().trim().lines().map(|f| f.to_string()).collect());
+        println!("Found modular features [{:?}]", config.modular_features);
+    }
     let config = Arc::new(config);
     if config.target.contains("android") {
         if let DebugInfoGdb = config.mode {
@@ -647,7 +659,10 @@ pub fn make_test(config: &Arc<Config>, testpaths: &TestPaths) -> test::TestDescA
         early_props.aux.is_empty() &&
         early_props.revisions.is_empty() &&
         !early_props.no_combine &&
-        config.mode == Mode::RunPass;
+        config.mode == Mode::RunPass &&
+        early_props.features.iter().all(|f| {
+            config.modular_features.as_ref().unwrap().contains(f)
+        });
 
     test::TestDescAndFn {
         desc: test::TestDesc {

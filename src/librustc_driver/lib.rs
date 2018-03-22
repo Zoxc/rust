@@ -100,7 +100,7 @@ use std::thread;
 
 use syntax::ast;
 use syntax::codemap::{CodeMap, FileLoader, RealFileLoader};
-use syntax::feature_gate::{GatedCfg, UnstableFeatures};
+use syntax::feature_gate::{self, GatedCfg, UnstableFeatures};
 use syntax::parse::{self, PResult};
 use syntax_pos::{DUMMY_SP, MultiSpan, FileName};
 
@@ -1003,6 +1003,7 @@ impl RustcDefaultCalls {
                     targets.sort();
                     println!("{}", targets.join("\n"));
                 },
+                ModularFeatures => feature_gate::print_modular_features(),
                 Sysroot => println!("{}", sess.sysroot().display()),
                 TargetSpec => println!("{}", sess.target.target.to_json().pretty()),
                 FileNames | CrateName => {

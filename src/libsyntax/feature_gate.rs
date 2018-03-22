@@ -2013,6 +2013,14 @@ pub fn check_crate(krate: &ast::Crate,
     visit::walk_mod(visitor, &krate.module);
 }
 
+pub fn print_modular_features() {
+    for feature in ACTIVE_FEATURES {
+        if feature.modular {
+            println!("{}", feature.name);
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnstableFeatures {
     /// Hard errors for unstable features are active, as on

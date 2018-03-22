@@ -143,6 +143,9 @@ pub struct Config {
     /// Merge tests together to form larger crates
     pub combine: bool,
 
+    /// Modular Rust features
+    pub modular_features: Option<Vec<String>>,
+
     /// Run ignored tests
     pub run_ignored: bool,
 

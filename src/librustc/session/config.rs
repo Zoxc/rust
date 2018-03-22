@@ -423,6 +423,7 @@ pub enum PrintRequest {
     TlsModels,
     TargetSpec,
     NativeStaticLibs,
+    ModularFeatures,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -2031,6 +2032,19 @@ pub fn build_session_options_and_crate_config(
         "code-models" => PrintRequest::CodeModels,
         "tls-models" => PrintRequest::TlsModels,
         "native-static-libs" => PrintRequest::NativeStaticLibs,
+        "modular-features" => {
+            if nightly_options::is_unstable_enabled(matches) {
+                PrintRequest::ModularFeatures
+            } else {
+                early_error(
+                    error_format,
+                    &format!(
+                        "the `-Z unstable-options` flag must also be passed to \
+                         enable the modular-features print option"
+                    ),
+                );
+            }
+        }
         "target-spec-json" => {
             if nightly_options::is_unstable_enabled(matches) {
                 PrintRequest::TargetSpec
