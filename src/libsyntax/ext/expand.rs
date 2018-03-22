@@ -1054,6 +1054,7 @@ impl<'a, 'b> Folder for InvocationCollector<'a, 'b> {
                         true);
                     self.cx.module_features.insert(item.ident, features.clone());
                     let features = Some(Rc::new(features));
+                    self.cfg.features = features.clone();
                     Some(mem::replace(&mut self.cx.current_expansion.features, features))
                 } else {
                     None
@@ -1063,8 +1064,9 @@ impl<'a, 'b> Folder for InvocationCollector<'a, 'b> {
                 let result = noop_fold_item(item, self);
                 self.cx.current_expansion.module = orig_module;
                 self.cx.current_expansion.directory_ownership = orig_directory_ownership;
-                if replace_features {
-                    self.cx.current_expansion.features = orig_features.unwrap();
+                if let Some(orig_features) = orig_features {
+                    self.cx.current_expansion.features = orig_features.clone();
+                    self.cfg.features = orig_features;
                 }
                 result
             }

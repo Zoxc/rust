@@ -426,7 +426,6 @@ fn parse_features(line: &str) -> Vec<String> {
             false
         }
     }
-    println!("Parsing line {} for features", line);
     let mut pos = line;
     &mut pos;
     if !skip_if(&mut pos, "#![") { return Vec::new() }
@@ -444,9 +443,7 @@ fn parse_features(line: &str) -> Vec<String> {
         end += 1;
     }
 
-    let fs: Vec<_> = pos[0..end].split(",").map(|f| f.trim().to_string()).collect();
-    println!("Parsed {} as {:?}", line, fs);
-    fs
+    pos[0..end].split(",").map(|f| f.trim().to_string()).collect()
 }
 
 fn iter_header(
