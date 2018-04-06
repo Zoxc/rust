@@ -23,7 +23,6 @@ use rustc_serialize::{Decodable, Decoder, Encodable, Encoder, opaque,
                       SpecializedDecoder, SpecializedEncoder,
                       UseSpecializedDecodable, UseSpecializedEncodable};
 use session::{CrateDisambiguator, Session};
-use std::cell::RefCell;
 use std::mem;
 use syntax::ast::NodeId;
 use syntax::codemap::{CodeMap, StableFilemapId};
@@ -81,7 +80,7 @@ pub struct OnDiskCache<'sess> {
     prev_interpret_alloc_index: Vec<AbsoluteBytePos>,
 
     /// Deserialization: A cache to ensure we don't read allocations twice
-    interpret_alloc_cache: RefCell<FxHashMap<usize, interpret::AllocId>>,
+    interpret_alloc_cache: Lock<FxHashMap<usize, interpret::AllocId>>,
 }
 
 // This type is used only for (de-)serialization.
@@ -150,7 +149,7 @@ impl<'sess> OnDiskCache<'sess> {
             prev_diagnostics_index: footer.diagnostics_index.into_iter().collect(),
             synthetic_expansion_infos: Lock::new(FxHashMap()),
             prev_interpret_alloc_index: footer.interpret_alloc_index,
-            interpret_alloc_cache: RefCell::new(FxHashMap::default()),
+            interpret_alloc_cache: Lock::new(FxHashMap::default()),
         }
     }
 
@@ -167,7 +166,7 @@ impl<'sess> OnDiskCache<'sess> {
             prev_diagnostics_index: FxHashMap(),
             synthetic_expansion_infos: Lock::new(FxHashMap()),
             prev_interpret_alloc_index: Vec::new(),
-            interpret_alloc_cache: RefCell::new(FxHashMap::default()),
+            interpret_alloc_cache: Lock::new(FxHashMap::default()),
         }
     }
 
@@ -487,7 +486,7 @@ struct CacheDecoder<'a, 'tcx: 'a, 'x> {
     synthetic_expansion_infos: &'x Lock<FxHashMap<AbsoluteBytePos, SyntaxContext>>,
     file_index_to_file: &'x Lock<FxHashMap<FileMapIndex, Lrc<FileMap>>>,
     file_index_to_stable_id: &'x FxHashMap<FileMapIndex, StableFilemapId>,
-    interpret_alloc_cache: &'x RefCell<FxHashMap<usize, interpret::AllocId>>,
+    interpret_alloc_cache: &'x Lock<FxHashMap<usize, interpret::AllocId>>,
     /// maps from index in the cache file to location in the cache file
     prev_interpret_alloc_index: &'x [AbsoluteBytePos],
 }
