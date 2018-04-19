@@ -37,7 +37,7 @@ pub trait QueryConfig<'tcx>: QueryBasicConfig {
     const NAME: &'static str;
 
     fn query(key: Self::Key) -> Query<'tcx>;
-    fn query_map<'a>(tcx: TyCtxt<'a, 'tcx, '_>) -> &'a Lock<QueryMap<'tcx, Self>>;
+    fn query_map<'a>(tcx: TyCtxt<'a, 'tcx, '_>) -> &'a Lock<QueryMap<'tcx, Self::Key, Self::Value>>;
 
     fn to_dep_node(tcx: TyCtxt<'_, 'tcx, '_>, key: &Self::Key) -> DepNode;
 

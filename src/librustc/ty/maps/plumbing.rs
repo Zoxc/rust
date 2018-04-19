@@ -35,11 +35,12 @@ use rustc_data_structures::sync::{Lrc, Lock};
 use std::mem;
 use std::ptr;
 use std::collections::hash_map::Entry;
+use std::hash::Hash;
 use syntax_pos::Span;
 use syntax::codemap::DUMMY_SP;
 
-pub struct QueryMap<'tcx, D: QueryBasicConfig/* + ?Sized*/> {
-    pub(super) map: FxHashMap<D::Key, QueryResult<'tcx, QueryValue<D::Value>>>,
+pub struct QueryMap<'tcx, K: Eq + Hash, V> {
+    pub(super) map: FxHashMap<K, QueryResult<'tcx, QueryValue<V>>>,
 }
 
 pub(super) struct QueryValue<T> {
@@ -58,8 +59,8 @@ impl<T> QueryValue<T> {
     }
 }
 
-impl<'tcx, M: QueryConfig<'tcx>> QueryMap<'tcx, M> {
-    pub(super) fn new() -> QueryMap<'tcx, M> {
+impl<'tcx, K: Eq + Hash, V> QueryMap<'tcx, K, V> {
+    pub(super) fn new() -> QueryMap<'tcx, K, V> {
         QueryMap {
             map: FxHashMap(),
         }
@@ -229,7 +230,7 @@ pub(super) enum TryGetJob<'a, 'tcx: 'a, D: QueryBasicConfig + 'a> {
 }
 
 pub(super) struct QueryData<'a, 'tcx: 'a, Q: QueryBasicConfig + 'a> {
-    map: &'a Lock<QueryMap<'tcx, Q>>,
+    map: &'a Lock<QueryMap<'tcx, Q::Key, Q::Value>>,
     cache_on_disk: bool,
     compute: fn(TyCtxt<'_, 'tcx, '_>, key: Q::Key) -> Q::Value,
     try_load_from_disk: fn(TyCtxt<'_, 'tcx, 'tcx>, SerializedDepNodeIndex) -> Option<Q::Value>,
@@ -730,7 +731,7 @@ macro_rules! define_maps {
                 Query::$name(key)
             }
 
-            fn query_map<'a>(tcx: TyCtxt<'a, $tcx, '_>) -> &'a Lock<QueryMap<$tcx, Self>> {
+            fn query_map<'a>(tcx: TyCtxt<'a, $tcx, '_>) -> &'a Lock<QueryMap<$tcx, $K, $V>> {
                 &tcx.maps.$name
             }
 
@@ -817,7 +818,9 @@ macro_rules! define_map_struct {
      input: ($(([$($modifiers:tt)*] [$($attr:tt)*] [$name:ident]))*)) => {
         pub struct Maps<$tcx> {
             providers: IndexVec<CrateNum, Providers<$tcx>>,
-            $($(#[$attr])*  $name: Lock<QueryMap<$tcx, queries::$name<$tcx>>>,)*
+            $($(#[$attr])*  $name: Lock<QueryMap<$tcx,
+                                                 <queries::$name<$tcx> as QueryBasicConfig>::Key,
+                                                 <queries::$name<$tcx> as QueryBasicConfig>::Value>>,)*
         }
     };
 }
