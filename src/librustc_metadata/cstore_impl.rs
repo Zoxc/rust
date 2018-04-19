@@ -15,7 +15,7 @@ use native_libs;
 use foreign_modules;
 use schema;
 
-use rustc::ty::maps::QueryConfig;
+use rustc::ty::maps::QueryBasicConfig;
 use rustc::middle::cstore::{CrateStore, DepKind,
                             MetadataLoader, LinkMeta,
                             LoadedMacro, EncodedMetadata, NativeLibraryKind};
@@ -51,7 +51,7 @@ macro_rules! provide {
         pub fn provide_extern<$lt>(providers: &mut Providers<$lt>) {
             $(fn $name<'a, $lt:$lt, T>($tcx: TyCtxt<'a, $lt, $lt>, def_id_arg: T)
                                     -> <ty::queries::$name<$lt> as
-                                        QueryConfig<$lt>>::Value
+                                        QueryBasicConfig>::Value
                 where T: IntoArgs,
             {
                 #[allow(unused_variables)]

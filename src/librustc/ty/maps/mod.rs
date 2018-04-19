@@ -75,6 +75,7 @@ mod values;
 use self::values::Value;
 
 mod config;
+pub use self::config::QueryBasicConfig;
 pub use self::config::QueryConfig;
 use self::config::QueryDescription;
 

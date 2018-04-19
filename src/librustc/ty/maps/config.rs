@@ -28,11 +28,13 @@ use ich::StableHashingContext;
 
 /// Query configuration and description traits.
 
-pub trait QueryConfig<'tcx> {
-    const NAME: &'static str;
-
+pub trait QueryBasicConfig: Sized {
     type Key: Eq + Hash + Clone + Debug;
     type Value: Clone + for<'a> HashStable<StableHashingContext<'a>>;
+}
+
+pub trait QueryConfig<'tcx>: QueryBasicConfig {
+    const NAME: &'static str;
 
     fn query(key: Self::Key) -> Query<'tcx>;
     fn query_map<'a>(tcx: TyCtxt<'a, 'tcx, '_>) -> &'a Lock<QueryMap<'tcx, Self>>;

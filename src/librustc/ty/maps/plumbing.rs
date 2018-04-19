@@ -12,7 +12,10 @@
 //! that generate the actual methods on tcx which find and execute the
 //! provider, manage the caches, and so forth.
 
+#![allow(warnings)]
+
 use dep_graph::{DepNodeIndex, DepNode, DepKind, DepNodeColor};
+use dep_graph::SerializedDepNodeIndex;
 use errors::DiagnosticBuilder;
 use errors::Level;
 use errors::Diagnostic;
@@ -20,7 +23,7 @@ use errors::FatalError;
 use ty::tls;
 use ty::{TyCtxt};
 use ty::maps::Query;
-use ty::maps::config::QueryConfig;
+use ty::maps::config::{QueryBasicConfig, QueryConfig};
 use ty::maps::config::QueryDescription;
 use ty::maps::job::{QueryJob, QueryResult, QueryInfo};
 use ty::item_path;
@@ -35,7 +38,7 @@ use std::collections::hash_map::Entry;
 use syntax_pos::Span;
 use syntax::codemap::DUMMY_SP;
 
-pub struct QueryMap<'tcx, D: QueryConfig<'tcx> + ?Sized> {
+pub struct QueryMap<'tcx, D: QueryBasicConfig/* + ?Sized*/> {
     pub(super) map: FxHashMap<D::Key, QueryResult<'tcx, QueryValue<D::Value>>>,
 }
 
@@ -92,26 +95,24 @@ macro_rules! profq_query_msg {
 
 /// A type representing the responsibility to execute the job in the `job` field.
 /// This will poison the relevant query if dropped.
-pub(super) struct JobOwner<'a, 'tcx: 'a, Q: QueryDescription<'tcx> + 'a> {
-    map: &'a Lock<QueryMap<'tcx, Q>>,
-    key: Q::Key,
+pub(super) struct JobOwner<'a, 'tcx: 'a, Q: QueryBasicConfig + 'a> {
+    data: &'a QueryData<'a, 'tcx, Q>,
     job: Lrc<QueryJob<'tcx>>,
 }
 
-impl<'a, 'tcx, Q: QueryDescription<'tcx>> JobOwner<'a, 'tcx, Q> {
+impl<'a, 'tcx, Q: QueryBasicConfig> JobOwner<'a, 'tcx, Q> {
     /// Either gets a JobOwner corresponding the the query, allowing us to
     /// start executing the query, or it returns with the result of the query.
     /// If the query is executing elsewhere, this will wait for it.
     /// If the query panicked, this will silently panic.
     pub(super) fn try_get(
         tcx: TyCtxt<'a, 'tcx, '_>,
+        data: &'a QueryData<'a, 'tcx, Q>,
         span: Span,
-        key: &Q::Key,
     ) -> TryGetJob<'a, 'tcx, Q> {
-        let map = Q::query_map(tcx);
         loop {
-            let mut lock = map.borrow_mut();
-            let job = match lock.map.entry((*key).clone()) {
+            let mut lock = data.map.borrow_mut();
+            let job = match lock.map.entry(data.key.clone()) {
                 Entry::Occupied(entry) => {
                     match *entry.get() {
                         QueryResult::Started(ref job) => job.clone(),
@@ -128,13 +129,12 @@ impl<'a, 'tcx, Q: QueryDescription<'tcx>> JobOwner<'a, 'tcx, Q> {
                     return tls::with_related_context(tcx, |icx| {
                         let info = QueryInfo {
                             span,
-                            query: Q::query(key.clone()),
+                            query: (data.query)(data.key.clone()),
                         };
                         let job = Lrc::new(QueryJob::new(info, icx.query.clone()));
                         let owner = JobOwner {
-                            map,
+                            data: data,
                             job: job.clone(),
-                            key: (*key).clone(),
                         };
                         entry.insert(QueryResult::Started(job));
                         TryGetJob::NotYetStarted(owner)
@@ -153,15 +153,14 @@ impl<'a, 'tcx, Q: QueryDescription<'tcx>> JobOwner<'a, 'tcx, Q> {
     /// signals the waiter and forgets the JobOwner, so it won't poison the query
     pub(super) fn complete(self, result: &Q::Value, dep_node_index: DepNodeIndex) {
         // We can move out of `self` here because we `mem::forget` it below
-        let key = unsafe { ptr::read(&self.key) };
         let job = unsafe { ptr::read(&self.job) };
-        let map = self.map;
+        let data = self.data;
 
         // Forget ourself so our destructor won't poison the query
         mem::forget(self);
 
         let value = QueryValue::new(result.clone(), dep_node_index);
-        map.borrow_mut().map.insert(key, QueryResult::Complete(value));
+        data.map.borrow_mut().map.insert(data.key.clone(), QueryResult::Complete(value));
 
         job.signal_complete();
     }
@@ -201,10 +200,10 @@ impl<'a, 'tcx, Q: QueryDescription<'tcx>> JobOwner<'a, 'tcx, Q> {
     }
 }
 
-impl<'a, 'tcx, Q: QueryDescription<'tcx>> Drop for JobOwner<'a, 'tcx, Q> {
+impl<'a, 'tcx, Q: QueryBasicConfig> Drop for JobOwner<'a, 'tcx, Q> {
     fn drop(&mut self) {
         // Poison the query so jobs waiting on it panic
-        self.map.borrow_mut().map.insert(self.key.clone(), QueryResult::Poisoned);
+        self.data.map.borrow_mut().map.insert(self.data.key.clone(), QueryResult::Poisoned);
         // Also signal the completion of the job, so waiters
         // will continue execution
         self.job.signal_complete();
@@ -219,7 +218,7 @@ pub(super) struct CycleError<'tcx> {
 }
 
 /// The result of `try_get_lock`
-pub(super) enum TryGetJob<'a, 'tcx: 'a, D: QueryDescription<'tcx> + 'a> {
+pub(super) enum TryGetJob<'a, 'tcx: 'a, D: QueryBasicConfig + 'a> {
     /// The query is not yet started. Contains a guard to the map eventually used to start it.
     NotYetStarted(JobOwner<'a, 'tcx, D>),
 
@@ -227,6 +226,32 @@ pub(super) enum TryGetJob<'a, 'tcx: 'a, D: QueryDescription<'tcx> + 'a> {
     /// Returns the result of the query and its dep node index
     /// if it succeeded or a cycle error if it failed
     JobCompleted(Result<(D::Value, DepNodeIndex), CycleError<'tcx>>),
+}
+
+pub(super) struct QueryData<'a, 'tcx: 'a, Q: QueryBasicConfig + 'a> {
+    map: &'a Lock<QueryMap<'tcx, Q>>,
+    cache_on_disk: bool,
+    compute: fn(TyCtxt<'_, 'tcx, '_>, key: Q::Key) -> Q::Value,
+    try_load_from_disk: fn(TyCtxt<'_, 'tcx, 'tcx>, SerializedDepNodeIndex) -> Option<Q::Value>,
+    to_dep_node: fn(tcx: TyCtxt<'_, 'tcx, '_>, key: &Q::Key) -> DepNode,
+    query: fn(Q::Key) -> Query<'tcx>,
+    name: &'static str,
+    key: Q::Key,
+}
+
+impl<'a, 'tcx: 'a, Q: QueryDescription<'tcx> + 'a> QueryData<'a, 'tcx, Q> {
+    fn new(tcx: TyCtxt<'a, 'tcx, '_>, key: Q::Key) -> Self {
+        QueryData {
+            map: Q::query_map(tcx),
+            cache_on_disk: Q::cache_on_disk(key.clone()),
+            try_load_from_disk: Q::try_load_from_disk,
+            compute: Q::compute,
+            query: Q::query,
+            to_dep_node: Q::to_dep_node,
+            name: Q::NAME,
+            key,
+        }
+    }
 }
 
 impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
@@ -330,25 +355,26 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         }
     }
 
-    fn try_get_with<Q: QueryDescription<'gcx>>(
+    fn try_get_with<Q: QueryBasicConfig>(
         self,
         span: Span,
-        key: Q::Key)
+        data: &'a QueryData<'a, 'gcx, Q>)
     -> Result<Q::Value, CycleError<'gcx>>
     {
+        let key = data.key.clone();
         debug!("ty::queries::{}::try_get_with(key={:?}, span={:?})",
-               Q::NAME,
+               data.name,
                key,
                span);
 
         profq_msg!(self,
             ProfileQueriesMsg::QueryBegin(
                 span.data(),
-                profq_query_msg!(Q::NAME, self, key),
+                profq_query_msg!(data.name, self, key),
             )
         );
 
-        let job = match JobOwner::try_get(self, span, &key) {
+        let job = match JobOwner::try_get(self, data, span) {
             TryGetJob::NotYetStarted(job) => job,
             TryGetJob::JobCompleted(result) => {
                 return result.map(|(v, index)| {
@@ -362,17 +388,17 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         // expensive for some DepKinds.
         if !self.dep_graph.is_fully_enabled() {
             let null_dep_node = DepNode::new_no_params(::dep_graph::DepKind::Null);
-            return self.force_query_with_job::<Q>(key, job, null_dep_node).map(|(v, _)| v);
+            return self.force_query_with_job::<Q>(job, data, null_dep_node).map(|(v, _)| v);
         }
 
-        let dep_node = Q::to_dep_node(self, &key);
+        let dep_node = (data.to_dep_node)(self, &key);
 
         if dep_node.kind.is_anon() {
             profq_msg!(self, ProfileQueriesMsg::ProviderBegin);
 
             let res = job.start(self, |tcx| {
                 tcx.dep_graph.with_anon_task(dep_node.kind, || {
-                    Q::compute(tcx.global_tcx(), key)
+                    (data.compute)(tcx.global_tcx(), key)
                 })
             });
 
@@ -392,14 +418,14 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         if !dep_node.kind.is_input() {
             if let Some(dep_node_index) = self.try_mark_green_and_read(&dep_node) {
                 profq_msg!(self, ProfileQueriesMsg::CacheHit);
-                return self.load_from_disk_and_cache_in_memory::<Q>(key,
+                return self.load_from_disk_and_cache_in_memory::<Q>(data,
                                                                     job,
                                                                     dep_node_index,
                                                                     &dep_node)
             }
         }
 
-        match self.force_query_with_job::<Q>(key, job, dep_node) {
+        match self.force_query_with_job::<Q>(job, data, dep_node) {
             Ok((result, dep_node_index)) => {
                 self.dep_graph.read_index(dep_node_index);
                 Ok(result)
@@ -408,9 +434,9 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         }
     }
 
-    fn load_from_disk_and_cache_in_memory<Q: QueryDescription<'gcx>>(
+    fn load_from_disk_and_cache_in_memory<Q: QueryBasicConfig>(
         self,
-        key: Q::Key,
+        data: &'a QueryData<'a, 'gcx, Q>,
         job: JobOwner<'a, 'gcx, Q>,
         dep_node_index: DepNodeIndex,
         dep_node: &DepNode
@@ -422,12 +448,12 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         debug_assert!(self.dep_graph.is_green(dep_node));
 
         // First we try to load the result from the on-disk cache
-        let result = if Q::cache_on_disk(key.clone()) &&
+        let result = if data.cache_on_disk &&
                         self.sess.opts.debugging_opts.incremental_queries {
             let prev_dep_node_index =
                 self.dep_graph.prev_dep_node_index_of(dep_node);
-            let result = Q::try_load_from_disk(self.global_tcx(),
-                                                    prev_dep_node_index);
+            let result = (data.try_load_from_disk)(self.global_tcx(),
+                                                   prev_dep_node_index);
 
             // We always expect to find a cached result for things that
             // can be forced from DepNode.
@@ -454,7 +480,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                 // The dep-graph for this computation is already in
                 // place
                 tcx.dep_graph.with_ignore(|| {
-                    Q::compute(tcx, key)
+                    (data.compute)(tcx, data.key.clone())
                 })
             });
             result
@@ -495,10 +521,10 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         Ok(result)
     }
 
-    fn force_query_with_job<Q: QueryDescription<'gcx>>(
+    fn force_query_with_job<Q: QueryBasicConfig>(
         self,
-        key: Q::Key,
         job: JobOwner<'_, 'gcx, Q>,
+        data: &'a QueryData<'a, 'gcx, Q>,
         dep_node: DepNode)
     -> Result<(Q::Value, DepNodeIndex), CycleError<'gcx>> {
         // If the following assertion triggers, it can have two reasons:
@@ -510,20 +536,20 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                 "Forcing query with already existing DepNode.\n\
                     - query-key: {:?}\n\
                     - dep-node: {:?}",
-                key, dep_node);
+                data.key, dep_node);
 
         profq_msg!(self, ProfileQueriesMsg::ProviderBegin);
         let res = job.start(self, |tcx| {
             if dep_node.kind.is_eval_always() {
                 tcx.dep_graph.with_eval_always_task(dep_node,
                                                     tcx,
-                                                    key,
-                                                    Q::compute)
+                                                    data.key.clone(),
+                                                    data.compute)
             } else {
                 tcx.dep_graph.with_task(dep_node,
                                         tcx,
-                                        key,
-                                        Q::compute)
+                                        data.key.clone(),
+                                        data.compute)
             }
         });
         profq_msg!(self, ProfileQueriesMsg::ProviderEnd);
@@ -575,13 +601,14 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         span: Span,
         dep_node: DepNode
     ) -> Result<(Q::Value, DepNodeIndex), CycleError<'gcx>> {
+        let data = &QueryData::new(self, key.clone());
         // We may be concurrently trying both execute and force a query
         // Ensure that only one of them runs the query
-        let job = match JobOwner::try_get(self, span, &key) {
+        let job = match JobOwner::try_get(self, data, span) {
             TryGetJob::NotYetStarted(job) => job,
             TryGetJob::JobCompleted(result) => return result,
         };
-        self.force_query_with_job::<Q>(key, job, dep_node)
+        self.force_query_with_job::<Q>(job, data, dep_node)
     }
 
     pub fn try_get_query<Q: QueryDescription<'gcx>>(
@@ -589,7 +616,8 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         span: Span,
         key: Q::Key
     ) -> Result<Q::Value, DiagnosticBuilder<'a>> {
-        match self.try_get_with::<Q>(span, key) {
+        let data = &QueryData::new(self, key.clone());
+        match self.try_get_with::<Q>(span, data) {
             Ok(e) => Ok(e),
             Err(e) => Err(self.report_cycle(e)),
         }
@@ -690,10 +718,12 @@ macro_rules! define_maps {
             })*
         }
 
-        $(impl<$tcx> QueryConfig<$tcx> for queries::$name<$tcx> {
+        $(impl<$tcx> QueryBasicConfig for queries::$name<$tcx> {
             type Key = $K;
             type Value = $V;
+        }
 
+        impl<$tcx> QueryConfig<$tcx> for queries::$name<$tcx> {
             const NAME: &'static str = stringify!($name);
 
             fn query(key: Self::Key) -> Query<'tcx> {
@@ -722,7 +752,6 @@ macro_rules! define_maps {
         }
 
         impl<'a, $tcx, 'lcx> queries::$name<$tcx> {
-            
             /// Ensure that either this query has all green inputs or been executed.
             /// Executing query::ensure(D) is considered a read of the dep-node D.
             ///
