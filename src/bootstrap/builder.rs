@@ -334,7 +334,7 @@ impl<'a> Builder<'a> {
                 native::Llvm, tool::Rustfmt, tool::Miri, native::Lld),
             Kind::Check => describe!(check::Std, check::Test, check::Rustc, check::CodegenBackend,
                 check::Rustdoc),
-            Kind::Test => describe!(test::Tidy, test::Bootstrap/**/, test::Ui, test::RunPass,
+            Kind::Test => describe!(test::Tidy, test::Bootstrap/*, test::Ui, test::RunPass,
                 test::CompileFail, test::ParseFail, test::RunFail, test::RunPassValgrind,
                 test::MirOpt, test::Codegen, test::CodegenUnits, test::Incremental, test::Debuginfo,
                 test::UiFullDeps, test::RunPassFullDeps, test::RunFailFullDeps,
@@ -349,7 +349,7 @@ impl<'a> Builder<'a> {
                 test::Rustfmt, test::Miri, test::Clippy, test::RustdocJS, test::RustdocTheme,
                 test::RustdocUi,
                 // Run run-make last, since these won't pass without make on Windows
-                test::RunMake/**/),
+                test::RunMake*/),
             Kind::Bench => describe!(test::Crate, test::CrateLibrustc),
             Kind::Doc => describe!(doc::UnstableBook, doc::UnstableBookGen, doc::TheBook,
                 doc::Standalone, doc::Std, doc::Test, doc::WhitelistedRustc, doc::Rustc,
