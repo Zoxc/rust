@@ -156,12 +156,6 @@ fn main() {
             cmd.arg("-C").arg("panic=abort");
         }
 
-        if crate_name == "rustc" {
-            cmd.arg("-Z").arg("time-passes");
-            let file = std::fs::File::create("rustc-timings").unwrap();
-            cmd.stdout(std::process::Stdio::from(file));
-        }
-
         // Set various options from config.toml to configure how we're building
         // code.
         if env::var("RUSTC_DEBUGINFO") == Ok("true".to_string()) {
