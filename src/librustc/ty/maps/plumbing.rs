@@ -27,15 +27,17 @@ use ty::maps::config::{QueryBasicConfig, QueryConfig};
 use ty::maps::config::QueryDescription;
 use ty::maps::job::{QueryJob, QueryResult, QueryInfo};
 use ty::item_path;
-
+use ich::StableHashingContext;
 use util::common::{profq_msg, ProfileQueriesMsg, QueryMsg};
 
+use rustc_data_structures::stable_hasher::HashStable;
 use rustc_data_structures::fx::{FxHashMap};
 use rustc_data_structures::sync::{Lrc, Lock};
 use std::mem;
 use std::ptr;
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
+use std::fmt::Debug;
 use syntax_pos::Span;
 use syntax::codemap::DUMMY_SP;
 
@@ -357,11 +359,13 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         }
     }
 
-    fn try_get_with<Q: QueryBasicConfig>(
+    #[inline(never)]
+    fn try_get_with<K: Eq + Hash + Clone + Debug + 'a,
+                    V: Clone + for<'b> HashStable<StableHashingContext<'b>> + 'a>(
         self,
         span: Span,
-        data: &'a QueryData<'a, 'gcx, Q::Key, Q::Value>)
-    -> Result<Q::Value, CycleError<'gcx>>
+        data: &'a QueryData<'a, 'gcx, K, V>)
+    -> Result<V, CycleError<'gcx>>
     {
         let key = data.key.clone();
         debug!("ty::queries::{}::try_get_with(key={:?}, span={:?})",
@@ -390,7 +394,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         // expensive for some DepKinds.
         if !self.dep_graph.is_fully_enabled() {
             let null_dep_node = DepNode::new_no_params(::dep_graph::DepKind::Null);
-            return self.force_query_with_job::<Q>(job, data, null_dep_node).map(|(v, _)| v);
+            return self.force_query_with_job(job, data, null_dep_node).map(|(v, _)| v);
         }
 
         let dep_node = (data.to_dep_node)(self, &key);
@@ -420,14 +424,14 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         if !dep_node.kind.is_input() {
             if let Some(dep_node_index) = self.try_mark_green_and_read(&dep_node) {
                 profq_msg!(self, ProfileQueriesMsg::CacheHit);
-                return self.load_from_disk_and_cache_in_memory::<Q>(data,
-                                                                    job,
-                                                                    dep_node_index,
-                                                                    &dep_node)
+                return self.load_from_disk_and_cache_in_memory(data,
+                                                               job,
+                                                               dep_node_index,
+                                                               &dep_node)
             }
         }
 
-        match self.force_query_with_job::<Q>(job, data, dep_node) {
+        match self.force_query_with_job(job, data, dep_node) {
             Ok((result, dep_node_index)) => {
                 self.dep_graph.read_index(dep_node_index);
                 Ok(result)
@@ -436,13 +440,15 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         }
     }
 
-    fn load_from_disk_and_cache_in_memory<Q: QueryBasicConfig>(
+    #[inline(always)]
+    fn load_from_disk_and_cache_in_memory
+    <K: Eq + Hash + Clone + 'a, V: Clone + for<'b> HashStable<StableHashingContext<'b>> + 'a>(
         self,
-        data: &'a QueryData<'a, 'gcx, Q::Key, Q::Value>,
-        job: JobOwner<'a, 'gcx, Q::Key, Q::Value>,
+        data: &'a QueryData<'a, 'gcx, K, V>,
+        job: JobOwner<'a, 'gcx, K, V>,
         dep_node_index: DepNodeIndex,
         dep_node: &DepNode
-    ) -> Result<Q::Value, CycleError<'gcx>>
+    ) -> Result<V, CycleError<'gcx>>
     {
         // Note this function can be called concurrently from the same query
         // We must ensure that this is handled correctly
@@ -523,12 +529,15 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         Ok(result)
     }
 
-    fn force_query_with_job<Q: QueryBasicConfig>(
+    #[inline(never)]
+    fn force_query_with_job
+    <K: Eq + Hash + Clone + Debug + 'a, V: Clone
+                                           + for<'b> HashStable<StableHashingContext<'b>> + 'a>(
         self,
-        job: JobOwner<'_, 'gcx, Q::Key, Q::Value>,
-        data: &'a QueryData<'a, 'gcx, Q::Key, Q::Value>,
+        job: JobOwner<'_, 'gcx, K, V>,
+        data: &'a QueryData<'a, 'gcx, K, V>,
         dep_node: DepNode)
-    -> Result<(Q::Value, DepNodeIndex), CycleError<'gcx>> {
+    -> Result<(V, DepNodeIndex), CycleError<'gcx>> {
         // If the following assertion triggers, it can have two reasons:
         // 1. Something is wrong with DepNode creation, either here or
         //    in DepGraph::try_mark_green()
@@ -610,7 +619,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             TryGetJob::NotYetStarted(job) => job,
             TryGetJob::JobCompleted(result) => return result,
         };
-        self.force_query_with_job::<Q>(job, data, dep_node)
+        self.force_query_with_job(job, data, dep_node)
     }
 
     pub fn try_get_query<Q: QueryDescription<'gcx>>(
@@ -619,7 +628,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         key: Q::Key
     ) -> Result<Q::Value, DiagnosticBuilder<'a>> {
         let data = &query_data::<Q>(self, key.clone());
-        match self.try_get_with::<Q>(span, data) {
+        match self.try_get_with(span, data) {
             Ok(e) => Ok(e),
             Err(e) => Err(self.report_cycle(e)),
         }
