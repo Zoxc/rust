@@ -96,21 +96,21 @@ macro_rules! profq_query_msg {
 
 /// A type representing the responsibility to execute the job in the `job` field.
 /// This will poison the relevant query if dropped.
-pub(super) struct JobOwner<'a, 'tcx: 'a, Q: QueryBasicConfig + 'a> {
-    data: &'a QueryData<'a, 'tcx, Q>,
+pub(super) struct JobOwner<'a, 'tcx: 'a, K: Eq + Hash + Clone + 'a, V: Clone + 'a> {
+    data: &'a QueryData<'a, 'tcx, K, V>,
     job: Lrc<QueryJob<'tcx>>,
 }
 
-impl<'a, 'tcx, Q: QueryBasicConfig> JobOwner<'a, 'tcx, Q> {
+impl<'a, 'tcx, K: Eq + Clone + Hash, V: Clone> JobOwner<'a, 'tcx, K, V> {
     /// Either gets a JobOwner corresponding the the query, allowing us to
     /// start executing the query, or it returns with the result of the query.
     /// If the query is executing elsewhere, this will wait for it.
     /// If the query panicked, this will silently panic.
     pub(super) fn try_get(
         tcx: TyCtxt<'a, 'tcx, '_>,
-        data: &'a QueryData<'a, 'tcx, Q>,
+        data: &'a QueryData<'a, 'tcx, K, V>,
         span: Span,
-    ) -> TryGetJob<'a, 'tcx, Q> {
+    ) -> TryGetJob<'a, 'tcx, K, V> {
         loop {
             let mut lock = data.map.borrow_mut();
             let job = match lock.map.entry(data.key.clone()) {
@@ -152,7 +152,7 @@ impl<'a, 'tcx, Q: QueryBasicConfig> JobOwner<'a, 'tcx, Q> {
 
     /// Completes the query by updating the query map with the `result`,
     /// signals the waiter and forgets the JobOwner, so it won't poison the query
-    pub(super) fn complete(self, result: &Q::Value, dep_node_index: DepNodeIndex) {
+    pub(super) fn complete(self, result: &V, dep_node_index: DepNodeIndex) {
         // We can move out of `self` here because we `mem::forget` it below
         let job = unsafe { ptr::read(&self.job) };
         let data = self.data;
@@ -201,7 +201,7 @@ impl<'a, 'tcx, Q: QueryBasicConfig> JobOwner<'a, 'tcx, Q> {
     }
 }
 
-impl<'a, 'tcx, Q: QueryBasicConfig> Drop for JobOwner<'a, 'tcx, Q> {
+impl<'a, 'tcx, K: Eq + Clone + Hash, V: Clone> Drop for JobOwner<'a, 'tcx, K, V> {
     fn drop(&mut self) {
         // Poison the query so jobs waiting on it panic
         self.data.map.borrow_mut().map.insert(self.data.key.clone(), QueryResult::Poisoned);
@@ -219,39 +219,40 @@ pub(super) struct CycleError<'tcx> {
 }
 
 /// The result of `try_get_lock`
-pub(super) enum TryGetJob<'a, 'tcx: 'a, D: QueryBasicConfig + 'a> {
+pub(super) enum TryGetJob<'a, 'tcx: 'a, K: Eq + Clone + Hash + 'a, V: Clone + 'a> {
     /// The query is not yet started. Contains a guard to the map eventually used to start it.
-    NotYetStarted(JobOwner<'a, 'tcx, D>),
+    NotYetStarted(JobOwner<'a, 'tcx, K, V>),
 
     /// The query was already completed.
     /// Returns the result of the query and its dep node index
     /// if it succeeded or a cycle error if it failed
-    JobCompleted(Result<(D::Value, DepNodeIndex), CycleError<'tcx>>),
+    JobCompleted(Result<(V, DepNodeIndex), CycleError<'tcx>>),
 }
 
-pub(super) struct QueryData<'a, 'tcx: 'a, Q: QueryBasicConfig + 'a> {
-    map: &'a Lock<QueryMap<'tcx, Q::Key, Q::Value>>,
+pub(super) struct QueryData<'a, 'tcx: 'a, K: Eq + Hash + 'a, V: 'a> {
+    map: &'a Lock<QueryMap<'tcx, K, V>>,
     cache_on_disk: bool,
-    compute: fn(TyCtxt<'_, 'tcx, '_>, key: Q::Key) -> Q::Value,
-    try_load_from_disk: fn(TyCtxt<'_, 'tcx, 'tcx>, SerializedDepNodeIndex) -> Option<Q::Value>,
-    to_dep_node: fn(tcx: TyCtxt<'_, 'tcx, '_>, key: &Q::Key) -> DepNode,
-    query: fn(Q::Key) -> Query<'tcx>,
+    compute: fn(TyCtxt<'_, 'tcx, '_>, key: K) -> V,
+    try_load_from_disk: fn(TyCtxt<'_, 'tcx, 'tcx>, SerializedDepNodeIndex) -> Option<V>,
+    to_dep_node: fn(tcx: TyCtxt<'_, 'tcx, '_>, key: &K) -> DepNode,
+    query: fn(K) -> Query<'tcx>,
     name: &'static str,
-    key: Q::Key,
+    key: K,
 }
 
-impl<'a, 'tcx: 'a, Q: QueryDescription<'tcx> + 'a> QueryData<'a, 'tcx, Q> {
-    fn new(tcx: TyCtxt<'a, 'tcx, '_>, key: Q::Key) -> Self {
-        QueryData {
-            map: Q::query_map(tcx),
-            cache_on_disk: Q::cache_on_disk(key.clone()),
-            try_load_from_disk: Q::try_load_from_disk,
-            compute: Q::compute,
-            query: Q::query,
-            to_dep_node: Q::to_dep_node,
-            name: Q::NAME,
-            key,
-        }
+fn query_data<'a, 'tcx: 'a, Q: QueryDescription<'tcx> + 'a>(
+    tcx: TyCtxt<'a, 'tcx, '_>,
+    key: Q::Key
+) -> QueryData<'a, 'tcx, Q::Key, Q::Value> {
+    QueryData {
+        map: Q::query_map(tcx),
+        cache_on_disk: Q::cache_on_disk(key.clone()),
+        try_load_from_disk: Q::try_load_from_disk,
+        compute: Q::compute,
+        query: Q::query,
+        to_dep_node: Q::to_dep_node,
+        name: Q::NAME,
+        key,
     }
 }
 
@@ -359,7 +360,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     fn try_get_with<Q: QueryBasicConfig>(
         self,
         span: Span,
-        data: &'a QueryData<'a, 'gcx, Q>)
+        data: &'a QueryData<'a, 'gcx, Q::Key, Q::Value>)
     -> Result<Q::Value, CycleError<'gcx>>
     {
         let key = data.key.clone();
@@ -437,8 +438,8 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
 
     fn load_from_disk_and_cache_in_memory<Q: QueryBasicConfig>(
         self,
-        data: &'a QueryData<'a, 'gcx, Q>,
-        job: JobOwner<'a, 'gcx, Q>,
+        data: &'a QueryData<'a, 'gcx, Q::Key, Q::Value>,
+        job: JobOwner<'a, 'gcx, Q::Key, Q::Value>,
         dep_node_index: DepNodeIndex,
         dep_node: &DepNode
     ) -> Result<Q::Value, CycleError<'gcx>>
@@ -524,8 +525,8 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
 
     fn force_query_with_job<Q: QueryBasicConfig>(
         self,
-        job: JobOwner<'_, 'gcx, Q>,
-        data: &'a QueryData<'a, 'gcx, Q>,
+        job: JobOwner<'_, 'gcx, Q::Key, Q::Value>,
+        data: &'a QueryData<'a, 'gcx, Q::Key, Q::Value>,
         dep_node: DepNode)
     -> Result<(Q::Value, DepNodeIndex), CycleError<'gcx>> {
         // If the following assertion triggers, it can have two reasons:
@@ -602,7 +603,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         span: Span,
         dep_node: DepNode
     ) -> Result<(Q::Value, DepNodeIndex), CycleError<'gcx>> {
-        let data = &QueryData::new(self, key.clone());
+        let data = &query_data::<Q>(self, key.clone());
         // We may be concurrently trying both execute and force a query
         // Ensure that only one of them runs the query
         let job = match JobOwner::try_get(self, data, span) {
@@ -617,7 +618,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         span: Span,
         key: Q::Key
     ) -> Result<Q::Value, DiagnosticBuilder<'a>> {
-        let data = &QueryData::new(self, key.clone());
+        let data = &query_data::<Q>(self, key.clone());
         match self.try_get_with::<Q>(span, data) {
             Ok(e) => Ok(e),
             Err(e) => Err(self.report_cycle(e)),
