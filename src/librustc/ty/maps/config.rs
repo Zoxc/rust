@@ -16,6 +16,8 @@ use traits::query::{CanonicalProjectionGoal, CanonicalTyGoal};
 use ty::{self, ParamEnvAnd, Ty, TyCtxt};
 use ty::subst::Substs;
 use ty::maps::queries;
+use ty::maps::{DummyId, DummyDefId};
+
 use ty::maps::Query;
 use ty::maps::QueryMap;
 
@@ -67,6 +69,24 @@ impl<'tcx, M: QueryConfig<'tcx, Key=DefId>> QueryDescription<'tcx> for M {
             let name = unsafe { ::std::intrinsics::type_name::<M>() };
             format!("processing `{}` applied to `{:?}`", name, def_id)
         }
+    }
+}
+
+impl<'tcx> QueryDescription<'tcx> for queries::dummy_bench_query<'tcx> {
+    fn describe(
+        _tcx: TyCtxt,
+        dummy: DummyId,
+    ) -> String {
+        format!("dummy query `{:?}`", dummy)
+    }
+}
+
+impl<'tcx> QueryDescription<'tcx> for queries::dummy_bench_query_dummy_def_id<'tcx> {
+    fn describe(
+        _tcx: TyCtxt,
+        dummy: DummyDefId,
+    ) -> String {
+        format!("dummy query `{:?}`", dummy)
     }
 }
 

@@ -810,6 +810,9 @@ impl_stable_hash_for!(enum ty::cast::CastKind {
     FnPtrAddrCast
 });
 
+impl_stable_hash_for!(tuple_struct ty::maps::DummyId { id });
+impl_stable_hash_for!(tuple_struct ty::maps::DummyDefId { f1, f2 });
+
 impl_stable_hash_for!(tuple_struct ::middle::region::FirstStatementIndex { idx });
 impl_stable_hash_for!(struct ::middle::region::Scope { id, code });
 

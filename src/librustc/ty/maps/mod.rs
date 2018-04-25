@@ -68,7 +68,7 @@ mod job;
 pub use self::job::{QueryJob, QueryInfo};
 
 mod keys;
-pub use self::keys::Key;
+pub use self::keys::{Key, DummyId, DummyDefId};
 
 mod values;
 use self::values::Value;
@@ -92,6 +92,11 @@ pub use self::on_disk_cache::OnDiskCache;
 // Queries marked with `fatal_cycle` do not need that implementation
 // as they will raise an fatal error on query cycles instead.
 define_maps! { <'tcx>
+    /// A dummy query used to benchmark the query system
+    [] fn dummy_bench_query: DummyBenchQuery(DummyId) -> bool,
+    [] fn dummy_bench_query_dummy_def_id: DummyBenchQueryDummyDefId(DummyDefId) -> bool,
+    [] fn dummy_bench_query_def_id: DummyBenchQueryDefId(DefId) -> bool,
+
     /// Records the type of every item.
     [] fn type_of: TypeOfItem(DefId) -> Ty<'tcx>,
 

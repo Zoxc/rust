@@ -18,6 +18,7 @@
       html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
       html_root_url = "https://doc.rust-lang.org/nightly/")]
 
+#![feature(asm)]
 #![feature(box_syntax)]
 #![cfg_attr(unix, feature(libc))]
 #![feature(quote)]
@@ -112,6 +113,7 @@ mod test;
 pub mod profile;
 pub mod driver;
 pub mod pretty;
+mod bench;
 mod derive_registrar;
 
 pub mod target_features {
