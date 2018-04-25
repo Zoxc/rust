@@ -1754,7 +1754,7 @@ pub mod tls {
     use rustc_data_structures::OnDrop;
     use rayon_core;
     use dep_graph::OpenTask;
-    use rustc_data_structures::sync::{Lrc, Lock};
+    use rustc_data_structures::sync::{self, Lrc, Lock};
 
     /// This is the implicit state of rustc. It contains the current
     /// TyCtxt and query. It is updated when creating a local interner or
@@ -1924,6 +1924,10 @@ pub mod tls {
         if context == 0 {
             f(None)
         } else {
+            // We could get a ImplicitCtxt pointer from another thread.
+            // Ensure that ImplicitCtxt is Sync
+            sync::assert_sync::<ImplicitCtxt>();
+
             unsafe { f(Some(&*(context as *const ImplicitCtxt))) }
         }
     }
