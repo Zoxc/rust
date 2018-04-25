@@ -956,6 +956,7 @@ pub fn force_from_dep_node<'a, 'gcx, 'lcx>(tcx: TyCtxt<'a, 'gcx, 'lcx>,
 
         // We don't have enough information to reconstruct the query key of
         // these
+        DepKind::DummyBenchQuery |
         DepKind::IsCopy |
         DepKind::IsSized |
         DepKind::IsFreeze |

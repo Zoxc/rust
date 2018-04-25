@@ -72,6 +72,7 @@ use std::hash::Hash;
 use syntax_pos::symbol::InternedString;
 use traits::query::{CanonicalProjectionGoal, CanonicalTyGoal};
 use ty::{TyCtxt, Instance, InstanceDef, ParamEnv, ParamEnvAnd, PolyTraitRef, Ty};
+use ty::maps::DummyId;
 use ty::subst::Substs;
 
 // erase!() just makes tokens go away. It's used to specify which macro argument
@@ -472,6 +473,8 @@ define_dep_nodes!( <'tcx>
     [eval_always] CoherenceInherentImplOverlapCheck,
     [] CoherenceCheckTrait(DefId),
     [eval_always] PrivacyAccessLevels(CrateNum),
+
+    [] DummyBenchQuery(DummyId),
 
     // Represents the MIR for a fn; also used as the task node for
     // things read/modify that MIR.

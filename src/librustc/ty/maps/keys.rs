@@ -22,6 +22,11 @@ use std::hash::Hash;
 use syntax_pos::{Span, DUMMY_SP};
 use syntax_pos::symbol::InternedString;
 
+/// A dummy id used as a key for the dummy query
+/// which in turn is only used for benchmarks
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DummyId(pub usize);
+
 /// The `Key` trait controls what types can legally be used as the key
 /// for a query.
 pub trait Key: Clone + Hash + Eq + Debug {
@@ -32,6 +37,15 @@ pub trait Key: Clone + Hash + Eq + Debug {
     /// In the event that a cycle occurs, if no explicit span has been
     /// given for a query with key `self`, what span should we use?
     fn default_span(&self, tcx: TyCtxt) -> Span;
+}
+
+impl Key for DummyId {
+    fn map_crate(&self) -> CrateNum {
+        LOCAL_CRATE
+    }
+    fn default_span(&self, _: TyCtxt) -> Span {
+        DUMMY_SP
+    }
 }
 
 impl<'tcx> Key for ty::InstanceDef<'tcx> {

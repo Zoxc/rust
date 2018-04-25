@@ -63,6 +63,7 @@ use derive_registrar;
 use pretty::ReplaceBodyWithLoop;
 
 use profile;
+use bench;
 
 pub fn compile_input(
     trans: Box<TransCrate>,
@@ -1033,6 +1034,7 @@ pub fn default_provide(providers: &mut ty::maps::Providers) {
     middle::region::provide(providers);
     cstore::provide(providers);
     lint::provide(providers);
+    bench::provide(providers);
 }
 
 pub fn default_provide_extern(providers: &mut ty::maps::Providers) {
@@ -1108,6 +1110,8 @@ where
             // Do some initialization of the DepGraph that can only be done with the
             // tcx available.
             rustc_incremental::dep_graph_tcx_init(tcx);
+
+            bench::run(tcx);
 
             time(sess, "attribute checking", || {
                 hir::check_attr::check_crate(tcx)

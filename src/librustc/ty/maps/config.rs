@@ -15,6 +15,7 @@ use traits::query::{CanonicalProjectionGoal, CanonicalTyGoal};
 use ty::{self, ParamEnvAnd, Ty, TyCtxt};
 use ty::subst::Substs;
 use ty::maps::queries;
+use ty::maps::DummyId;
 
 use std::hash::Hash;
 use syntax_pos::symbol::InternedString;
@@ -49,6 +50,15 @@ impl<'tcx, M: QueryConfig<Key=DefId>> QueryDescription<'tcx> for M {
             let name = unsafe { ::std::intrinsics::type_name::<M>() };
             format!("processing `{}` applied to `{:?}`", name, def_id)
         }
+    }
+}
+
+impl<'tcx> QueryDescription<'tcx> for queries::dummy_bench_query<'tcx> {
+    fn describe(
+        _tcx: TyCtxt,
+        dummy: DummyId,
+    ) -> String {
+        format!("dummy query `{:?}`", dummy)
     }
 }
 
