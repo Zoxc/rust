@@ -13,7 +13,6 @@
 //! [rustc guide]: https://rust-lang-nursery.github.io/rustc-guide/mir.html
 
 use graphviz::IntoCow;
-use middle::const_val::ConstVal;
 use middle::region;
 use rustc_const_math::ConstMathErr;
 use rustc_data_structures::sync::{Lrc};
@@ -1573,11 +1572,7 @@ impl<'tcx> Operand<'tcx> {
             span,
             ty,
             literal: Literal::Value {
-                value: tcx.mk_const(ty::Const {
-                    // ZST function type
-                    val: ConstVal::Value(Value::ByVal(PrimVal::Undef)),
-                    ty
-                })
+                value: ty::Const::zero_sized(tcx, ty),
             },
         })
     }
@@ -1905,11 +1900,17 @@ impl<'tcx> Debug for Literal<'tcx> {
 }
 
 /// Write a `ConstVal` in a way closer to the original source code than the `Debug` output.
-fn fmt_const_val<W: Write>(fmt: &mut W, const_val: &ty::Const) -> fmt::Result {
-    use middle::const_val::ConstVal::*;
+pub fn fmt_const_val<W: Write>(fmt: &mut W, const_val: &ty::Const) -> fmt::Result {
+    use middle::const_val::ConstVal;
     match const_val.val {
-        Unevaluated(..) => write!(fmt, "{:?}", const_val),
-        Value(val) => print_miri_value(val, const_val.ty, fmt),
+        ConstVal::Unevaluated(..) => write!(fmt, "{:?}", const_val),
+        ConstVal::Value(val) => {
+            if let Some(value) = val.to_byval_value() {
+                print_miri_value(value, const_val.ty, fmt)
+            } else {
+                write!(fmt, "{:?}:{}", val, const_val.ty)
+            }
+        },
     }
 }
 

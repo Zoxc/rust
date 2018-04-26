@@ -12,7 +12,7 @@ use hir::def_id::DefId;
 use ty::{self, TyCtxt, layout};
 use ty::subst::Substs;
 use rustc_const_math::*;
-use mir::interpret::{Value, PrimVal};
+use mir::interpret::{Allocation, PrimVal, Value, MemoryPointer};
 use errors::DiagnosticBuilder;
 
 use graphviz::IntoCow;
@@ -26,25 +26,65 @@ pub type EvalResult<'tcx> = Result<&'tcx ty::Const<'tcx>, ConstEvalErr<'tcx>>;
 #[derive(Copy, Clone, Debug, Hash, RustcEncodable, RustcDecodable, Eq, PartialEq)]
 pub enum ConstVal<'tcx> {
     Unevaluated(DefId, &'tcx Substs<'tcx>),
-    Value(Value),
+    Value(ConstValue<'tcx>),
 }
 
-impl<'tcx> ConstVal<'tcx> {
-    pub fn to_raw_bits(&self) -> Option<u128> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq, RustcEncodable, RustcDecodable, Hash)]
+pub enum ConstValue<'tcx> {
+    // Used only for types with layout::abi::Scalar ABI and ZSTs which use PrimVal::Undef
+    ByVal(PrimVal),
+    // Used only for types with layout::abi::ScalarPair
+    ByValPair(PrimVal, PrimVal),
+    // Used only for the remaining cases
+    ByRef(&'tcx Allocation),
+}
+
+impl<'tcx> ConstValue<'tcx> {
+    #[inline]
+    pub fn from_byval_value(val: Value) -> Self {
+        match val {
+            Value::ByRef(..) => bug!(),
+            Value::ByValPair(a, b) => ConstValue::ByValPair(a, b),
+            Value::ByVal(val) => ConstValue::ByVal(val),
+        }
+    }
+
+    #[inline]
+    pub fn to_byval_value(&self) -> Option<Value> {
         match *self {
-            ConstVal::Value(Value::ByVal(PrimVal::Bytes(b))) => {
-                Some(b)
-            },
+            ConstValue::ByRef(..) => None,
+            ConstValue::ByValPair(a, b) => Some(Value::ByValPair(a, b)),
+            ConstValue::ByVal(val) => Some(Value::ByVal(val)),
+        }
+    }
+
+    #[inline]
+    pub fn from_primval(val: PrimVal) -> Self {
+        ConstValue::ByVal(val)
+    }
+
+    #[inline]
+    pub fn to_primval(&self) -> Option<PrimVal> {
+        match *self {
+            ConstValue::ByRef(..) => None,
+            ConstValue::ByValPair(..) => None,
+            ConstValue::ByVal(val) => Some(val),
+        }
+    }
+
+    #[inline]
+    pub fn to_bits(&self) -> Option<u128> {
+        match self.to_primval() {
+            Some(PrimVal::Bytes(val)) => Some(val),
             _ => None,
         }
     }
-    pub fn unwrap_u64(&self) -> u64 {
-        match self.to_raw_bits() {
-            Some(val) => {
-                assert_eq!(val as u64 as u128, val);
-                val as u64
-            },
-            None => bug!("expected constant u64, got {:#?}", self),
+
+    #[inline]
+    pub fn to_ptr(&self) -> Option<MemoryPointer> {
+        match self.to_primval() {
+            Some(PrimVal::Ptr(ptr)) => Some(ptr),
+            _ => None,
         }
     }
 }

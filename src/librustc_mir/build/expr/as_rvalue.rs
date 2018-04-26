@@ -17,11 +17,9 @@ use rustc_data_structures::indexed_vec::Idx;
 use build::{BlockAnd, BlockAndExtension, Builder};
 use build::expr::category::{Category, RvalueFunc};
 use hair::*;
-use rustc::middle::const_val::ConstVal;
 use rustc::middle::region;
 use rustc::ty::{self, Ty};
 use rustc::mir::*;
-use rustc::mir::interpret::{Value, PrimVal};
 use syntax_pos::Span;
 
 impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
@@ -199,10 +197,10 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
                         span: expr_span,
                         ty: this.hir.tcx().types.u32,
                         literal: Literal::Value {
-                            value: this.hir.tcx().mk_const(ty::Const {
-                                val: ConstVal::Value(Value::ByVal(PrimVal::Bytes(0))),
-                                ty: this.hir.tcx().types.u32
-                            }),
+                            value: ty::Const::from_bits(
+                                this.hir.tcx(),
+                                0,
+                                this.hir.tcx().types.u32),
                         },
                     }));
                     box AggregateKind::Generator(closure_id, substs, interior)
@@ -384,10 +382,7 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
         let bits = self.hir.integer_bit_width(ty);
         let n = (!0u128) >> (128 - bits);
         let literal = Literal::Value {
-            value: self.hir.tcx().mk_const(ty::Const {
-                val: ConstVal::Value(Value::ByVal(PrimVal::Bytes(n))),
-                ty
-            })
+            value: ty::Const::from_bits(self.hir.tcx(), n, ty)
         };
 
         self.literal_operand(span, ty, literal)
@@ -399,10 +394,7 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
         let bits = self.hir.integer_bit_width(ty);
         let n = 1 << (bits - 1);
         let literal = Literal::Value {
-            value: self.hir.tcx().mk_const(ty::Const {
-                val: ConstVal::Value(Value::ByVal(PrimVal::Bytes(n))),
-                ty
-            })
+            value: ty::Const::from_bits(self.hir.tcx(), n, ty)
         };
 
         self.literal_operand(span, ty, literal)

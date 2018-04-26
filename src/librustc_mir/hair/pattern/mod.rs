@@ -18,9 +18,9 @@ pub(crate) use self::check_match::check_match;
 
 use interpret::{const_val_field, const_variant_index, self};
 
-use rustc::middle::const_val::ConstVal;
-use rustc::mir::{Field, BorrowKind, Mutability};
-use rustc::mir::interpret::{GlobalId, Value, PrimVal};
+use rustc::middle::const_val::{ConstVal, ConstValue};
+use rustc::mir::{fmt_const_val, Field, BorrowKind, Mutability};
+use rustc::mir::interpret::GlobalId;
 use rustc::ty::{self, TyCtxt, AdtDef, Ty, Region};
 use rustc::ty::subst::{Substs, Kind};
 use rustc::hir::{self, PatKind, RangeEnd};
@@ -124,21 +124,8 @@ pub enum PatternKind<'tcx> {
 
 fn print_const_val(value: &ty::Const, f: &mut fmt::Formatter) -> fmt::Result {
     match value.val {
-        ConstVal::Value(v) => print_miri_value(v, value.ty, f),
+        ConstVal::Value(..) => fmt_const_val(f, value),
         ConstVal::Unevaluated(..) => bug!("{:?} not printable in a pattern", value)
-    }
-}
-
-fn print_miri_value(value: Value, ty: Ty, f: &mut fmt::Formatter) -> fmt::Result {
-    use rustc::ty::TypeVariants::*;
-    match (value, &ty.sty) {
-        (Value::ByVal(PrimVal::Bytes(0)), &TyBool) => write!(f, "false"),
-        (Value::ByVal(PrimVal::Bytes(1)), &TyBool) => write!(f, "true"),
-        (Value::ByVal(PrimVal::Bytes(n)), &TyUint(..)) => write!(f, "{:?}", n),
-        (Value::ByVal(PrimVal::Bytes(n)), &TyInt(..)) => write!(f, "{:?}", n as i128),
-        (Value::ByVal(PrimVal::Bytes(n)), &TyChar) =>
-            write!(f, "{:?}", ::std::char::from_u32(n as u32).unwrap()),
-        _ => bug!("{:?}: {} not printable in a pattern", value, ty),
     }
 }
 
@@ -372,7 +359,7 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                     (PatternKind::Constant { value: lo },
                      PatternKind::Constant { value: hi }) => {
                         use std::cmp::Ordering;
-                        match (end, compare_const_vals(self.tcx, &lo.val, &hi.val, ty).unwrap()) {
+                        match (end, compare_const_vals(self.tcx, lo, hi, ty).unwrap()) {
                             (RangeEnd::Excluded, Ordering::Less) =>
                                 PatternKind::Range { lo, hi, end },
                             (RangeEnd::Excluded, _) => {
@@ -616,7 +603,7 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
 
             ty::TyArray(_, len) => {
                 // fixed-length array
-                let len = len.val.unwrap_u64();
+                let len = len.unwrap_usize(self.tcx);
                 assert!(len >= prefix.len() as u64 + suffix.len() as u64);
                 PatternKind::Array { prefix: prefix, slice: slice, suffix: suffix }
             }
@@ -740,8 +727,7 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                             self.tables.local_id_root.expect("literal outside any scope"),
                             self.substs,
                         );
-                        let cv = self.tcx.mk_const(ty::Const { val, ty });
-                        *self.const_to_pat(instance, cv, expr.hir_id, lit.span).kind
+                        *self.const_to_pat(instance, val, expr.hir_id, lit.span).kind
                     },
                     Err(()) => {
                         self.errors.push(PatternError::FloatBug);
@@ -762,8 +748,7 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
                             self.tables.local_id_root.expect("literal outside any scope"),
                             self.substs,
                         );
-                        let cv = self.tcx.mk_const(ty::Const { val, ty });
-                        *self.const_to_pat(instance, cv, expr.hir_id, lit.span).kind
+                        *self.const_to_pat(instance, val, expr.hir_id, lit.span).kind
                     },
                     Err(()) => {
                         self.errors.push(PatternError::FloatBug);
@@ -866,7 +851,7 @@ impl<'a, 'tcx> PatternContext<'a, 'tcx> {
             }
             ty::TyArray(_, n) => {
                 PatternKind::Array {
-                    prefix: (0..n.val.unwrap_u64())
+                    prefix: (0..n.unwrap_usize(self.tcx))
                         .map(|i| adt_subpattern(i as usize, None))
                         .collect(),
                     slice: None,
@@ -1049,47 +1034,48 @@ impl<'tcx> PatternFoldable<'tcx> for PatternKind<'tcx> {
 
 pub fn compare_const_vals<'a, 'tcx>(
     tcx: TyCtxt<'a, 'tcx, 'tcx>,
-    a: &ConstVal,
-    b: &ConstVal,
+    a: &'tcx ty::Const<'tcx>,
+    b: &'tcx ty::Const<'tcx>,
     ty: Ty<'tcx>,
 ) -> Option<Ordering> {
     use rustc_const_math::ConstFloat;
     trace!("compare_const_vals: {:?}, {:?}", a, b);
-    use rustc::mir::interpret::{Value, PrimVal};
-    match (a, b) {
-        (&ConstVal::Value(Value::ByVal(PrimVal::Bytes(a))),
-         &ConstVal::Value(Value::ByVal(PrimVal::Bytes(b)))) => {
-            match ty.sty {
-                ty::TyFloat(ty) => {
-                    let l = ConstFloat {
-                        bits: a,
-                        ty,
-                    };
-                    let r = ConstFloat {
-                        bits: b,
-                        ty,
-                    };
-                    // FIXME(oli-obk): report cmp errors?
-                    l.try_cmp(r).ok()
-                },
-                ty::TyInt(_) => {
-                    let a = interpret::sign_extend(tcx, a, ty).expect("layout error for TyInt");
-                    let b = interpret::sign_extend(tcx, b, ty).expect("layout error for TyInt");
-                    Some((a as i128).cmp(&(b as i128)))
-                },
-                _ => Some(a.cmp(&b)),
-            }
-        },
-        _ if a == b => Some(Ordering::Equal),
-        _ => None,
+    if let (Some(a), Some(b)) = (a.to_bits(ty), b.to_bits(ty)) {
+        match ty.sty {
+            ty::TyFloat(ty) => {
+                let l = ConstFloat {
+                    bits: a,
+                    ty,
+                };
+                let r = ConstFloat {
+                    bits: b,
+                    ty,
+                };
+                // FIXME(oli-obk): report cmp errors?
+                l.try_cmp(r).ok()
+            },
+            ty::TyInt(_) => {
+                let a = interpret::sign_extend(tcx, a, ty).expect("layout error for TyInt");
+                let b = interpret::sign_extend(tcx, b, ty).expect("layout error for TyInt");
+                Some((a as i128).cmp(&(b as i128)))
+            },
+            _ => Some(a.cmp(&b)),
+        }
+    } else {
+        if a == b {
+            Some(Ordering::Equal)
+        } else {
+            None
+        }
     }
 }
 
+// FIXME: Combine with rustc_mir::hair::cx::const_eval_literal
 fn lit_to_const<'a, 'tcx>(lit: &'tcx ast::LitKind,
                           tcx: TyCtxt<'a, 'tcx, 'tcx>,
                           ty: Ty<'tcx>,
                           neg: bool)
-                          -> Result<ConstVal<'tcx>, ()> {
+                          -> Result<&'tcx ty::Const<'tcx>, ()> {
     use syntax::ast::*;
 
     use rustc::mir::interpret::*;
@@ -1098,7 +1084,7 @@ fn lit_to_const<'a, 'tcx>(lit: &'tcx ast::LitKind,
             let s = s.as_str();
             let id = tcx.allocate_cached(s.as_bytes());
             let ptr = MemoryPointer::new(id, 0);
-            Value::ByValPair(
+            ConstValue::ByValPair(
                 PrimVal::Ptr(ptr),
                 PrimVal::from_u128(s.len() as u128),
             )
@@ -1106,9 +1092,9 @@ fn lit_to_const<'a, 'tcx>(lit: &'tcx ast::LitKind,
         LitKind::ByteStr(ref data) => {
             let id = tcx.allocate_cached(data);
             let ptr = MemoryPointer::new(id, 0);
-            Value::ByVal(PrimVal::Ptr(ptr))
+            ConstValue::ByVal(PrimVal::Ptr(ptr))
         },
-        LitKind::Byte(n) => Value::ByVal(PrimVal::Bytes(n as u128)),
+        LitKind::Byte(n) => ConstValue::ByVal(PrimVal::Bytes(n as u128)),
         LitKind::Int(n, _) => {
             enum Int {
                 Signed(IntTy),
@@ -1121,31 +1107,28 @@ fn lit_to_const<'a, 'tcx>(lit: &'tcx ast::LitKind,
                 ty::TyUint(other) => Int::Unsigned(other),
                 _ => bug!(),
             };
+            // This converts from LitKind::Int (which is sign extended) to
+            // PrimVal::Bytes (which is zero extended)
             let n = match ty {
                 // FIXME(oli-obk): are these casts correct?
                 Int::Signed(IntTy::I8) if neg =>
-                    (n as i128 as i8).overflowing_neg().0 as i128 as u128,
+                    (n as i8).overflowing_neg().0 as u8 as u128,
                 Int::Signed(IntTy::I16) if neg =>
-                    (n as i128 as i16).overflowing_neg().0 as i128 as u128,
+                    (n as i16).overflowing_neg().0 as u16 as u128,
                 Int::Signed(IntTy::I32) if neg =>
-                    (n as i128 as i32).overflowing_neg().0 as i128 as u128,
+                    (n as i32).overflowing_neg().0 as u32 as u128,
                 Int::Signed(IntTy::I64) if neg =>
-                    (n as i128 as i64).overflowing_neg().0 as i128 as u128,
+                    (n as i64).overflowing_neg().0 as u64 as u128,
                 Int::Signed(IntTy::I128) if neg =>
                     (n as i128).overflowing_neg().0 as u128,
-                Int::Signed(IntTy::I8) => n as i128 as i8 as i128 as u128,
-                Int::Signed(IntTy::I16) => n as i128 as i16 as i128 as u128,
-                Int::Signed(IntTy::I32) => n as i128 as i32 as i128 as u128,
-                Int::Signed(IntTy::I64) => n as i128 as i64 as i128 as u128,
-                Int::Signed(IntTy::I128) => n,
-                Int::Unsigned(UintTy::U8) => n as u8 as u128,
-                Int::Unsigned(UintTy::U16) => n as u16 as u128,
-                Int::Unsigned(UintTy::U32) => n as u32 as u128,
-                Int::Unsigned(UintTy::U64) => n as u64 as u128,
-                Int::Unsigned(UintTy::U128) => n,
+                Int::Signed(IntTy::I8) | Int::Unsigned(UintTy::U8) => n as u8 as u128,
+                Int::Signed(IntTy::I16) | Int::Unsigned(UintTy::U16) => n as u16 as u128,
+                Int::Signed(IntTy::I32) | Int::Unsigned(UintTy::U32) => n as u32 as u128,
+                Int::Signed(IntTy::I64) | Int::Unsigned(UintTy::U64) => n as u64 as u128,
+                Int::Signed(IntTy::I128)| Int::Unsigned(UintTy::U128) => n,
                 _ => bug!(),
             };
-            Value::ByVal(PrimVal::Bytes(n))
+            ConstValue::ByVal(PrimVal::Bytes(n))
         },
         LitKind::Float(n, fty) => {
             let n = n.as_str();
@@ -1154,7 +1137,7 @@ fn lit_to_const<'a, 'tcx>(lit: &'tcx ast::LitKind,
                 f = -f;
             }
             let bits = f.bits;
-            Value::ByVal(PrimVal::Bytes(bits))
+            ConstValue::ByVal(PrimVal::Bytes(bits))
         }
         LitKind::FloatUnsuffixed(n) => {
             let fty = match ty.sty {
@@ -1167,12 +1150,12 @@ fn lit_to_const<'a, 'tcx>(lit: &'tcx ast::LitKind,
                 f = -f;
             }
             let bits = f.bits;
-            Value::ByVal(PrimVal::Bytes(bits))
+            ConstValue::ByVal(PrimVal::Bytes(bits))
         }
-        LitKind::Bool(b) => Value::ByVal(PrimVal::Bytes(b as u128)),
-        LitKind::Char(c) => Value::ByVal(PrimVal::Bytes(c as u128)),
+        LitKind::Bool(b) => ConstValue::ByVal(PrimVal::Bytes(b as u128)),
+        LitKind::Char(c) => ConstValue::ByVal(PrimVal::Bytes(c as u128)),
     };
-    Ok(ConstVal::Value(lit))
+    Ok(ty::Const::from_const_value(tcx, lit, ty))
 }
 
 fn parse_float<'tcx>(num: &str, fty: ast::FloatTy)
