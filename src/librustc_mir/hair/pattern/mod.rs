@@ -1082,7 +1082,7 @@ fn lit_to_const<'a, 'tcx>(lit: &'tcx ast::LitKind,
     let lit = match *lit {
         LitKind::Str(ref s, _) => {
             let s = s.as_str();
-            let id = tcx.allocate_cached(s.as_bytes());
+            let id = tcx.allocate_bytes(s.as_bytes());
             let ptr = MemoryPointer::new(id, 0);
             ConstValue::ByValPair(
                 PrimVal::Ptr(ptr),
@@ -1090,7 +1090,7 @@ fn lit_to_const<'a, 'tcx>(lit: &'tcx ast::LitKind,
             )
         },
         LitKind::ByteStr(ref data) => {
-            let id = tcx.allocate_cached(data);
+            let id = tcx.allocate_bytes(data);
             let ptr = MemoryPointer::new(id, 0);
             ConstValue::ByVal(PrimVal::Ptr(ptr))
         },
