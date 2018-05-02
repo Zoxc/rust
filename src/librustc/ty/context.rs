@@ -939,6 +939,16 @@ pub struct InterpretInterner<'tcx> {
     inner: Lock<InterpretInternerInner<'tcx>>,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum AllocIdTarget<'tcx> {
+    /// The alloc id is used as a function pointer
+    Function(Instance<'tcx>),
+    /// The alloc id points to a static variable
+    Static(DefId),
+    /// The alloc id points to a constant
+    Constant(&'tcx Allocation)
+}
+
 #[derive(Debug, Default)]
 struct InterpretInternerInner<'tcx> {
     /// Allows obtaining function instance handles via a unique identifier
