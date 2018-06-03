@@ -14,6 +14,7 @@
 Core encoding and decoding interfaces.
 */
 
+use std;
 use std::borrow::Cow;
 use std::intrinsics;
 use std::path;
@@ -54,7 +55,8 @@ pub trait Encoder {
                             f: F) -> Result<(), Self::Error>
         where F: FnOnce(&mut Self) -> Result<(), Self::Error>
     {
-        self.emit_usize(v_id)?;
+        assert!(v_id <= std::u8::MAX as usize);
+        self.emit_u8(v_id as u8)?;
         f(self)
     }
     fn emit_enum_variant_arg<F>(&mut self, _a_idx: usize, f: F)
@@ -171,7 +173,7 @@ pub trait Decoder {
                                -> Result<T, Self::Error>
         where F: FnMut(&mut Self, usize) -> Result<T, Self::Error>
     {
-        let disr = self.read_usize()?;
+        let disr = self.read_u8()? as usize;
         f(self, disr)
     }
     fn read_enum_variant_arg<T, F>(&mut self, _a_idx: usize, f: F)
