@@ -8,12 +8,26 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::mem::size_of;
+use byteorder::{NativeEndian, ByteOrder};
+
 #[inline]
 pub fn write_to_vec(vec: &mut Vec<u8>, position: usize, byte: u8) {
     if position == vec.len() {
         vec.push(byte);
     } else {
         vec[position] = byte;
+    }
+}
+
+#[inline]
+pub fn write_buf_to_vec(vec: &mut Vec<u8>, position: usize, buffer: &[u8]) {
+    if position == vec.len() {
+        vec.extend_from_slice(buffer);
+    } else {
+        for (i, &b) in buffer.iter().enumerate() {
+            write_to_vec(vec, position + i, b)
+        }
     }
 }
 
@@ -31,70 +45,62 @@ macro_rules! leb128_size {
 }
 
 macro_rules! impl_write_unsigned_leb128 {
-    ($fn_name:ident, $int_ty:ident) => (
+    ($fn_name:ident, $int_ty:ident, $write:path) => (
         #[inline]
-        pub fn $fn_name(out: &mut Vec<u8>, start_position: usize, mut value: $int_ty) -> usize {
-            let mut position = start_position;
-            for _ in 0 .. leb128_size!($int_ty) {
-                let mut byte = (value & 0x7F) as u8;
-                value >>= 7;
-                if value != 0 {
-                    byte |= 0x80;
-                }
-
-                write_to_vec(out, position, byte);
-                position += 1;
-
-                if value == 0 {
-                    break;
-                }
-            }
-
-            position - start_position
+        pub fn $fn_name(out: &mut Vec<u8>, position: usize, value: $int_ty) -> usize {
+            let mut buf = [0; size_of::<$int_ty>()];
+            $write(&mut buf, value);
+            write_buf_to_vec(out, position, &buf);
+            buf.len()
         }
     )
 }
 
-impl_write_unsigned_leb128!(write_u16_leb128, u16);
-impl_write_unsigned_leb128!(write_u32_leb128, u32);
-impl_write_unsigned_leb128!(write_u64_leb128, u64);
-impl_write_unsigned_leb128!(write_u128_leb128, u128);
-impl_write_unsigned_leb128!(write_usize_leb128, usize);
+#[inline]
+fn write_usize(buf: &mut [u8], n: usize) {
+    #[cfg(target_pointer_width = "32")]
+    {
+    NativeEndian::write_u32(buf, n as u32)
+    }
+    #[cfg(target_pointer_width = "64")]
+    {
+    NativeEndian::write_u64(buf, n as u64)
+    }
+}
+
+impl_write_unsigned_leb128!(write_u16_leb128, u16, NativeEndian::write_u16);
+impl_write_unsigned_leb128!(write_u32_leb128, u32, NativeEndian::write_u32);
+impl_write_unsigned_leb128!(write_u64_leb128, u64, NativeEndian::write_u64);
+impl_write_unsigned_leb128!(write_u128_leb128, u128, NativeEndian::write_u128);
+impl_write_unsigned_leb128!(write_usize_leb128, usize, write_usize);
 
 
 macro_rules! impl_read_unsigned_leb128 {
-    ($fn_name:ident, $int_ty:ident) => (
+    ($fn_name:ident, $int_ty:ident, $read:path) => (
         #[inline]
         pub fn $fn_name(slice: &[u8]) -> ($int_ty, usize) {
-            let mut result: $int_ty = 0;
-            let mut shift = 0;
-            let mut position = 0;
-
-            for _ in 0 .. leb128_size!($int_ty) {
-                let byte = unsafe {
-                    *slice.get_unchecked(position)
-                };
-                position += 1;
-                result |= ((byte & 0x7F) as $int_ty) << shift;
-                if (byte & 0x80) == 0 {
-                    break;
-                }
-                shift += 7;
-            }
-
-            // Do a single bounds check at the end instead of for every byte.
-            assert!(position <= slice.len());
-
-            (result, position)
+            ($read(slice), size_of::<$int_ty>())
         }
     )
 }
 
-impl_read_unsigned_leb128!(read_u16_leb128, u16);
-impl_read_unsigned_leb128!(read_u32_leb128, u32);
-impl_read_unsigned_leb128!(read_u64_leb128, u64);
-impl_read_unsigned_leb128!(read_u128_leb128, u128);
-impl_read_unsigned_leb128!(read_usize_leb128, usize);
+#[inline]
+fn read_usize(buf: &[u8]) -> usize {
+    #[cfg(target_pointer_width = "32")]
+    {
+    NativeEndian::read_u32(buf) as usize
+    }
+    #[cfg(target_pointer_width = "64")]
+    {
+    NativeEndian::read_u64(buf) as usize
+    }
+}
+
+impl_read_unsigned_leb128!(read_u16_leb128, u16, NativeEndian::read_u16);
+impl_read_unsigned_leb128!(read_u32_leb128, u32, NativeEndian::read_u32);
+impl_read_unsigned_leb128!(read_u64_leb128, u64, NativeEndian::read_u64);
+impl_read_unsigned_leb128!(read_u128_leb128, u128, NativeEndian::read_u128);
+impl_read_unsigned_leb128!(read_usize_leb128, usize, read_usize);
 
 
 
