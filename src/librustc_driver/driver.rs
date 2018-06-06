@@ -1201,8 +1201,6 @@ where
     sess.derive_registrar_fn
         .set(derive_registrar::find(&hir_map));
 
-    time(sess, "loop checking", || loops::check_crate(sess, &hir_map));
-
     let mut local_providers = ty::maps::Providers::default();
     default_provide(&mut local_providers);
     codegen_backend.provide(&mut local_providers);
@@ -1231,6 +1229,8 @@ where
             // Do some initialization of the DepGraph that can only be done with the
             // tcx available.
             rustc_incremental::dep_graph_tcx_init(tcx);
+
+            time(sess, "loop checking", || loops::check_crate(sess, &hir_map));
 
             time(sess, "attribute checking", || {
                 hir::check_attr::check_crate(tcx)
