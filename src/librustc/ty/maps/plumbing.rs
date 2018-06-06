@@ -768,6 +768,9 @@ macro_rules! define_maps {
 
             #[inline]
             fn compute(tcx: TyCtxt<'_, 'tcx, '_>, key: Self::Key) -> Self::Value {
+                if tcx.sess.verbose() {
+                    eprintln!("executing {}", stringify!($name));
+                }
                 __query_compute::$name(move || {
                     let provider = tcx.maps.providers[key.map_crate()].$name;
                     provider(tcx.global_tcx(), key)
