@@ -586,6 +586,12 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         span: Span,
         dep_node: DepNode
     ) -> Result<(Q::Value, DepNodeIndex), CycleError<'gcx>> {
+        if self.sess.verbose() {
+            eprintln!("forcing queries {} key={:?})",
+                Q::NAME,
+                key);
+        }
+
         // We may be concurrently trying both execute and force a query
         // Ensure that only one of them runs the query
         let job = match JobOwner::try_get(self, span, &key) {
@@ -1049,6 +1055,9 @@ pub fn force_from_dep_node<'a, 'gcx, 'lcx>(tcx: TyCtxt<'a, 'gcx, 'lcx>,
         DepKind::UnsafeDeriveOnReprPacked => { force!(unsafe_derive_on_repr_packed, def_id!()); }
         DepKind::CheckModAttrs => { force!(check_mod_attrs, def_id!()); }
         DepKind::CheckModLoops => { force!(check_mod_loops, def_id!()); }
+        DepKind::CheckModUnstableApiUsage => { force!(check_mod_unstable_api_usage, def_id!()); }
+        DepKind::CheckModItemTypes => { force!(check_mod_item_types, def_id!()); }
+        DepKind::CollectModItemTypes => { force!(collect_mod_item_types, def_id!()); }
         DepKind::Reachability => { force!(reachable_set, LOCAL_CRATE); }
         DepKind::MirKeys => { force!(mir_keys, LOCAL_CRATE); }
         DepKind::CrateVariances => { force!(crate_variances, LOCAL_CRATE); }

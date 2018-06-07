@@ -17,6 +17,8 @@ use lint;
 use hir::def::Def;
 use hir::def_id::{CrateNum, CRATE_DEF_INDEX, DefId, LOCAL_CRATE};
 use ty::{self, TyCtxt};
+use ty::maps::Providers;
+use ty::maps::queries;
 use middle::privacy::AccessLevels;
 use session::DiagnosticMessageId;
 use syntax::symbol::Symbol;
@@ -463,11 +465,23 @@ impl<'a, 'tcx> Index<'tcx> {
     }
 }
 
+pub fn check_unstable_api_usage<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
+    for &module in &tcx.hir.krate().modules {
+        queries::check_mod_unstable_api_usage::ensure(tcx, tcx.hir.local_def_id(module));
+    }
+}
+
 /// Cross-references the feature names of unstable APIs with enabled
 /// features and possibly prints errors.
-pub fn check_unstable_api_usage<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
-    let mut checker = Checker { tcx: tcx };
-    tcx.hir.krate().visit_all_item_likes(&mut checker.as_deep_visitor());
+pub fn check_mod_unstable_api_usage<'tcx>(tcx: TyCtxt<'_, 'tcx, 'tcx>, module_def_id: DefId) {
+    tcx.hir.visit_module_item_likes(module_def_id, Checker { tcx }.as_deep_visitor());
+}
+
+pub fn provide(providers: &mut Providers) {
+    *providers = Providers {
+        check_mod_unstable_api_usage,
+        ..*providers
+    };
 }
 
 /// Check whether an item marked with `deprecated(since="X")` is currently

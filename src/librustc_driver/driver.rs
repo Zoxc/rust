@@ -1150,7 +1150,7 @@ pub fn default_provide(providers: &mut ty::maps::Providers) {
     typeck::provide(providers);
     ty::provide(providers);
     traits::provide(providers);
-    reachable::provide(providers);
+    stability::provide(providers);
     rustc_passes::provide(providers);
     rustc_traits::provide(providers);
     middle::region::provide(providers);
@@ -1228,7 +1228,7 @@ where
         |tcx| {
             // Do some initialization of the DepGraph that can only be done with the
             // tcx available.
-            rustc_incremental::dep_graph_tcx_init(tcx);
+            time(sess, "dep graph tcx init", || rustc_incremental::dep_graph_tcx_init(tcx));
 
             time(sess, "loop checking", || loops::check_crate(tcx));
 

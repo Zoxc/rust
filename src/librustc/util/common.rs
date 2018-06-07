@@ -171,6 +171,13 @@ pub fn time_ext<T, F>(do_it: bool, sess: Option<&Session>, what: &str, f: F) -> 
         r
     });
 
+    if sess.map(|s| s.verbose()).unwrap_or(false) {
+        let indentation = TIME_DEPTH.with(|slot| slot.get());
+        println!("{}start time: {}",
+                repeat("  ").take(indentation).collect::<String>(),
+                what);
+    }
+
     if let Some(sess) = sess {
         if cfg!(debug_assertions) {
             profq_msg(sess, ProfileQueriesMsg::TimeBegin(what.to_string()))

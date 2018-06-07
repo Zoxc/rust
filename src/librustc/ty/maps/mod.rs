@@ -195,8 +195,14 @@ define_maps! { <'tcx>
     /// Checks the attributes in the module
     [] fn check_mod_attrs: CheckModAttrs(DefId) -> (),
 
+    [] fn check_mod_unstable_api_usage: CheckModUnstableApiUsage(DefId) -> (),
+
     /// Checks the attributes in the module
     [] fn check_mod_loops: CheckModLoops(DefId) -> (),
+
+    [] fn check_mod_item_types: CheckModItemTypes(DefId) -> (),
+
+    [] fn collect_mod_item_types: CollectModItemTypes(DefId) -> (),
 
     /// The signature of functions and closures.
     [] fn fn_sig: FnSignature(DefId) -> ty::PolyFnSig<'tcx>,

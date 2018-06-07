@@ -99,7 +99,7 @@ use rustc::traits::{self, ObligationCause, ObligationCauseCode, TraitEngine};
 use rustc::ty::{self, Ty, TyCtxt, GenericParamDefKind, Visibility, ToPredicate, RegionKind};
 use rustc::ty::adjustment::{Adjust, Adjustment, AllowTwoPhase, AutoBorrow, AutoBorrowMutability};
 use rustc::ty::fold::TypeFoldable;
-use rustc::ty::maps::Providers;
+use rustc::ty::maps::{queries, Providers};
 use rustc::ty::util::{Representability, IntTypeExt, Discr};
 use errors::{DiagnosticBuilder, DiagnosticId};
 
@@ -689,8 +689,14 @@ pub fn check_wf_new<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) -> Result<(), ErrorRe
 
 pub fn check_item_types<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) -> Result<(), ErrorReported> {
     tcx.sess.track_errors(|| {
-        tcx.hir.krate().visit_all_item_likes(&mut CheckItemTypesVisitor { tcx });
+        for &module in &tcx.hir.krate().modules {
+            queries::check_mod_item_types::ensure(tcx, tcx.hir.local_def_id(module));
+        }
     })
+}
+
+fn check_mod_item_types<'tcx>(tcx: TyCtxt<'_, 'tcx, 'tcx>, module_def_id: DefId) {
+    tcx.hir.visit_module_item_likes(module_def_id, CheckItemTypesVisitor { tcx });
 }
 
 pub fn check_item_bodies<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) -> Result<(), CompileIncomplete> {
@@ -731,6 +737,7 @@ pub fn provide(providers: &mut Providers) {
         check_item_well_formed,
         check_trait_item_well_formed,
         check_impl_item_well_formed,
+        check_mod_item_types,
         ..*providers
     };
 }

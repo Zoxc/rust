@@ -1086,6 +1086,10 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                                   f: F) -> R
                                   where F: for<'b> FnOnce(TyCtxt<'b, 'tcx, 'tcx>) -> R
     {
+        if s.verbose() {
+            eprintln!("entering tcx 1");
+        }
+
         let data_layout = TargetDataLayout::parse(&s.target.target).unwrap_or_else(|err| {
             s.fatal(&err);
         });
@@ -1095,6 +1099,10 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         let max_cnum = cstore.crates_untracked().iter().map(|c| c.as_usize()).max().unwrap_or(0);
         let mut providers = IndexVec::from_elem_n(extern_providers, max_cnum + 1);
         providers[LOCAL_CRATE] = local_providers;
+
+        if s.verbose() {
+            eprintln!("entering tcx 2");
+        }
 
         let def_path_hash_to_def_id = if s.opts.build_dep_graph() {
             let upstream_def_path_tables: Vec<(CrateNum, Lrc<_>)> = cstore
@@ -1128,6 +1136,10 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             None
         };
 
+        if s.verbose() {
+            eprintln!("entering tcx 3");
+        }
+
         let mut trait_map = FxHashMap();
         for (k, v) in resolutions.trait_map {
             let hir_id = hir.node_to_hir_id(k);
@@ -1136,6 +1148,10 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             Lrc::get_mut(map).unwrap()
                             .insert(hir_id.local_id,
                                     Lrc::new(StableVec::new(v)));
+        }
+
+        if s.verbose() {
+            eprintln!("entering tcx 4");
         }
 
         let gcx = &GlobalCtxt {
@@ -1180,6 +1196,10 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         };
 
         sync::assert_send_val(&gcx);
+
+        if s.verbose() {
+            eprintln!("entering tcx 5");
+        }
 
         tls::enter_global(gcx, f)
     }
