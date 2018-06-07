@@ -192,6 +192,12 @@ define_maps! { <'tcx>
     /// HACK: when evaluated, this reports a "unsafe derive on repr(packed)" error
     [] fn unsafe_derive_on_repr_packed: UnsafeDeriveOnReprPacked(DefId) -> (),
 
+    /// Checks the attributes in the module
+    [] fn check_mod_attrs: CheckModAttrs(DefId) -> (),
+
+    /// Checks the attributes in the module
+    [] fn check_mod_loops: CheckModLoops(DefId) -> (),
+
     /// The signature of functions and closures.
     [] fn fn_sig: FnSignature(DefId) -> ty::PolyFnSig<'tcx>,
 

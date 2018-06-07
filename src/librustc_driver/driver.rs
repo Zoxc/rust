@@ -1230,10 +1230,14 @@ where
             // tcx available.
             rustc_incremental::dep_graph_tcx_init(tcx);
 
-            time(sess, "loop checking", || loops::check_crate(sess, &hir_map));
+            time(sess, "loop checking", || loops::check_crate(tcx));
 
             time(sess, "attribute checking", || {
                 hir::check_attr::check_crate(tcx)
+            });
+
+            time(sess, "stability index", || {
+                tcx.stability();
             });
 
             time(sess, "stability checking", || {

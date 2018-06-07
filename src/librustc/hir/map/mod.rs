@@ -28,6 +28,7 @@ use syntax::ext::base::MacroKind;
 use syntax_pos::Span;
 
 use hir::*;
+use hir::itemlikevisit::ItemLikeVisitor;
 use hir::print::Nested;
 use hir::svh::Svh;
 use util::nodemap::FxHashMap;
@@ -606,6 +607,80 @@ impl<'hir> Map<'hir> {
 
         self.dep_graph.read(def_path_hash.to_dep_node(DepKind::Hir));
         &self.forest.krate.attrs
+    }
+
+    pub fn visit_module_item_likes<V>(&self, module: DefId, visitor: V)
+        where V: itemlikevisit::ItemLikeVisitor<'hir>
+    {
+        let node_id = self.as_local_node_id(module).unwrap();
+
+        // Read the module so we'll be re-executed if new items appear in the module
+        self.read(node_id);
+
+        struct Filter<'a, 'hir: 'a, V> {
+            map: &'a Map<'hir>,
+            module: NodeId,
+            visitor: V,
+        }
+
+        impl<'a, 'hir, V> Filter<'a, 'hir, V> {
+            fn module_id(&self, mut id: NodeId) -> NodeId {
+                loop {
+                    let entry = self.map.find_entry(id);
+
+                    match entry {
+                        // We are in a module, return the id
+                        Some(EntryItem(_, _, Item { node: Item_::ItemMod(..), .. })) |
+                        Some(RootCrate(_)) => return id,
+
+                        // Not a module, go to the parent
+                        _ => (),
+                    }
+
+                    id = entry.and_then(|x| x.parent_node()).unwrap();
+                }
+            }
+
+            fn in_module(&self, id: NodeId) -> bool {
+                if self.module_id(id) == self.module {
+                    self.map.read(id);
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+
+        impl<'a, 'hir, V> ItemLikeVisitor<'hir> for Filter<'a, 'hir, V>
+            where V: ItemLikeVisitor<'hir>
+        {
+            fn visit_item(&mut self, item: &'hir Item) {
+                if self.in_module(item.id) {
+                    self.visitor.visit_item(item);
+                }
+            }
+
+            fn visit_trait_item(&mut self, trait_item: &'hir TraitItem) {
+                if self.in_module(trait_item.id) {
+                    self.visitor.visit_trait_item(trait_item);
+                }
+            }
+
+            fn visit_impl_item(&mut self, impl_item: &'hir ImplItem) {
+                if self.in_module(impl_item.id) {
+                    self.visitor.visit_impl_item(impl_item);
+                }
+            }
+        }
+
+        let mut filter = Filter {
+            map: self,
+            module: node_id,
+            visitor,
+        };
+
+        // We can't krate() since that adds a dependency on the whole crate
+        self.forest.krate.visit_all_item_likes(&mut filter);
     }
 
     /// Retrieve the Node corresponding to `id`, panicking if it cannot

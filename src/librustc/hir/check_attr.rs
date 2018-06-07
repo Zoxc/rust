@@ -16,8 +16,11 @@
 
 use syntax_pos::Span;
 use ty::TyCtxt;
+use ty::maps::Providers;
+use ty::maps::queries;
 
 use hir;
+use hir::def_id::DefId;
 use hir::intravisit::{self, Visitor, NestedVisitorMap};
 
 #[derive(Copy, Clone, PartialEq)]
@@ -340,8 +343,9 @@ impl<'a, 'tcx> Visitor<'tcx> for CheckAttrVisitor<'a, 'tcx> {
 }
 
 pub fn check_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
-    let mut checker = CheckAttrVisitor { tcx };
-    tcx.hir.krate().visit_all_item_likes(&mut checker.as_deep_visitor());
+    for &module in &tcx.hir.krate().modules {
+        queries::check_mod_attrs::ensure(tcx, tcx.hir.local_def_id(module));
+    }
 }
 
 fn is_c_like_enum(item: &hir::Item) -> bool {
@@ -356,4 +360,15 @@ fn is_c_like_enum(item: &hir::Item) -> bool {
     } else {
         false
     }
+}
+
+pub fn check_mod_attrs<'tcx>(tcx: TyCtxt<'_, 'tcx, 'tcx>, module_def_id: DefId) {
+    tcx.hir.visit_module_item_likes(module_def_id, CheckAttrVisitor { tcx }.as_deep_visitor());
+}
+
+pub(crate) fn provide(providers: &mut Providers) {
+    *providers = Providers {
+        check_mod_attrs,
+        ..*providers
+    };
 }

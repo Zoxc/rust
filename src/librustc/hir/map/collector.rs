@@ -77,6 +77,7 @@ impl<'a, 'hir> NodeCollector<'a, 'hir> {
                 trait_impls: _,
                 trait_auto_impl: _,
                 body_ids: _,
+                modules: _,
             } = *krate;
 
             root_mod_sig_dep_index = dep_graph.input_task(

@@ -694,6 +694,10 @@ pub struct Crate {
     /// in the crate, you should iterate over this list rather than the keys
     /// of bodies.
     pub body_ids: Vec<BodyId>,
+
+    /// A list of modules written out in the order in which they
+    /// appear in the crate. This includes the main crate module.
+    pub modules: Vec<NodeId>,
 }
 
 impl Crate {
@@ -2264,6 +2268,7 @@ pub type GlobMap = NodeMap<FxHashSet<Name>>;
 
 
 pub fn provide(providers: &mut Providers) {
+    check_attr::provide(providers);
     providers.describe_def = map::describe_def;
 }
 

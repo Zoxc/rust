@@ -96,6 +96,8 @@ pub struct LoweringContext<'a> {
     trait_impls: BTreeMap<DefId, Vec<NodeId>>,
     trait_auto_impl: BTreeMap<DefId, NodeId>,
 
+    modules: Vec<NodeId>,
+
     is_generator: bool,
 
     catch_scopes: Vec<NodeId>,
@@ -209,6 +211,7 @@ pub fn lower_crate(
         bodies: BTreeMap::new(),
         trait_impls: BTreeMap::new(),
         trait_auto_impl: BTreeMap::new(),
+        modules: vec![CRATE_NODE_ID],
         exported_macros: Vec::new(),
         catch_scopes: Vec::new(),
         loop_scopes: Vec::new(),
@@ -361,6 +364,9 @@ impl<'a> LoweringContext<'a> {
                 let mut item_lowered = true;
                 self.lctx.with_hir_id_owner(item.id, |lctx| {
                     if let Some(hir_item) = lctx.lower_item(item) {
+                        if let hir::Item_::ItemMod(..) = hir_item.node {
+                            lctx.modules.push(item.id);
+                        }
                         lctx.items.insert(item.id, hir_item);
                     } else {
                         item_lowered = false;
@@ -436,6 +442,7 @@ impl<'a> LoweringContext<'a> {
             body_ids,
             trait_impls: self.trait_impls,
             trait_auto_impl: self.trait_auto_impl,
+            modules: self.modules,
         }
     }
 
