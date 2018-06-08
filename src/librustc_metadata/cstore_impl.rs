@@ -51,7 +51,7 @@ macro_rules! provide {
       $($name:ident => $compute:block)*) => {
         pub fn provide_extern<$lt>(providers: &mut Providers<$lt>) {
             $(fn $name<'a, $lt:$lt, T>($tcx: TyCtxt<'a, $lt, $lt>, def_id_arg: T)
-                                    -> <ty::queries::$name<$lt> as
+                                    -> <ty::queries::$name as
                                         QueryConfig<$lt>>::Value
                 where T: IntoArgs,
             {

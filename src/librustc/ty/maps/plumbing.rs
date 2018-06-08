@@ -733,12 +733,8 @@ macro_rules! define_maps {
         }
 
         pub mod queries {
-            use std::marker::PhantomData;
-
             $(#[allow(bad_style)]
-            pub struct $name<$tcx> {
-                data: PhantomData<&$tcx ()>
-            })*
+            pub struct $name {})*
         }
 
         // This module and the functions in it exist only to provide a
@@ -751,7 +747,7 @@ macro_rules! define_maps {
             })*
         }
 
-        $(impl<$tcx> QueryConfig<$tcx> for queries::$name<$tcx> {
+        $(impl<$tcx> QueryConfig<$tcx> for queries::$name {
             type Key = $K;
             type Value = $V;
 
@@ -788,7 +784,7 @@ macro_rules! define_maps {
             }
         }
 
-        impl<'a, $tcx, 'lcx> queries::$name<$tcx> {
+        impl<'a, $tcx, 'lcx> queries::$name {
             /// Ensure that either this query has all green inputs or been executed.
             /// Executing query::ensure(D) is considered a read of the dep-node D.
             ///
@@ -854,7 +850,7 @@ macro_rules! define_map_struct {
      input: ($(([$($modifiers:tt)*] [$($attr:tt)*] [$name:ident]))*)) => {
         pub struct Maps<$tcx> {
             providers: IndexVec<CrateNum, Providers<$tcx>>,
-            $($(#[$attr])*  $name: Lock<QueryMap<$tcx, queries::$name<$tcx>>>,)*
+            $($(#[$attr])*  $name: Lock<QueryMap<$tcx, queries::$name>>,)*
         }
     };
 }
