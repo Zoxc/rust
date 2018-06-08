@@ -578,8 +578,10 @@ impl DepGraph {
             None => {
                 // This DepNode did not exist in the previous compilation session,
                 // so we cannot mark it as green.
-                debug!("try_mark_green({:?}) - END - DepNode does not exist in \
-                        current compilation session anymore", dep_node);
+                if tcx.sess.verbose() {
+                    eprintln!("try_mark_green({:?}) - END - DepNode does not exist in \
+                            current compilation session anymore", dep_node);
+                }
                 return None
             }
         };
@@ -607,10 +609,12 @@ impl DepGraph {
                     // compared to the previous compilation session. We cannot
                     // mark the DepNode as green and also don't need to bother
                     // with checking any of the other dependencies.
-                    debug!("try_mark_green({:?}) - END - dependency {:?} was \
-                            immediately red",
-                            dep_node,
-                            data.previous.index_to_node(dep_dep_node_index));
+                    if tcx.sess.verbose() {
+                        eprintln!("try_mark_green({:?}) - END - dependency {:?} was \
+                                immediately red",
+                                dep_node,
+                                data.previous.index_to_node(dep_dep_node_index));
+                    }
                     return None
                 }
                 None => {
@@ -635,6 +639,10 @@ impl DepGraph {
                             DepKind::HirBody |
                             DepKind::CrateMetadata => {
                                 if dep_node.extract_def_id(tcx).is_none() {
+                                    if tcx.sess.verbose() {
+                                        eprintln!("try_mark_green({:?}) - node does not exist",
+                                                dep_node);
+                                    }
                                     // If the node does not exist anymore, we
                                     // just fail to mark green.
                                     return None
@@ -654,23 +662,26 @@ impl DepGraph {
                     }
 
                     // We failed to mark it green, so we try to force the query.
-                    debug!("try_mark_green({:?}) --- trying to force \
+                    if tcx.sess.verbose() {
+                    eprintln!("try_mark_green({:?}) --- trying to force \
                             dependency {:?}", dep_node, dep_dep_node);
+                    }
                     if ::ty::maps::force_from_dep_node(tcx, dep_dep_node) {
                         let dep_dep_node_color = data.colors.borrow().get(dep_dep_node_index);
 
                         match dep_dep_node_color {
                             Some(DepNodeColor::Green(node_index)) => {
-                                debug!("try_mark_green({:?}) --- managed to \
+                                if tcx.sess.verbose() {
+                                    eprintln!("try_mark_green({:?}) --- managed to \
                                         FORCE dependency {:?} to green",
-                                        dep_node, dep_dep_node);
+                                        dep_node, dep_dep_node);}
                                 current_deps.push(node_index);
                             }
                             Some(DepNodeColor::Red) => {
-                                debug!("try_mark_green({:?}) - END - \
+                                if tcx.sess.verbose() {eprintln!("try_mark_green({:?}) - END - \
                                         dependency {:?} was red after forcing",
                                        dep_node,
-                                       dep_dep_node);
+                                       dep_dep_node);}
                                 return None
                             }
                             None => {
@@ -687,8 +698,9 @@ impl DepGraph {
                         }
                     } else {
                         // The DepNode could not be forced.
-                        debug!("try_mark_green({:?}) - END - dependency {:?} \
-                                could not be forced", dep_node, dep_dep_node);
+                        if tcx.sess.verbose() {
+                            eprintln!("try_mark_green({:?}) - END - dependency {:?} \
+                                could not be forced", dep_node, dep_dep_node);}
                         return None
                     }
                 }
