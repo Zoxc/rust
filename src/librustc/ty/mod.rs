@@ -1708,9 +1708,6 @@ pub struct FieldDef {
 }
 
 /// The definition of an abstract data type - a struct or enum.
-///
-/// These are all interned (by intern_adt_def) into the adt_defs
-/// table.
 pub struct AdtDef {
     pub did: DefId,
     pub variants: Vec<VariantDef>,
