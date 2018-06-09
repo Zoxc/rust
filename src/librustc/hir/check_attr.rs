@@ -16,8 +16,7 @@
 
 use syntax_pos::Span;
 use ty::TyCtxt;
-use ty::maps::Providers;
-use ty::maps::queries;
+use ty::maps::{Providers, queries};
 
 use hir;
 use hir::def_id::DefId;

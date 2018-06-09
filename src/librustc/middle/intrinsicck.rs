@@ -12,6 +12,8 @@ use hir::def::Def;
 use hir::def_id::DefId;
 use ty::{self, Ty, TyCtxt};
 use ty::layout::{LayoutError, Pointer, SizeSkeleton};
+use ty::maps::Providers;
+use ty::maps::queries;
 
 use rustc_target::spec::abi::Abi::RustIntrinsic;
 use syntax_pos::Span;
@@ -19,10 +21,20 @@ use hir::intravisit::{self, Visitor, NestedVisitorMap};
 use hir;
 
 pub fn check_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
-    let mut visitor = ItemVisitor {
-        tcx,
+    for &module in &tcx.hir.krate().modules {
+        queries::check_mod_intrinsics::ensure(tcx, tcx.hir.local_def_id(module));
+    }
+}
+
+pub fn check_mod_intrinsics<'tcx>(tcx: TyCtxt<'_, 'tcx, 'tcx>, module_def_id: DefId) {
+    tcx.hir.visit_module_item_likes(module_def_id, ItemVisitor { tcx }.as_deep_visitor());
+}
+
+pub fn provide(providers: &mut Providers) {
+    *providers = Providers {
+        check_mod_intrinsics,
+        ..*providers
     };
-    tcx.hir.krate().visit_all_item_likes(&mut visitor.as_deep_visitor());
 }
 
 struct ItemVisitor<'a, 'tcx: 'a> {
