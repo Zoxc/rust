@@ -23,6 +23,7 @@ use lint;
 use middle::privacy;
 use ty::{self, TyCtxt};
 use util::nodemap::FxHashSet;
+use util::common::time;
 
 use syntax::{ast, codemap};
 use syntax::attr;
@@ -399,7 +400,9 @@ fn create_and_seed_worklist<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
         krate,
         tcx,
     };
+    time(tcx.sess, "LifeSeeder",  || {
     krate.visit_all_item_likes(&mut life_seeder);
+    });
 
     return life_seeder.worklist;
 }
@@ -408,7 +411,9 @@ fn find_live<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                        access_levels: &privacy::AccessLevels,
                        krate: &hir::Crate)
                        -> Box<FxHashSet<ast::NodeId>> {
-    let worklist = create_and_seed_worklist(tcx, access_levels, krate);
+    let worklist = time(tcx.sess, "DeadVisitor",  || {
+        create_and_seed_worklist(tcx, access_levels, krate)
+    });
     let mut symbol_visitor = MarkSymbolVisitor {
         worklist,
         tcx,
@@ -419,7 +424,7 @@ fn find_live<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
         inherited_pub_visibility: false,
         ignore_variant_stack: vec![],
     };
-    symbol_visitor.mark_live_symbols();
+    time(tcx.sess, "mark_live_symbols",  || symbol_visitor.mark_live_symbols());
     symbol_visitor.live_symbols
 }
 
@@ -631,12 +636,15 @@ impl<'a, 'tcx> Visitor<'tcx> for DeadVisitor<'a, 'tcx> {
 }
 
 pub fn check_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
-    let access_levels = &tcx.privacy_access_levels(LOCAL_CRATE);
+    let access_levels = &time(tcx.sess, "privacy_access_levels",
+        || tcx.privacy_access_levels(LOCAL_CRATE));
     let krate = tcx.hir.krate();
-    let live_symbols = find_live(tcx, access_levels, krate);
+    let live_symbols = time(tcx.sess, "find_live", || find_live(tcx, access_levels, krate));
+    time(tcx.sess, "DeadVisitor",  || {
     let mut visitor = DeadVisitor {
         tcx,
         live_symbols,
     };
     intravisit::walk_crate(&mut visitor, krate);
+    });
 }
