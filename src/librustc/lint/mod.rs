@@ -150,6 +150,10 @@ pub trait LintPass {
 // FIXME: eliminate the duplication with `Visitor`. But this also
 // contains a few lint-specific methods with no equivalent in `Visitor`.
 pub trait LateLintPass<'a, 'tcx>: LintPass {
+    fn lint_name(&self) -> &'static str {
+        unsafe { ::std::intrinsics::type_name::<Self>() }
+    }
+
     fn check_body(&mut self, _: &LateContext, _: &'tcx hir::Body) { }
     fn check_body_post(&mut self, _: &LateContext, _: &'tcx hir::Body) { }
     fn check_name(&mut self, _: &LateContext, _: Span, _: ast::Name) { }
@@ -236,6 +240,10 @@ pub trait LateLintPass<'a, 'tcx>: LintPass {
 }
 
 pub trait EarlyLintPass: LintPass {
+    fn lint_name(&self) -> &'static str {
+        unsafe { ::std::intrinsics::type_name::<Self>() }
+    }
+
     fn check_ident(&mut self, _: &EarlyContext, _: ast::Ident) { }
     fn check_crate(&mut self, _: &EarlyContext, _: &ast::Crate) { }
     fn check_crate_post(&mut self, _: &EarlyContext, _: &ast::Crate) { }

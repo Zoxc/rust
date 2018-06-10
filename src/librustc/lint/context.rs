@@ -37,6 +37,7 @@ use rustc_serialize::{Decoder, Decodable, Encoder, Encodable};
 use session::{config, early_error, Session};
 use ty::{self, TyCtxt, Ty};
 use ty::layout::{LayoutError, LayoutOf, TyLayout};
+use util::common::time;
 use util::nodemap::FxHashMap;
 
 use std::default::Default as StdDefault;
@@ -1067,13 +1068,22 @@ pub fn check_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
 
     // Visit the whole crate.
     cx.with_lint_attrs(ast::CRATE_NODE_ID, &krate.attrs, |cx| {
-        // since the root module isn't visited as an item (because it isn't an
-        // item), warn for it here.
-        run_lints!(cx, check_crate, late_passes, krate);
+        let passes = cx.lint_sess_mut().passes.take().unwrap();
+        let passes: Vec<_> = passes.into_iter().map(|obj| {
+            time(tcx.sess, &format!("lint {}", obj.lint_name()), || {
+                cx.lint_sess_mut().passes = Some(vec![obj]);
+                // since the root module isn't visited as an item (because it isn't an
+                // item), warn for it here.
+                run_lints!(cx, check_crate, late_passes, krate);
 
-        hir_visit::walk_crate(cx, krate);
+                hir_visit::walk_crate(cx, krate);
 
-        run_lints!(cx, check_crate_post, late_passes, krate);
+                run_lints!(cx, check_crate_post, late_passes, krate);
+
+                cx.lint_sess_mut().passes.take().unwrap().into_iter().next().unwrap()
+            })
+        }).collect();
+        cx.lint_sess_mut().passes = Some(passes);
     });
 
     // Put the lint store levels and passes back in the session.
