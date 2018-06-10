@@ -22,6 +22,7 @@ use hir::def_id::{DefId, LOCAL_CRATE};
 use lint;
 use middle::privacy;
 use ty::{self, TyCtxt};
+use ty::maps::{Providers, queries};
 use util::nodemap::FxHashSet;
 use util::common::time;
 
@@ -636,6 +637,11 @@ impl<'a, 'tcx> Visitor<'tcx> for DeadVisitor<'a, 'tcx> {
 }
 
 pub fn check_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
+    use hir::def_id::CRATE_DEF_INDEX;
+    queries::check_mod_dead::ensure(tcx, DefId::local(CRATE_DEF_INDEX));
+}
+
+pub fn check_mod_dead<'tcx>(tcx: TyCtxt<'_, 'tcx, 'tcx>, _: DefId) {
     let access_levels = &time(tcx.sess, "privacy_access_levels",
         || tcx.privacy_access_levels(LOCAL_CRATE));
     let krate = tcx.hir.krate();
@@ -647,4 +653,11 @@ pub fn check_crate<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
     };
     intravisit::walk_crate(&mut visitor, krate);
     });
+}
+
+pub fn provide(providers: &mut Providers) {
+    *providers = Providers {
+        check_mod_dead,
+        ..*providers
+    };
 }

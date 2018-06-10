@@ -208,6 +208,8 @@ define_maps! { <'tcx>
 
     [] fn check_mod_liveness: CheckModLiveness(DefId) -> (),
 
+    [] fn check_mod_dead: CheckModDead(DefId) -> (),
+
     [] fn collect_mod_item_types: CollectModItemTypes(DefId) -> (),
 
     /// The signature of functions and closures.

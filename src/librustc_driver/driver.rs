@@ -1153,6 +1153,7 @@ pub fn default_provide(providers: &mut ty::maps::Providers) {
     stability::provide(providers);
     middle::intrinsicck::provide(providers);
     middle::liveness::provide(providers);
+    middle::dead::provide(providers);
     rustc_passes::provide(providers);
     rustc_traits::provide(providers);
     middle::region::provide(providers);
