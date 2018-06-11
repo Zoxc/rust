@@ -679,7 +679,7 @@ impl<'hir> Map<'hir> {
             visitor,
         };
 
-        // We can't krate() since that adds a dependency on the whole crate
+        // We can't use krate() since that adds a dependency on the whole crate
         self.forest.krate.visit_all_item_likes(&mut filter);
     }
 
