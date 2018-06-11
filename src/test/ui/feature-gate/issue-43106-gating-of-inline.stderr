@@ -14,12 +14,6 @@ LL | | }
    | |_- not a function or closure
 
 error[E0518]: attribute should be applied to function or closure
-  --> $DIR/issue-43106-gating-of-inline.rs:24:17
-   |
-LL |     mod inner { #![inline="2100"] }
-   |     ------------^^^^^^^^^^^^^^^^^-- not a function or closure
-
-error[E0518]: attribute should be applied to function or closure
   --> $DIR/issue-43106-gating-of-inline.rs:29:5
    |
 LL |     #[inline = "2100"] struct S;
@@ -36,6 +30,12 @@ error[E0518]: attribute should be applied to function or closure
    |
 LL |     #[inline = "2100"] impl S { }
    |     ^^^^^^^^^^^^^^^^^^ ---------- not a function or closure
+
+error[E0518]: attribute should be applied to function or closure
+  --> $DIR/issue-43106-gating-of-inline.rs:24:17
+   |
+LL |     mod inner { #![inline="2100"] }
+   |     ------------^^^^^^^^^^^^^^^^^-- not a function or closure
 
 error: aborting due to 5 previous errors
 

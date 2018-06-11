@@ -10,6 +10,11 @@ note: ...which requires computing the supertraits of `t2`...
 LL | trait t2 : t1 {
    | ^^^^^^^^^^^^^
    = note: ...which again requires computing the supertraits of `t1`, completing the cycle
+note: cycle used when processing ``
+  --> $DIR/issue-12511.rs:11:1
+   |
+LL | trait t1 : t2 {
+   | ^^^^^^^^^^^^^
 
 error: aborting due to previous error
 

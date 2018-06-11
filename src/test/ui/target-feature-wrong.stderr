@@ -28,6 +28,12 @@ error: #[target_feature(..)] can only be applied to `unsafe` function
 LL | #[target_feature(enable = "sse2")]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+error: cannot use #[inline(always)] with #[target_feature]
+  --> $DIR/target-feature-wrong.rs:41:1
+   |
+LL | #[inline(always)]
+   | ^^^^^^^^^^^^^^^^^
+
 error: attribute should be applied to a function
   --> $DIR/target-feature-wrong.rs:37:1
    |
@@ -36,12 +42,6 @@ LL | #[target_feature(enable = "sse2")]
 LL | //~^ ERROR: should be applied to a function
 LL | mod another {}
    | -------------- not a function
-
-error: cannot use #[inline(always)] with #[target_feature]
-  --> $DIR/target-feature-wrong.rs:41:1
-   |
-LL | #[inline(always)]
-   | ^^^^^^^^^^^^^^^^^
 
 error: aborting due to 7 previous errors
 

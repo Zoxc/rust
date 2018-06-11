@@ -5,6 +5,11 @@ LL | impl ToNbt<Self> {}
    |            ^^^^
    |
    = note: ...which again requires processing `<impl at $DIR/issue-23305.rs:15:1: 15:20>`, completing the cycle
+note: cycle used when processing ``
+  --> $DIR/issue-23305.rs:11:1
+   |
+LL | pub trait ToNbt<T> {
+   | ^^^^^^^^^^^^^^^^^^
 
 error: aborting due to previous error
 

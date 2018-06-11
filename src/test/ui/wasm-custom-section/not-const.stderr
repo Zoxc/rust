@@ -23,13 +23,13 @@ LL | #[wasm_custom_section = "foo"] //~ ERROR: only allowed on consts
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: only allowed on consts
-  --> $DIR/not-const.rs:25:1
+  --> $DIR/not-const.rs:28:1
    |
 LL | #[wasm_custom_section = "foo"] //~ ERROR: only allowed on consts
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: only allowed on consts
-  --> $DIR/not-const.rs:28:1
+  --> $DIR/not-const.rs:25:1
    |
 LL | #[wasm_custom_section = "foo"] //~ ERROR: only allowed on consts
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
