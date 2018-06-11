@@ -149,7 +149,7 @@ pub fn register_builtins(store: &mut lint::LintStore, sess: Option<&Session>) {
         // Expensive and refers to a few things.
         // Should have a separate query.
         // Seems like a good candidate to move to MIR.
-        UnconditionalRecursion, 
+        UnconditionalRecursion,
 
         PluginAsLibrary,
         MutableTransmutes, // Depends on referenced function signatures in expressions
@@ -165,7 +165,7 @@ pub fn register_builtins(store: &mut lint::LintStore, sess: Option<&Session>) {
 
                  // Uses attr::is_used which is untracked, can't be an incremental module pass.
                  // Doesn't require type tables. Make a separate things for that?
-                 UnusedAttributes, 
+                 UnusedAttributes,
 
                  NonSnakeCase, // Checks crate attributes. Find out how that would work.
                  UnstableFeatures, // Needs to look at crate attributes. Make sure that works
