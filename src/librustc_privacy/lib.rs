@@ -1772,7 +1772,6 @@ fn privacy_access_levels<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
         };
         time(tcx.sess, "PrivateItemsInPublicInterfacesVisitor",
             || krate.visit_all_item_likes(&mut DeepVisitor::new(&mut visitor)));
-        
     }
 
     Lrc::new(visitor.access_levels)
