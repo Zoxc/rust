@@ -497,6 +497,7 @@ define_dep_nodes!( <'tcx>
     [] CheckModIntrinsics(DefId),
     [] CheckModLiveness(DefId),
     [] CheckModDead(DefId),
+    [] LintMod(DefId),
     [] CollectModItemTypes(DefId),
 
     [] Reachability,

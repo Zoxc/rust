@@ -626,4 +626,5 @@ impl<'a, 'tcx> intravisit::Visitor<'tcx> for LintLevelMapBuilder<'a, 'tcx> {
 
 pub fn provide(providers: &mut Providers) {
     providers.lint_levels = lint_levels;
+    context::provide(providers);
 }

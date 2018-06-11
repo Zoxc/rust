@@ -67,7 +67,15 @@ pub fn register_builtins(store: &mut lint::LintStore, sess: Option<&Session>) {
     macro_rules! add_builtin {
         ($sess:ident, $($name:ident),*,) => (
             {$(
-                store.register_late_pass($sess, false, box $name);
+                store.register_late_pass($sess, false, false, box $name);
+                )*}
+            )
+    }
+
+    macro_rules! add_module_builtin {
+        ($sess:ident, $($name:ident),*,) => (
+            {$(
+                store.register_late_pass($sess, false, true, box $name);
                 )*}
             )
     }
@@ -83,7 +91,15 @@ pub fn register_builtins(store: &mut lint::LintStore, sess: Option<&Session>) {
     macro_rules! add_builtin_with_new {
         ($sess:ident, $($name:ident),*,) => (
             {$(
-                store.register_late_pass($sess, false, box $name::new());
+                store.register_late_pass($sess, false, false, box $name::new());
+                )*}
+            )
+    }
+
+    macro_rules! add_module_builtin_with_new {
+        ($sess:ident, $($name:ident),*,) => (
+            {$(
+                store.register_late_pass($sess, false, true, box $name::new());
                 )*}
             )
     }
@@ -114,38 +130,57 @@ pub fn register_builtins(store: &mut lint::LintStore, sess: Option<&Session>) {
                                 DeprecatedAttr,
                                 );
 
+    add_module_builtin!(
+        sess,
+        HardwiredLints,
+        WhileTrue,
+        ImproperCTypes, // Depends on types
+        VariantSizeDifferences, // Depends on types
+        BoxPointers,
+        PathStatements,
+        UnusedResults, // Depends ADT attributes for types used in expressions
+        NonCamelCaseTypes,
+        NonUpperCaseGlobals,
+        NonShorthandFieldPatterns,
+        UnsafeCode,
+        UnusedAllocation,
+        MissingCopyImplementations, // Depends on types used in type definitions
+
+        // Expensive and refers to a few things.
+        // Should have a separate query.
+        // Seems like a good candidate to move to MIR.
+        UnconditionalRecursion, 
+
+        PluginAsLibrary,
+        MutableTransmutes, // Depends on referenced function signatures in expressions
+        UnionsWithDropFields, // Depends on types of fields, checks if they implement Drop
+        TypeAliasBounds,
+        UnusedBrokenConst, // May Depend on constants elsewhere
+        TrivialConstraints,
+    );
+
+    // FIXME: Make a separate lint type which do not require typeck tables
+
     add_builtin!(sess,
-                 HardwiredLints,
-                 WhileTrue,
-                 ImproperCTypes,
-                 VariantSizeDifferences,
-                 BoxPointers,
-                 UnusedAttributes,
-                 PathStatements,
-                 UnusedResults,
-                 NonCamelCaseTypes,
-                 NonSnakeCase,
-                 NonUpperCaseGlobals,
-                 NonShorthandFieldPatterns,
-                 UnsafeCode,
-                 UnusedAllocation,
-                 MissingCopyImplementations,
-                 UnstableFeatures,
-                 UnconditionalRecursion,
-                 InvalidNoMangleItems,
-                 PluginAsLibrary,
-                 MutableTransmutes,
-                 UnionsWithDropFields,
-                 UnreachablePub,
-                 TypeAliasBounds,
-                 UnusedBrokenConst,
-                 TrivialConstraints,
+
+                 // Uses attr::is_used which is untracked, can't be an incremental module pass.
+                 // Doesn't require type tables. Make a separate things for that?
+                 UnusedAttributes, 
+
+                 NonSnakeCase, // Checks crate attributes. Find out how that would work.
+                 UnstableFeatures, // Needs to look at crate attributes. Make sure that works
+                 InvalidNoMangleItems, // Depends on access levels
+                 UnreachablePub, // Depends on access levels
                  );
 
+    add_module_builtin_with_new!(
+        sess,
+        TypeLimits,
+    );
+
     add_builtin_with_new!(sess,
-                          TypeLimits,
-                          MissingDoc,
-                          MissingDebugImplementations,
+                          MissingDoc, // Tracks attributes of parents
+                          MissingDebugImplementations, // Depends on access levels
                           );
 
     add_lint_group!(sess,
