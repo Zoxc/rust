@@ -1313,6 +1313,16 @@ warning: unused attribute
 LL | #![proc_macro_derive          = "2500"] //~ WARN unused attribute
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+warning: function is marked #[no_mangle], but not exported
+  --> $DIR/issue-43106-gating-of-builtin-attrs.rs:387:27
+   |
+LL |     #[no_mangle = "3500"] fn f() { }
+   |                           -^^^^^^^^^
+   |                           |
+   |                           help: try making it public: `pub`
+   |
+   = note: #[warn(private_no_mangle_fns)] on by default
+
 error: compilation successful
   --> $DIR/issue-43106-gating-of-builtin-attrs.rs:844:1
    |
