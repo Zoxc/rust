@@ -2698,6 +2698,8 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         // Once red/green incremental compilation lands we should be able to
         // remove this because while the crate changes often the lint level map
         // will change rarely.
+        // FIXME: How is this correct?
+        // Just remove it.
         self.dep_graph.with_ignore(|| {
             let sets = self.lint_levels(LOCAL_CRATE);
             loop {
