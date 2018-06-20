@@ -614,8 +614,13 @@ impl<'hir> Map<'hir> {
     {
         let node_id = self.as_local_node_id(module).unwrap();
 
-        // Read the module so we'll be re-executed if new items appear in the module
+        // Read the module so we'll be re-executed if new items appear in it
+        // FIXME: Doesn't work since modules do not hash their items.
+        // See https://github.com/rust-lang/rust/issues/40876
         self.read(node_id);
+
+        // FIXME: That doesn't account for nested items in the module.
+        // Ensure those are caught by adding dependencies for the items in the module
 
         struct Filter<'a, 'hir: 'a, V> {
             map: &'a Map<'hir>,
