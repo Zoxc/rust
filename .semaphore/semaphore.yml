@@ -1,0 +1,24 @@
+version: v1.0
+name: First pipeline example
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+blocks:
+  - name: "Build"
+    task:
+      env_vars:
+        - name: APP_ENV
+          value: prod
+        - name: SRC
+          value: .
+        - name: NO_CCACHE
+          value: "1"
+      jobs:
+      - name: Build rustc
+        commands:
+          - git clone --depth 2 -b sem2 --single-branch $SEMAPHORE_GIT_URL $SEMAPHORE_GIT_DIR
+          - cd $SEMAPHORE_GIT_DIR
+          - ./sem.sh
+          - ./src/ci/run.sh
