@@ -219,7 +219,7 @@ impl Step for StdLink {
                 target_compiler.host,
                 target));
         let libdir = builder.sysroot_libdir(target_compiler, target);
-        add_to_sysroot(builder, &libdir, &libstd_stamp(builder, compiler, target));
+        add_to_sysroot(builder, &libdir, &libstd_stamp(builder, compiler, target), None);
 
         if builder.config.sanitizers && compiler.stage != 0 && target == "x86_64-apple-darwin" {
             // The sanitizers are only built in stage1 or above, so the dylibs will
@@ -423,7 +423,7 @@ impl Step for TestLink {
                 target_compiler.host,
                 target));
         add_to_sysroot(builder, &builder.sysroot_libdir(target_compiler, target),
-                    &libtest_stamp(builder, compiler, target));
+                    &libtest_stamp(builder, compiler, target), None);
 
         builder.cargo(target_compiler, Mode::ToolTest, target, "clean");
     }
@@ -584,8 +584,13 @@ impl Step for RustcLink {
                  &compiler.host,
                  target_compiler.host,
                  target));
-        add_to_sysroot(builder, &builder.sysroot_libdir(target_compiler, target),
-                       &librustc_stamp(builder, compiler, target));
+        let stage_out = builder.build.stage_out(target_compiler, Mode::Rustc);
+        add_to_sysroot(
+            builder,
+            &builder.sysroot_libdir(target_compiler, target),
+            &librustc_stamp(builder, compiler, target),
+            Some(&stage_out),
+        );
         builder.cargo(target_compiler, Mode::ToolRustc, target, "clean");
     }
 }
@@ -1014,10 +1019,26 @@ impl Step for Assemble {
 ///
 /// For a particular stage this will link the file listed in `stamp` into the
 /// `sysroot_dst` provided.
-pub fn add_to_sysroot(builder: &Builder, sysroot_dst: &Path, stamp: &Path) {
+pub fn add_to_sysroot(
+    builder: &Builder,
+    sysroot_dst: &Path,
+    stamp: &Path,
+    stage_out: Option<&Path>) {
     t!(fs::create_dir_all(&sysroot_dst));
     for path in builder.read_stamp_file(stamp) {
-        builder.copy(&path, &sysroot_dst.join(path.file_name().unwrap()));
+        let file_dir = path.parent().unwrap()  // chop off base name
+                           .parent().unwrap()  // chop off `release`
+                           .parent().unwrap(); // chop off `release`
+        if stage_out == Some(file_dir) {
+            // We are copying a build file. We need to add the build triple to it
+            let rustlib_dir = sysroot_dst.parent().unwrap()  // chop off `lib`
+                                         .parent().unwrap(); // chop off `$target`
+            let build_dir = rustlib_dir.join(builder.build.build).join("lib");
+            t!(fs::create_dir_all(&build_dir));
+            builder.copy(&path, &build_dir.join(path.file_name().unwrap()));
+        } else {
+            builder.copy(&path, &sysroot_dst.join(path.file_name().unwrap()));
+        }
     }
 }
 
@@ -1047,8 +1068,12 @@ pub fn run_cargo(builder: &Builder,
     let mut deps = Vec::new();
     let mut toplevel = Vec::new();
     let ok = stream_cargo(builder, cargo, tail_args, &mut |msg| {
-        let filenames = match msg {
-            CargoMessage::CompilerArtifact { filenames, .. } => filenames,
+        let (filenames, package_id) = match msg {
+            CargoMessage::CompilerArtifact {
+                filenames,
+                package_id,
+                ..
+            } => (filenames, package_id),
             _ => return,
         };
         for filename in filenames {
@@ -1062,9 +1087,19 @@ pub fn run_cargo(builder: &Builder,
 
             let filename = Path::new(&*filename);
 
+            // If this was an output file in the "host dir" we don't actually
+            // worry about it, it's not relevant for us
+            if filename.starts_with(&host_root_dir) {
+                // Unless it's a proc macro used in the compiler
+                if package_id.starts_with("serde_derive ") {
+                    deps.push(filename.to_path_buf());
+                }
+                continue;
+            }
+
             // If this was output in the `deps` dir then this is a precise file
             // name (hash included) so we start tracking it.
-            if filename.starts_with(&host_root_dir) || filename.starts_with(&target_deps_dir) {
+            if filename.starts_with(&target_deps_dir) {
                 deps.push(filename.to_path_buf());
                 continue;
             }
