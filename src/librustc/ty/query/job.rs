@@ -18,6 +18,11 @@ use syntax_pos::Span;
 use ty::tls;
 use ty::query::Query;
 use ty::query::plumbing::CycleError;
+#[cfg(not(parallel_queries))]
+use ty::query::{
+    plumbing::TryGetJob,
+    config::QueryDescription,
+};
 use ty::context::TyCtxt;
 use errors::Diagnostic;
 use std::process;
@@ -83,33 +88,41 @@ impl<'tcx> QueryJob<'tcx> {
     ///
     /// For single threaded rustc there's no concurrent jobs running, so if we are waiting for any
     /// query that means that there is a query cycle, thus this always running a cycle error.
+    #[cfg(not(parallel_queries))]
+    #[inline(never)]
+    #[cold]
+    pub(super) fn await<'lcx, 'a, D: QueryDescription<'tcx>>(
+        &self,
+        tcx: TyCtxt<'_, 'tcx, 'lcx>,
+        span: Span,
+    ) -> TryGetJob<'a, 'tcx, D> {
+        TryGetJob::JobCompleted(Err(Box::new(self.find_cycle_in_stack(tcx, span))))
+    }
+
+    /// Awaits for the query job to complete.
+    ///
+    /// For single threaded rustc there's no concurrent jobs running, so if we are waiting for any
+    /// query that means that there is a query cycle, thus this always running a cycle error.
+    #[cfg(parallel_queries)]
     pub(super) fn await<'lcx>(
         &self,
         tcx: TyCtxt<'_, 'tcx, 'lcx>,
         span: Span,
-    ) -> Result<(), CycleError<'tcx>> {
-        #[cfg(not(parallel_queries))]
-        {
-            self.find_cycle_in_stack(tcx, span)
-        }
+    ) -> Result<(), Box<CycleError<'tcx>>> {
+        tls::with_related_context(tcx, move |icx| {
+            let mut waiter = Lrc::new(QueryWaiter {
+                query: icx.query.clone(),
+                span,
+                cycle: Lock::new(None),
+                condvar: Condvar::new(),
+            });
+            self.latch.await(&waiter);
 
-        #[cfg(parallel_queries)]
-        {
-            tls::with_related_context(tcx, move |icx| {
-                let mut waiter = Lrc::new(QueryWaiter {
-                    query: icx.query.clone(),
-                    span,
-                    cycle: Lock::new(None),
-                    condvar: Condvar::new(),
-                });
-                self.latch.await(&waiter);
-
-                match Lrc::get_mut(&mut waiter).unwrap().cycle.get_mut().take() {
-                    None => Ok(()),
-                    Some(cycle) => Err(cycle)
-                }
-            })
-        }
+            match Lrc::get_mut(&mut waiter).unwrap().cycle.get_mut().take() {
+                None => Ok(()),
+                Some(cycle) => Err(Box::new(cycle))
+            }
+        })
     }
 
     #[cfg(not(parallel_queries))]
@@ -117,7 +130,7 @@ impl<'tcx> QueryJob<'tcx> {
         &self,
         tcx: TyCtxt<'_, 'tcx, 'lcx>,
         span: Span,
-    ) -> Result<(), CycleError<'tcx>> {
+    ) -> CycleError<'tcx> {
         // Get the current executing query (waiter) and find the waitee amongst its parents
         let mut current_job = tls::with_related_context(tcx, |icx| icx.query.clone());
         let mut cycle = Vec::new();
@@ -137,7 +150,7 @@ impl<'tcx> QueryJob<'tcx> {
                 let usage = job.parent.as_ref().map(|parent| {
                     (job.info.span, parent.info.query.clone())
                 });
-                return Err(CycleError { usage, cycle });
+                return CycleError { usage, cycle };
             }
 
             current_job = job.parent.clone();

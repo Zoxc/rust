@@ -825,10 +825,19 @@ impl Session {
         }
     }
 
-    pub fn profiler<F: FnOnce(&mut SelfProfiler) -> ()>(&self, f: F) {
+    #[inline(never)]
+    #[cold]
+    fn profiler_active<F: FnOnce(&mut SelfProfiler) -> ()>(&self, f: F) {
         if self.opts.debugging_opts.self_profile {
             let mut profiler = self.self_profiling.borrow_mut();
             f(&mut profiler);
+        }
+    }
+
+    #[inline(always)]
+    pub fn profiler<F: FnOnce(&mut SelfProfiler) -> ()>(&self, f: F) {
+        if unsafe { std::intrinsics::unlikely(self.opts.debugging_opts.self_profile) } {
+            self.profiler_active(f)
         }
     }
 
