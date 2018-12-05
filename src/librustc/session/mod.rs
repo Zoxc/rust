@@ -838,7 +838,7 @@ impl Session {
 
     #[inline(always)]
     pub fn profiler<F: FnOnce(&mut SelfProfiler) -> ()>(&self, f: F) {
-        if unsafe { std::intrinsics::unlikely(self.opts.debugging_opts.self_profile) } {
+        if unlikely!(self.opts.debugging_opts.self_profile) {
             self.profiler_active(f)
         }
     }
