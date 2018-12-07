@@ -75,6 +75,10 @@ pub struct QueryJob<'tcx> {
 impl<'tcx> QueryJob<'tcx> {
     /// Creates a new query job
     pub fn new(info: QueryInfo<'tcx>, parent: Option<Lrc<QueryJob<'tcx>>>) -> Self {
+        // We want to keep this size small. Introducing queries with large key
+        // may cause the size of this to blow up
+        assert!(mem::size_of::<QueryInfo<'_>>() < 24);
+
         QueryJob {
             diagnostics: Lock::new(Vec::new()),
             info,

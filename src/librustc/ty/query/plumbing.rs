@@ -12,6 +12,8 @@
 //! that generate the actual methods on tcx which find and execute the
 //! provider, manage the caches, and so forth.
 
+#![allow(non_snake_case)]
+
 use dep_graph::{DepNodeIndex, DepNode, DepKind, DepNodeColor, OpenTask};
 use errors::DiagnosticBuilder;
 use errors::Level;
@@ -105,17 +107,17 @@ pub(super) struct JobOwner<'a, 'tcx: 'a, Q: QueryDescription<'tcx> + 'a> {
 
 #[no_mangle]
 fn size_JobOwner() -> usize {
-    std::mem::size_of::<JobOwner<::ty::query::queries::type_of>>()
+    std::mem::size_of::<JobOwner<'_, '_, ::ty::query::queries::type_of<'_>>>()
 }
 
 #[no_mangle]
 fn size_QueryJob() -> usize {
-    std::mem::size_of::<QueryJob>()
+    std::mem::size_of::<QueryJob<'_>>()
 }
 
 #[no_mangle]
 fn size_Query() -> usize {
-    std::mem::size_of::<::ty::query::Query>()
+    std::mem::size_of::<::ty::query::Query<'_>>()
 }
 
 use hir::def_id::DefId;
@@ -128,6 +130,84 @@ fn size_DefId() -> usize {
 #[no_mangle]
 fn size_CrateId() -> usize {
     std::mem::size_of::<CrateId>()
+}
+
+#[no_mangle]
+fn size_const_eval() -> usize {
+    std::mem::size_of::<ty::ParamEnvAnd<'_, ::mir::interpret::GlobalId<'_>>>()
+}
+
+#[no_mangle]
+fn size_mir_shims() -> usize {
+    std::mem::size_of::<ty::InstanceDef<'_>>()
+}
+
+#[no_mangle]
+fn size_symbol_name() -> usize {
+    std::mem::size_of::<ty::Instance<'_>>()
+}
+
+#[no_mangle]
+fn size_vtable_methods() -> usize {
+    std::mem::size_of::<ty::PolyTraitRef<'_>>()
+}
+
+#[no_mangle]
+fn size_codegen_fulfill_obligation() -> usize {
+    std::mem::size_of::<(ty::ParamEnv<'_>, ty::PolyTraitRef<'_>)>()
+}
+
+#[no_mangle]
+fn size_is_copy_raw() -> usize {
+    std::mem::size_of::<ty::ParamEnvAnd<'_, ty::Ty<'_>>>()
+}
+
+#[no_mangle]
+fn size_normalize_projection_ty() -> usize {
+    std::mem::size_of::<CanonicalProjectionGoal<'_>>()
+}
+
+#[no_mangle]
+fn size_implied_outlives_bounds() -> usize {
+    std::mem::size_of::<CanonicalTyGoal<'_>>()
+}
+
+#[no_mangle]
+fn size_evaluate_obligation() -> usize {
+    std::mem::size_of::<CanonicalPredicateGoal<'_>>()
+}
+
+#[no_mangle]
+fn size_type_op_ascribe_user_type() -> usize {
+    std::mem::size_of::<CanonicalTypeOpAscribeUserTypeGoal<'_>>()
+}
+
+#[no_mangle]
+fn size_type_op_eq() -> usize {
+    std::mem::size_of::<CanonicalTypeOpEqGoal<'_>>()
+}
+
+#[no_mangle]
+fn size_type_op_subtype() -> usize {
+    std::mem::size_of::<CanonicalTypeOpSubtypeGoal<'_>>()
+}
+
+use traits::query::*;
+use ty;
+
+#[no_mangle]
+fn size_type_op_prove_predicate() -> usize {
+    std::mem::size_of::<CanonicalTypeOpProvePredicateGoal<'_>>()
+}
+
+#[no_mangle]
+fn size_type_op_normalize_ty() -> usize {
+    std::mem::size_of::<CanonicalTypeOpNormalizeGoal<'_, ty::Ty<'_>>>()
+}
+
+#[no_mangle]
+fn size_program_clauses_for_env() -> usize {
+    std::mem::size_of::<ty::traits::Environment<'_>>()
 }
 
  use hir::def_id::CrateNum;
