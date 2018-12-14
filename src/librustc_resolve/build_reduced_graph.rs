@@ -382,6 +382,7 @@ impl<'a, 'cl> Resolver<'a, 'cl> {
                     subclass: ImportDirectiveSubclass::ExternCrate {
                         source: orig_name,
                         target: ident,
+                        no_link: attr::contains_name(&item.attrs, "no_link"),
                     },
                     root_span: item.span,
                     span: item.span,
