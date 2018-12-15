@@ -17,7 +17,6 @@ pub use self::hcx::{StableHashingContextProvider, StableHashingContext, NodeIdHa
 mod caching_source_map_view;
 mod hcx;
 
-mod impls_cstore;
 mod impls_hir;
 mod impls_mir;
 mod impls_misc;

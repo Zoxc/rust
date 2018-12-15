@@ -87,6 +87,7 @@ extern crate libc;
 extern crate polonius_engine;
 extern crate rustc_target;
 #[macro_use] extern crate rustc_data_structures;
+#[macro_use] extern crate rustc_macros;
 extern crate serialize;
 extern crate parking_lot;
 extern crate rustc_errors as errors;

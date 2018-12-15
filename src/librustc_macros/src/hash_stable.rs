@@ -21,7 +21,7 @@ pub fn hash_stable_derive(mut s: synstructure::Structure) -> proc_macro2::TokenS
     s.bound_impl(quote!(::rustc_data_structures::stable_hasher::HashStable<__CTX>), quote!{
         fn hash_stable<__W: ::rustc_data_structures::stable_hasher::StableHasherResult>(
             &self,
-            __hcx: &mut CTX,
+            __hcx: &mut __CTX,
             __hasher: &mut ::rustc_data_structures::stable_hasher::StableHasher<__W>) {
             #discriminant
             match *self { #body }
