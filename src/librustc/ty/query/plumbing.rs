@@ -22,6 +22,7 @@ use ty::query::Query;
 use ty::query::config::{QueryConfig, QueryDescription};
 use ty::query::job::{QueryJob, QueryInfo};
 use ty::item_path;
+use hir::def_id::DefId;
 
 use util::common::{profq_msg, ProfileQueriesMsg, QueryMsg};
 
@@ -34,35 +35,71 @@ use syntax_pos::Span;
 use syntax::source_map::DUMMY_SP;
 
 pub struct QueryCache<'tcx, D: QueryConfig<'tcx> + ?Sized> {
-    /// Completed queries have their result stored here
-    pub(super) results: FxHashMap<D::Key, QueryValue<D::Value>>,
-
-    /// Queries under execution will have an entry in this map.
-    /// The query job inside can be used to await for completion of queries.
-    pub(super) active: FxHashMap<D::Key, Lrc<QueryJob<'tcx>>>,
+    pub(super) results: FxHashMap<D::Key, QueryValue<'tcx, D::Value>>,
 }
 
-pub(super) struct QueryValue<T> {
-    pub(super) value: T,
-    pub(super) index: DepNodeIndex,
+impl<D: QueryConfig<'tcx> + ?Sized> QueryCache<'tcx, D> {
+    #[cfg(parallel_queries)]
+    pub fn active_jobs(&self) -> impl Iterator<Item=Lrc<QueryJob<'tcx>>> + '_ {
+        self.results.values().filter_map(|value| {
+            match value {
+                QueryValue::Complete { .. } => None,
+                QueryValue::Active(job) => Some(job.clone())
+            }
+        })
+    }
 }
 
-impl<T> QueryValue<T> {
-    pub(super) fn new(value: T,
-                      dep_node_index: DepNodeIndex)
-                      -> QueryValue<T> {
-        QueryValue {
-            value,
-            index: dep_node_index,
+/// This is used so we can lower the alignment required for Lrc in order
+/// to avoid increasing the alignment of the QueryValue type
+#[repr(packed(4))]
+pub(super) struct UnalignedQueryJob<'tcx>(Lrc<QueryJob<'tcx>>);
+
+static_assert!(
+    MEM_SIZE_OF_QUERY_VALUE_SDFDS:
+    mem::align_of::<UnalignedQueryJob<'_>>() == 1
+);
+
+impl<'tcx> UnalignedQueryJob<'tcx> {
+    fn clone(&self) -> Lrc<QueryJob<'tcx>> {
+        // This is safe since we move the unaligned data out so it
+        // gets properly aligned before forming a pointer to it
+        unsafe {
+            let job = mem::ManuallyDrop::new(ptr::read_unaligned(&self.0));
+            (*job).clone()
         }
     }
 }
+
+pub(super) enum QueryValue<'tcx, T> {
+    /// The query is completed with a result
+    Complete {
+        value: T,
+        index: DepNodeIndex,
+    },
+    /// The query will be in this state under execution.
+    /// The job inside can be used to await for completion of it.
+    Active(UnalignedQueryJob<'tcx>)
+}
+
+impl<T> QueryValue<'_, T> {
+    pub fn unwrap(&self) -> (&T, DepNodeIndex) {
+        match self {
+            QueryValue::Complete { ref value, index} => (value, *index),
+            QueryValue::Active(_) => panic!()
+        }
+    }
+}
+
+static_assert!(
+    MEM_SIZE_OF_QUERY_VALUE:
+    mem::size_of::<QueryValue<'_, DefId>>() <= mem::size_of::<(DefId, DepNodeIndex)>()
+);
 
 impl<'tcx, M: QueryConfig<'tcx>> Default for QueryCache<'tcx, M> {
     fn default() -> QueryCache<'tcx, M> {
         QueryCache {
             results: FxHashMap::default(),
-            active: FxHashMap::default(),
         }
     }
 }
@@ -119,18 +156,20 @@ impl<'a, 'tcx, Q: QueryDescription<'tcx>> JobOwner<'a, 'tcx, Q> {
         let cache = Q::query_cache(tcx);
         loop {
             let mut lock = cache.borrow_mut();
-            if let Some(value) = lock.results.get(key) {
-                profq_msg!(tcx, ProfileQueriesMsg::CacheHit);
-                tcx.sess.profiler(|p| {
-                    p.record_query(Q::CATEGORY);
-                    p.record_query_hit(Q::CATEGORY);
-                });
+            let job = match lock.results.entry((*key).clone()) {
+                Entry::Occupied(entry) => match entry.get() {
+                    QueryValue::Complete { ref value, index } => {
+                        profq_msg!(tcx, ProfileQueriesMsg::CacheHit);
+                        tcx.sess.profiler(|p| {
+                            p.record_query(Q::CATEGORY);
+                            p.record_query_hit(Q::CATEGORY);
+                        });
 
-                let result = Ok((value.value.clone(), value.index));
-                return TryGetJob::JobCompleted(result);
-            }
-            let job = match lock.active.entry((*key).clone()) {
-                Entry::Occupied(entry) => entry.get().clone(),
+                        let result = Ok((value.clone(), *index));
+                        return TryGetJob::JobCompleted(result);
+                    },
+                    QueryValue::Active(ref job) => job.clone(),
+                }
                 Entry::Vacant(entry) => {
                     // No job entry for this query. Return a new one to be started later
                     return tls::with_related_context(tcx, |icx| {
@@ -147,7 +186,7 @@ impl<'a, 'tcx, Q: QueryDescription<'tcx>> JobOwner<'a, 'tcx, Q> {
                             job: job.clone(),
                             key: (*key).clone(),
                         };
-                        entry.insert(job);
+                        entry.insert(QueryValue::Active(UnalignedQueryJob(job)));
                         TryGetJob::NotYetStarted(owner)
                     })
                 }
@@ -182,12 +221,10 @@ impl<'a, 'tcx, Q: QueryDescription<'tcx>> JobOwner<'a, 'tcx, Q> {
         // Forget ourself so our destructor won't poison the query
         mem::forget(self);
 
-        let value = QueryValue::new(result.clone(), dep_node_index);
-        {
-            let mut lock = cache.borrow_mut();
-            lock.active.remove(&key);
-            lock.results.insert(key, value);
-        }
+        cache.borrow_mut().results.insert(key, QueryValue::Complete {
+            value: result.clone(),
+            index: dep_node_index,
+        });
 
         job.signal_complete();
     }
@@ -233,8 +270,8 @@ impl<'a, 'tcx, Q: QueryDescription<'tcx>> Drop for JobOwner<'a, 'tcx, Q> {
     #[cold]
     fn drop(&mut self) {
         // This job failed to execute due to a panic.
-        // Remove it from the list of active queries
-        self.cache.borrow_mut().active.remove(&self.key);
+        // Remove the active state of the query
+        self.cache.borrow_mut().results.remove(&self.key);
         // Signal that the job not longer executes, so the waiters will continue execution.
         // The waiters will try to execute the query which may result in them panicking too.
         self.job.signal_complete();
@@ -747,7 +784,7 @@ macro_rules! define_queries_inner {
                 // deadlock handler, and this shouldn't be locked
                 $(
                     jobs.extend(
-                        self.$name.try_lock().unwrap().active.values().cloned()
+                        self.$name.try_lock().unwrap().active_jobs()
                     );
                 )*
 
