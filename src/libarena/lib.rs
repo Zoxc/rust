@@ -18,18 +18,21 @@
 #![feature(dropck_eyepatch)]
 #![feature(nll)]
 #![feature(raw_vec_internals)]
+#![feature(stmt_expr_attributes)]
 #![cfg_attr(test, feature(test))]
 
 #![allow(deprecated)]
 
 extern crate alloc;
 extern crate rustc_data_structures;
+extern crate rustc_rayon_core;
 
-use rustc_data_structures::sync::MTLock;
+use rustc_data_structures::sync::{WorkerLocal, Lock};
+use rustc_data_structures::{likely, unlikely, cold_path};
+use rustc_rayon_core::ThreadPool;
 
 use std::cell::{Cell, RefCell};
 use std::cmp;
-use std::intrinsics;
 use std::marker::{PhantomData, Send};
 use std::mem;
 use std::ptr;
@@ -37,14 +40,76 @@ use std::slice;
 
 use alloc::raw_vec::RawVec;
 
-/// An arena that can hold objects of only one type.
-pub struct TypedArena<T> {
+struct CurrentChunk<T> {
     /// A pointer to the next object to be allocated.
     ptr: Cell<*mut T>,
 
     /// A pointer to the end of the allocated area. When this pointer is
     /// reached, a new chunk is allocated.
     end: Cell<*mut T>,
+}
+
+impl<T> Default for CurrentChunk<T> {
+    #[inline]
+    fn default() -> Self {
+        CurrentChunk {
+            // We set both `ptr` and `end` to 0 so that the first call to
+            // alloc() will trigger a grow().
+            ptr: Cell::new(0 as *mut T),
+            end: Cell::new(0 as *mut T),
+        }
+    }
+}
+
+impl<T> CurrentChunk<T> {
+    fn alloc_unchecked(&self, units: usize) -> *mut T {
+        let ptr = self.ptr.get();
+        // Advance the pointer.
+        self.ptr.set(ptr.offset(units as isize));
+        ptr
+    }
+
+    // FIXME: Write a fn which check for enough space for fixed sizes given that bytes < PAGE
+    fn available_bytes(&self) -> usize {
+        self.end.get() as usize - self.ptr.get() as usize
+    }
+
+    /// Grows the arena.
+    #[inline(always)]
+    fn grow(&self, n: usize, chunks: &mut Vec<TypedArenaChunk<T>>) {
+        unsafe {
+            let (chunk, mut new_capacity);
+            if let Some(last_chunk) = chunks.last_mut() {
+                let used_bytes = self.ptr.get() as usize - last_chunk.start() as usize;
+                let currently_used_cap = used_bytes / mem::size_of::<T>();
+                if last_chunk.storage.reserve_in_place(currently_used_cap, n) {
+                    self.end.set(last_chunk.end());
+                    return;
+                } else {
+                    new_capacity = last_chunk.storage.cap();
+                    loop {
+                        new_capacity = new_capacity.checked_mul(2).unwrap();
+                        if new_capacity >= currently_used_cap + n {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                let elem_size = cmp::max(1, mem::size_of::<T>());
+                new_capacity = cmp::max(n, PAGE / elem_size);
+            }
+            chunk = TypedArenaChunk::<T>::new(new_capacity);
+            self.ptr.set(chunk.start());
+            self.end.set(chunk.end());
+            chunks.push(chunk);
+        }
+    }
+}
+
+/// An arena that can hold objects of only one type.
+pub struct TypedArena<T> {
+    /// Pointers to the current chunk
+    current: CurrentChunk<T>,
 
     /// A vector of arena chunks.
     chunks: RefCell<Vec<TypedArenaChunk<T>>>,
@@ -108,10 +173,7 @@ impl<T> Default for TypedArena<T> {
     /// Creates a new `TypedArena`.
     fn default() -> TypedArena<T> {
         TypedArena {
-            // We set both `ptr` and `end` to 0 so that the first call to
-            // alloc() will trigger a grow().
-            ptr: Cell::new(0 as *mut T),
-            end: Cell::new(0 as *mut T),
+            current: CurrentChunk::default(),
             chunks: RefCell::new(vec![]),
             _own: PhantomData,
         }
@@ -122,51 +184,27 @@ impl<T> TypedArena<T> {
     /// Allocates an object in the `TypedArena`, returning a reference to it.
     #[inline]
     pub fn alloc(&self, object: T) -> &mut T {
-        // Zero sized path
-        if mem::size_of::<T>() == 0 {
-            if self.ptr == self.end {
-                self.grow(1)
-            }
+        assert!(mem::size_of::<T>() != 0);
 
-            unsafe {
-                self.ptr
-                    .set(intrinsics::arith_offset(self.ptr.get() as *mut u8, 1)
-                        as *mut T);
-                let ptr = mem::align_of::<T>() as *mut T;
-                // Don't drop the object. This `write` is equivalent to `forget`.
-                ptr::write(ptr, object);
-                return &mut *ptr;
-            }
-        }
-
-        let ptr = self.ptr.get();
+        // Pass `Self` as an argument to avoid putting the closure on the stack
+        let alloc = |arena: &Self, object| {
+            let ptr = self.current.alloc_unchecked(1);
+            // Write into uninitialized memory.
+            ptr::write(ptr, object);
+            &mut *ptr
+        };
 
         unsafe {
-            if std::intrinsics::unlikely(ptr == self.end.get()) {
-                self.grow_and_alloc(object)
+            if likely!(self.current.ptr.get() == self.current.end.get()) {
+                alloc(self, object)
             } else {
-                self.alloc_unchecked(ptr, object)
+                // We move the object in this closure so if it has a destructor
+                // the fast path need not have an unwind handler to destroy it
+                cold_path(move || {
+                    self.grow(1);
+                    alloc(self, object)
+                })
             }
-        }
-    }
-
-    #[inline(always)]
-    unsafe fn alloc_unchecked(&self, ptr: *mut T, object: T) -> &mut T {
-        // Advance the pointer.
-        self.ptr.set(ptr.offset(1));
-        // Write into uninitialized memory.
-        ptr::write(ptr, object);
-        &mut *ptr
-    }
-
-    #[inline(never)]
-    #[cold]
-    fn grow_and_alloc(&self, object: T) -> &mut T {
-        // We move the object in this function so if it has a destructor
-        // the fast path need not have an unwind handler to destroy it
-        self.grow(1);
-        unsafe {
-            self.alloc_unchecked(self.ptr.get(), object)
         }
     }
 
@@ -183,59 +221,25 @@ impl<T> TypedArena<T> {
         T: Copy,
     {
         assert!(mem::size_of::<T>() != 0);
-        assert!(slice.len() != 0);
 
-        let available_capacity_bytes = self.end.get() as usize - self.ptr.get() as usize;
         let at_least_bytes = slice.len() * mem::size_of::<T>();
-        if available_capacity_bytes < at_least_bytes {
-            self.grow_slice(slice.len());
+        if unlikely!(at_least_bytes > self.current.available_bytes()) {
+            cold_path(|| {
+                self.grow(slice.len())
+            });
         }
 
         unsafe {
-            let start_ptr = self.ptr.get();
-            let arena_slice = slice::from_raw_parts_mut(start_ptr, slice.len());
-            self.ptr.set(start_ptr.add(arena_slice.len()));
-            arena_slice.copy_from_slice(slice);
-            arena_slice
+            let start_ptr = self.current.alloc_unchecked(slice.len());
+            slice.as_ptr().copy_to_nonoverlapping(start_ptr, slice.len());
+            slice::from_raw_parts_mut(start_ptr, slice.len())
         }
-    }
-
-    #[inline(never)]
-    #[cold]
-    fn grow_slice(&self, n: usize) {
-        self.grow(n)
     }
 
     /// Grows the arena.
     #[inline(always)]
     fn grow(&self, n: usize) {
-        unsafe {
-            let mut chunks = self.chunks.borrow_mut();
-            let (chunk, mut new_capacity);
-            if let Some(last_chunk) = chunks.last_mut() {
-                let used_bytes = self.ptr.get() as usize - last_chunk.start() as usize;
-                let currently_used_cap = used_bytes / mem::size_of::<T>();
-                if last_chunk.storage.reserve_in_place(currently_used_cap, n) {
-                    self.end.set(last_chunk.end());
-                    return;
-                } else {
-                    new_capacity = last_chunk.storage.cap();
-                    loop {
-                        new_capacity = new_capacity.checked_mul(2).unwrap();
-                        if new_capacity >= currently_used_cap + n {
-                            break;
-                        }
-                    }
-                }
-            } else {
-                let elem_size = cmp::max(1, mem::size_of::<T>());
-                new_capacity = cmp::max(n, PAGE / elem_size);
-            }
-            chunk = TypedArenaChunk::<T>::new(new_capacity);
-            self.ptr.set(chunk.start());
-            self.end.set(chunk.end());
-            chunks.push(chunk);
-        }
+        self.current.grow(n, &mut *self.chunks.borrow_mut());
     }
 
     /// Clears the arena. Deallocates all but the longest chunk which may be reused.
@@ -261,7 +265,7 @@ impl<T> TypedArena<T> {
         // Determine how much was filled.
         let start = last_chunk.start() as usize;
         // We obtain the value of the pointer to the first uninitialized element.
-        let end = self.ptr.get() as usize;
+        let end = self.current.ptr.get() as usize;
         // We then calculate the number of elements to be dropped in the last chunk,
         // which is the filled area's length.
         let diff = if mem::size_of::<T>() == 0 {
@@ -277,7 +281,7 @@ impl<T> TypedArena<T> {
             last_chunk.destroy(diff);
         }
         // Reset the chunk.
-        self.ptr.set(last_chunk.start());
+        self.current.ptr.set(last_chunk.start());
     }
 }
 
@@ -319,77 +323,34 @@ fn align(val: usize, align: usize) -> usize {
 }
 
 pub struct DroplessArena {
-    /// A pointer to the next object to be allocated.
-    ptr: Cell<*mut u8>,
+    /// Pointers to the current chunk
+    current: WorkerLocal<CurrentChunk<usize>>,
 
-    /// A pointer to the end of the allocated area. When this pointer is
-    /// reached, a new chunk is allocated.
-    end: Cell<*mut u8>,
-
-    /// A vector of arena chunks.
-    chunks: RefCell<Vec<TypedArenaChunk<BackingType>>>,
-}
-
-unsafe impl Send for DroplessArena {}
-
-impl Default for DroplessArena {
-    #[inline]
-    fn default() -> DroplessArena {
-        DroplessArena {
-            ptr: Cell::new(0 as *mut u8),
-            end: Cell::new(0 as *mut u8),
-            chunks: Default::default(),
-        }
-    }
+    /// A vector of arena chunks, one per worker
+    chunks: Lock<Vec<Vec<TypedArenaChunk<usize>>>>,
 }
 
 impl DroplessArena {
+    fn new(worker_count: usize) -> DroplessArena {
+        DroplessArena {
+            current: WorkerLocal::new(|_| CurrentChunk::default()),
+            chunks: Lock::new((0..worker_count).map(|_| Vec::new()).collect()),
+        }
+    }
+
     pub fn in_arena<T: ?Sized>(&self, ptr: *const T) -> bool {
         let ptr = ptr as *const u8 as *mut BackingType;
 
-        self.chunks.borrow().iter().any(|chunk| chunk.start() <= ptr && ptr < chunk.end())
+        self.chunks.borrow().iter().any(|chunks| chunks.iter().any(|chunk| {
+            chunk.start() <= ptr && ptr < chunk.end()
+        }))
     }
 
+    #[inline(always)]
     fn grow(&self, needed_bytes: usize) {
-        unsafe {
-            let needed_vals = required_backing_types(needed_bytes);
-            let mut chunks = self.chunks.borrow_mut();
-            let (chunk, mut new_capacity);
-            if let Some(last_chunk) = chunks.last_mut() {
-                let used_bytes = self.ptr.get() as usize - last_chunk.start() as usize;
-                let used_vals = required_backing_types(used_bytes);
-                if last_chunk
-                    .storage
-                    .reserve_in_place(used_vals, needed_vals)
-                {
-                    self.end.set(last_chunk.end() as *mut u8);
-                    return;
-                } else {
-                    new_capacity = last_chunk.storage.cap();
-                    loop {
-                        new_capacity = new_capacity.checked_mul(2).unwrap();
-                        if new_capacity >= used_vals + needed_vals {
-                            break;
-                        }
-                    }
-                }
-            } else {
-                new_capacity = cmp::max(needed_vals, required_backing_types(PAGE));
-            }
-            chunk = TypedArenaChunk::<BackingType>::new(new_capacity);
-            self.ptr.set(chunk.start() as *mut u8);
-            self.end.set(chunk.end() as *mut u8);
-            chunks.push(chunk);
-        }
-    }
-
-    #[inline(never)]
-    #[cold]
-    fn grow_and_alloc_raw(&self, bytes: usize) -> &mut [u8] {
-        self.grow(bytes);
-        unsafe {
-            self.alloc_raw_unchecked(self.ptr.get(), bytes)
-        }
+        let index = ThreadPool::current_thread_index().unwrap();
+        let needed_vals = required_backing_types(needed_bytes);
+        self.current.grow(needed_vals, &mut self.chunks.borrow_mut()[index])
     }
 
     #[inline(always)]
@@ -407,32 +368,57 @@ impl DroplessArena {
     }
 
     #[inline]
-    pub fn alloc_raw(&self, bytes: usize, align: usize) -> &mut [u8] {
+    fn alloc_raw_fixed<B, C>(&self, check: C, bytes: B, align: usize) -> &mut [u8]
+    where
+        B: Fn() -> usize,
+        C: Fn(&Self) -> bool,
+    {
         unsafe {
-            assert!(bytes != 0);
             assert!(align <= BLOCK_SIZE);
-            assert!(std::mem::align_of::<BackingType>() == std::mem::size_of::<BackingType>());
             // FIXME: Check that `bytes` fit in a isize
 
             // FIXME: arith_offset could overflow here.
             // Find some way to guarantee this doesn't happen for small fixed size types
-            let ptr = self.ptr.get();
-            let future_end = intrinsics::arith_offset(ptr, bytes as isize);
-            if std::intrinsics::unlikely((future_end as *mut u8) >= self.end.get()) {
-                self.grow_and_alloc_raw(bytes)
+            // FIXME: Compare ptr and end by equality for sizes < usize?
+
+            // Pass `Self` as an argument to avoid putting the closure on the stack
+            let alloc = |arena: &Self, object| {
+                let ptr = self.current.alloc_unchecked(required_backing_types(bytes()));
+                slice::from_raw_parts_mut(ptr, bytes())
+            };
+
+            if likely!(check()) {
+                alloc(self, bytes)
             } else {
-                self.alloc_raw_unchecked(ptr, bytes)
+                cold_path(move || {
+                    self.current.grow(required_backing_types(bytes()));
+                    alloc(self, bytes)
+                });
             }
         }
+    }
+
+    #[inline]
+    pub fn alloc_raw(&self, bytes: usize, align: usize) -> &mut [u8] {
+        self.alloc_raw_fixed(
+            |this: &Self| bytes <= this.current.available_bytes(),
+            || bytes,
+            align
+        )
     }
 
     #[inline]
     pub fn alloc<T>(&self, object: T) -> &mut T {
         assert!(!mem::needs_drop::<T>());
 
-        let mem = self.alloc_raw(
-            mem::size_of::<T>(),
-            mem::align_of::<T>()) as *mut _ as *mut T;
+        let mem = self.alloc_raw_fixed(
+            |this| {
+                // FIXME: Compare ptr and end by equality for sizes < usize?
+                mem::size_of::<T>() <= this.current.available_bytes()
+            },
+            || mem::size_of::<T>(),
+            mem::align_of::<T>()
+        ) as *mut _ as *mut T;
 
         unsafe {
             // Write into uninitialized memory.
@@ -454,79 +440,15 @@ impl DroplessArena {
         T: Copy,
     {
         assert!(!mem::needs_drop::<T>());
-        assert!(mem::size_of::<T>() != 0);
-        assert!(!slice.is_empty());
 
         let mem = self.alloc_raw(
             slice.len() * mem::size_of::<T>(),
             mem::align_of::<T>()) as *mut _ as *mut T;
 
         unsafe {
-            let arena_slice = slice::from_raw_parts_mut(mem, slice.len());
-            arena_slice.copy_from_slice(slice);
-            arena_slice
+            slice.as_ptr().copy_to_nonoverlapping(mem, slice.len());
+            slice::from_raw_parts_mut(mem, slice.len())
         }
-    }
-}
-
-#[derive(Default)]
-// FIXME(@Zoxc): this type is entirely unused in rustc
-pub struct SyncTypedArena<T> {
-    lock: MTLock<TypedArena<T>>,
-}
-
-impl<T> SyncTypedArena<T> {
-    #[inline(always)]
-    pub fn alloc(&self, object: T) -> &mut T {
-        // Extend the lifetime of the result since it's limited to the lock guard
-        unsafe { &mut *(self.lock.lock().alloc(object) as *mut T) }
-    }
-
-    #[inline(always)]
-    pub fn alloc_slice(&self, slice: &[T]) -> &mut [T]
-    where
-        T: Copy,
-    {
-        // Extend the lifetime of the result since it's limited to the lock guard
-        unsafe { &mut *(self.lock.lock().alloc_slice(slice) as *mut [T]) }
-    }
-
-    #[inline(always)]
-    pub fn clear(&mut self) {
-        self.lock.get_mut().clear();
-    }
-}
-
-#[derive(Default)]
-pub struct SyncDroplessArena {
-    lock: MTLock<DroplessArena>,
-}
-
-impl SyncDroplessArena {
-    #[inline(always)]
-    pub fn in_arena<T: ?Sized>(&self, ptr: *const T) -> bool {
-        self.lock.lock().in_arena(ptr)
-    }
-
-    #[inline(always)]
-    pub fn alloc_raw(&self, bytes: usize, align: usize) -> &mut [u8] {
-        // Extend the lifetime of the result since it's limited to the lock guard
-        unsafe { &mut *(self.lock.lock().alloc_raw(bytes, align) as *mut [u8]) }
-    }
-
-    #[inline(always)]
-    pub fn alloc<T>(&self, object: T) -> &mut T {
-        // Extend the lifetime of the result since it's limited to the lock guard
-        unsafe { &mut *(self.lock.lock().alloc(object) as *mut T) }
-    }
-
-    #[inline(always)]
-    pub fn alloc_slice<T>(&self, slice: &[T]) -> &mut [T]
-    where
-        T: Copy,
-    {
-        // Extend the lifetime of the result since it's limited to the lock guard
-        unsafe { &mut *(self.lock.lock().alloc_slice(slice) as *mut [T]) }
     }
 }
 

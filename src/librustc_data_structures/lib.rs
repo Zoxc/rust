@@ -49,6 +49,18 @@ extern crate rustc_cratesio_shim;
 
 pub use rustc_serialize::hex::ToHex;
 
+#[inline(never)]
+#[cold]
+pub fn cold_path<F: FnOnce() -> R, R>(f: F) -> R {
+      f()
+}
+
+#[inline(never)]
+#[cold]
+pub fn cold_path_arg<F: FnOnce(A) -> R, R, A>(a: A, f: F) -> R {
+      f(a)
+}
+
 #[macro_export]
 macro_rules! likely {
       ($e:expr) => {

@@ -9,4 +9,5 @@ path = "lib.rs"
 crate-type = ["dylib"]
 
 [dependencies]
+rustc-rayon-core = "0.1.1"
 rustc_data_structures = { path = "../librustc_data_structures" }
