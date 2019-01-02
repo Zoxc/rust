@@ -7,7 +7,7 @@ pub use self::SubregionOrigin::*;
 pub use self::ValuePairs::*;
 pub use ty::IntVarValue;
 
-use arena::SyncDroplessArena;
+use arena::DroplessArena;
 use errors::DiagnosticBuilder;
 use hir::def_id::DefId;
 use infer::canonical::{Canonical, CanonicalVarValues};
@@ -463,7 +463,7 @@ impl fmt::Display for FixupError {
 /// F: for<'b, 'tcx> where 'gcx: 'tcx FnOnce(InferCtxt<'b, 'gcx, 'tcx>).
 pub struct InferCtxtBuilder<'a, 'gcx: 'a + 'tcx, 'tcx: 'a> {
     global_tcx: TyCtxt<'a, 'gcx, 'gcx>,
-    arena: SyncDroplessArena,
+    arena: DroplessArena,
     interners: Option<CtxtInterners<'tcx>>,
     fresh_tables: Option<RefCell<ty::TypeckTables<'tcx>>>,
     trait_object_mode: TraitObjectMode,
@@ -473,7 +473,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'gcx> {
     pub fn infer_ctxt(self) -> InferCtxtBuilder<'a, 'gcx, 'tcx> {
         InferCtxtBuilder {
             global_tcx: self,
-            arena: SyncDroplessArena::default(),
+            arena: DroplessArena::default(),
             interners: None,
             fresh_tables: None,
             trait_object_mode: TraitObjectMode::NoSquash,

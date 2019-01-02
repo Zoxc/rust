@@ -28,7 +28,7 @@ use ty::util::{IntTypeExt, Discr};
 use ty::walk::TypeWalker;
 use util::captures::Captures;
 use util::nodemap::{NodeSet, DefIdMap, FxHashMap};
-use arena::SyncDroplessArena;
+use arena::DroplessArena;
 use session::DataTypeKind;
 
 use serialize::{self, Encodable, Encoder};
@@ -619,7 +619,7 @@ unsafe impl<T: Sync> Sync for List<T> {}
 
 impl<T: Copy> List<T> {
     #[inline]
-    fn from_arena<'tcx>(arena: &'tcx SyncDroplessArena, slice: &[T]) -> &'tcx List<T> {
+    fn from_arena<'tcx>(arena: &'tcx DroplessArena, slice: &[T]) -> &'tcx List<T> {
         assert!(!mem::needs_drop::<T>());
         assert!(mem::size_of::<T>() != 0);
         assert!(slice.len() != 0);

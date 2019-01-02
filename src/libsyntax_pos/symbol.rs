@@ -2,7 +2,7 @@
 //! allows bidirectional lookup; i.e., given a value, one can easily find the
 //! type, and vice versa.
 
-use arena::DroplessArena;
+use arena::TypedArena;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::indexed_vec::Idx;
 use serialize::{Decodable, Decoder, Encodable, Encoder};
@@ -238,7 +238,7 @@ impl<T: ::std::ops::Deref<Target=str>> PartialEq<T> for Symbol {
 // downward from SymbolIndex::MAX_AS_U32.
 #[derive(Default)]
 pub struct Interner {
-    arena: DroplessArena,
+    arena: TypedArena<u8>,
     names: FxHashMap<&'static str, Symbol>,
     strings: Vec<&'static str>,
     gensyms: Vec<Symbol>,

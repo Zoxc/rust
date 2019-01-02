@@ -48,7 +48,7 @@ use smallvec::SmallVec;
 use rustc_data_structures::stable_hasher::{HashStable, hash_stable_hashmap,
                                            StableHasher, StableHasherResult,
                                            StableVec};
-use arena::{TypedArena, SyncDroplessArena};
+use arena::{TypedArena, DroplessArena};
 use rustc_data_structures::indexed_vec::{Idx, IndexVec};
 use rustc_data_structures::sync::{self, Lrc, Lock, WorkerLocal};
 use std::any::Any;
@@ -76,7 +76,7 @@ use hir;
 
 pub struct AllArenas<'tcx> {
     pub global: WorkerLocal<GlobalArenas<'tcx>>,
-    pub interner: SyncDroplessArena,
+    pub interner: DroplessArena,
     global_ctxt: Option<GlobalCtxt<'tcx>>,
 }
 
@@ -84,7 +84,7 @@ impl<'tcx> AllArenas<'tcx> {
     pub fn new() -> Self {
         AllArenas {
             global: WorkerLocal::new(|_| GlobalArenas::default()),
-            interner: SyncDroplessArena::default(),
+            interner: DroplessArena::default(),
             global_ctxt: None,
         }
     }
@@ -111,7 +111,7 @@ type InternedSet<'tcx, T> = Lock<FxHashMap<Interned<'tcx, T>, ()>>;
 
 pub struct CtxtInterners<'tcx> {
     /// The arena that types, regions, etc are allocated from
-    arena: &'tcx SyncDroplessArena,
+    arena: &'tcx DroplessArena,
 
     /// Specifically use a speedy hash algorithm for these hash sets,
     /// they're accessed quite often.
@@ -130,7 +130,7 @@ pub struct CtxtInterners<'tcx> {
 }
 
 impl<'gcx: 'tcx, 'tcx> CtxtInterners<'tcx> {
-    fn new(arena: &'tcx SyncDroplessArena) -> CtxtInterners<'tcx> {
+    fn new(arena: &'tcx DroplessArena) -> CtxtInterners<'tcx> {
         CtxtInterners {
             arena,
             type_: Default::default(),
@@ -1675,7 +1675,7 @@ impl<'gcx> GlobalCtxt<'gcx> {
     /// with the same lifetime as `arena`.
     pub fn enter_local<'tcx, F, R>(
         &'gcx self,
-        arena: &'tcx SyncDroplessArena,
+        arena: &'tcx DroplessArena,
         interners: &'tcx mut Option<CtxtInterners<'tcx>>,
         f: F
     ) -> R
@@ -2485,7 +2485,7 @@ macro_rules! direct_interners {
         intern_method!(
             $lt_tcx,
             $name: $method($ty,
-                           |a: &$lt_tcx SyncDroplessArena, v| -> &$lt_tcx $ty { a.alloc(v) },
+                           |a: &$lt_tcx DroplessArena, v| -> &$lt_tcx $ty { a.alloc(v) },
                            |x| x,
                            $keep_in_local_tcx) -> $ty);)+
     }

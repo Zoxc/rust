@@ -27,9 +27,8 @@ extern crate alloc;
 extern crate rustc_data_structures;
 extern crate rustc_rayon_core;
 
-use rustc_data_structures::sync::{WorkerLocal, Lock};
+use rustc_data_structures::sync::{SharedWorkerLocal, WorkerLocal, Lock};
 use rustc_data_structures::{likely, unlikely, cold_path};
-use rustc_rayon_core::ThreadPool;
 
 use std::cell::{Cell, RefCell};
 use std::cmp;
@@ -62,7 +61,7 @@ impl<T> Default for CurrentChunk<T> {
 }
 
 impl<T> CurrentChunk<T> {
-    fn alloc_unchecked(&self, units: usize) -> *mut T {
+    unsafe fn alloc_unchecked(&self, units: usize) -> *mut T {
         let ptr = self.ptr.get();
         // Advance the pointer.
         self.ptr.set(ptr.offset(units as isize));
@@ -188,14 +187,16 @@ impl<T> TypedArena<T> {
 
         // Pass `Self` as an argument to avoid putting the closure on the stack
         let alloc = |arena: &Self, object| {
-            let ptr = self.current.alloc_unchecked(1);
-            // Write into uninitialized memory.
-            ptr::write(ptr, object);
-            &mut *ptr
+            unsafe {
+                let ptr = arena.current.alloc_unchecked(1);
+                // Write into uninitialized memory.
+                ptr::write(ptr, object);
+                &mut *ptr
+            }
         };
 
         unsafe {
-            if likely!(self.current.ptr.get() == self.current.end.get()) {
+            if likely!(self.current.ptr.get() != self.current.end.get()) {
                 alloc(self, object)
             } else {
                 // We move the object in this closure so if it has a destructor
@@ -306,65 +307,30 @@ unsafe impl<#[may_dangle] T> Drop for TypedArena<T> {
 
 unsafe impl<T: Send> Send for TypedArena<T> {}
 
-type BackingType = usize;
-const BLOCK_SIZE: usize = std::mem::size_of::<BackingType>();
+const UNIT_SIZE: usize = std::mem::size_of::<usize>();
 
 #[inline(always)]
-fn required_backing_types(bytes: usize) -> usize {
-    assert!(BLOCK_SIZE.is_power_of_two());
+fn bytes_in_units(bytes: usize) -> usize {
     // FIXME: This addition could overflow
-    (bytes + BLOCK_SIZE - 1) / BLOCK_SIZE
+    (bytes + UNIT_SIZE - 1) / UNIT_SIZE
 }
 
-#[inline(always)]
-fn align(val: usize, align: usize) -> usize {
-    assert!(align.is_power_of_two());
-    (val + align - 1) & !(align - 1)
-}
-
+#[derive(Default)]
 pub struct DroplessArena {
     /// Pointers to the current chunk
     current: WorkerLocal<CurrentChunk<usize>>,
 
     /// A vector of arena chunks, one per worker
-    chunks: Lock<Vec<Vec<TypedArenaChunk<usize>>>>,
+    chunks: Lock<SharedWorkerLocal<Vec<TypedArenaChunk<usize>>>>,
 }
 
 impl DroplessArena {
-    fn new(worker_count: usize) -> DroplessArena {
-        DroplessArena {
-            current: WorkerLocal::new(|_| CurrentChunk::default()),
-            chunks: Lock::new((0..worker_count).map(|_| Vec::new()).collect()),
-        }
-    }
-
     pub fn in_arena<T: ?Sized>(&self, ptr: *const T) -> bool {
-        let ptr = ptr as *const u8 as *mut BackingType;
+        let ptr = ptr as *const u8 as *mut usize;
 
         self.chunks.borrow().iter().any(|chunks| chunks.iter().any(|chunk| {
             chunk.start() <= ptr && ptr < chunk.end()
         }))
-    }
-
-    #[inline(always)]
-    fn grow(&self, needed_bytes: usize) {
-        let index = ThreadPool::current_thread_index().unwrap();
-        let needed_vals = required_backing_types(needed_bytes);
-        self.current.grow(needed_vals, &mut self.chunks.borrow_mut()[index])
-    }
-
-    #[inline(always)]
-    unsafe fn alloc_raw_unchecked(&self, start: *mut u8, bytes: usize) -> &mut [u8] {
-        // Tell LLVM that `start` is aligned to BLOCK_SIZE
-        std::intrinsics::assume(start as usize == align(start as usize, BLOCK_SIZE));
-
-        // Set the pointer past ourselves and align it
-        let end = start.offset(bytes as isize) as usize;
-        let end = align(end, BLOCK_SIZE) as *mut u8;
-        self.ptr.set(end);
-
-        // Return the result
-        slice::from_raw_parts_mut(start, bytes)
     }
 
     #[inline]
@@ -374,7 +340,7 @@ impl DroplessArena {
         C: Fn(&Self) -> bool,
     {
         unsafe {
-            assert!(align <= BLOCK_SIZE);
+            assert!(align <= UNIT_SIZE);
             // FIXME: Check that `bytes` fit in a isize
 
             // FIXME: arith_offset could overflow here.
@@ -382,18 +348,18 @@ impl DroplessArena {
             // FIXME: Compare ptr and end by equality for sizes < usize?
 
             // Pass `Self` as an argument to avoid putting the closure on the stack
-            let alloc = |arena: &Self, object| {
-                let ptr = self.current.alloc_unchecked(required_backing_types(bytes()));
-                slice::from_raw_parts_mut(ptr, bytes())
+            let alloc = |arena: &Self, bytes| {
+                let ptr = arena.current.alloc_unchecked(bytes_in_units(bytes));
+                slice::from_raw_parts_mut(ptr as *mut u8, bytes)
             };
 
-            if likely!(check()) {
-                alloc(self, bytes)
+            if likely!(check(self)) {
+                alloc(self, bytes())
             } else {
                 cold_path(move || {
-                    self.current.grow(required_backing_types(bytes()));
-                    alloc(self, bytes)
-                });
+                    self.current.grow(bytes_in_units(bytes()), &mut *self.chunks.lock());
+                    alloc(self, bytes())
+                })
             }
         }
     }
