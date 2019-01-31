@@ -157,6 +157,7 @@ pub struct LintLevelsBuilder<'a> {
 
 pub struct BuilderPush {
     prev: u32,
+    pub(super) changed: bool,
 }
 
 impl<'a> LintLevelsBuilder<'a> {
@@ -454,6 +455,7 @@ impl<'a> LintLevelsBuilder<'a> {
 
         BuilderPush {
             prev: prev,
+            changed: prev != self.cur,
         }
     }
 
@@ -494,7 +496,7 @@ impl<'a> LintLevelsBuilder<'a> {
 
 pub struct LintLevelMap {
     sets: LintLevelSets,
-    id_to_set: FxHashMap<HirId, u32>,
+    pub(super) id_to_set: FxHashMap<HirId, u32>,
 }
 
 impl LintLevelMap {
@@ -511,11 +513,6 @@ impl LintLevelMap {
         self.id_to_set.get(&id).map(|idx| {
             self.sets.get_lint_level(lint, *idx, None, session)
         })
-    }
-
-    /// Returns if this `id` has lint level information.
-    pub fn lint_level_set(&self, id: HirId) -> Option<u32> {
-        self.id_to_set.get(&id).cloned()
     }
 }
 

@@ -27,6 +27,7 @@ use crate::errors::{DiagnosticBuilder, DiagnosticId};
 use crate::hir::def_id::{CrateNum, LOCAL_CRATE};
 use crate::hir::intravisit;
 use crate::hir;
+use crate::hir::CRATE_HIR_ID;
 use crate::lint::builtin::{BuiltinLintDiagnostics, DUPLICATE_MATCHER_BINDING_NAME};
 use crate::lint::builtin::parser::{QUESTION_MARK_MACRO_SEP, ILL_FORMED_ATTRIBUTE_INPUT};
 use crate::session::{Session, DiagnosticMessageId};
@@ -713,6 +714,16 @@ pub fn struct_lint_level<'a>(sess: &'a Session,
     return err
 }
 
+pub fn maybe_lint_level_root(tcx: TyCtxt<'_, '_, '_>, id: ast::NodeId) -> bool {
+    let attrs = tcx.hir().attrs(id);
+    for attr in attrs {
+        if Level::from_str(&attr.name().as_str()).is_some() {
+            true;
+        }
+    }
+    false
+}
+
 fn lint_levels<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, cnum: CrateNum)
     -> Lrc<LintLevelMap>
 {
@@ -723,9 +734,10 @@ fn lint_levels<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, cnum: CrateNum)
     };
     let krate = tcx.hir().krate();
 
-    builder.with_lint_attrs(ast::CRATE_NODE_ID, &krate.attrs, |builder| {
-        intravisit::walk_crate(builder, krate);
-    });
+    let push = builder.levels.push(&krate.attrs);
+    builder.levels.register_id(CRATE_HIR_ID);
+    intravisit::walk_crate(&mut builder, krate);
+    builder.levels.pop(push);
 
     Lrc::new(builder.levels.build_map())
 }
@@ -743,7 +755,9 @@ impl<'a, 'tcx> LintLevelMapBuilder<'a, 'tcx> {
         where F: FnOnce(&mut Self)
     {
         let push = self.levels.push(attrs);
-        self.levels.register_id(self.tcx.hir().definitions().node_to_hir_id(id));
+        if push.changed {
+            self.levels.register_id(self.tcx.hir().definitions().node_to_hir_id(id));
+        }
         f(self);
         self.levels.pop(push);
     }

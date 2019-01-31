@@ -82,7 +82,6 @@ use crate::hair::LintLevel;
 use rustc::middle::region;
 use rustc::ty::Ty;
 use rustc::hir;
-use rustc::hir::def_id::LOCAL_CRATE;
 use rustc::mir::*;
 use syntax_pos::{Span};
 use rustc_data_structures::fx::FxHashMap;
@@ -309,22 +308,18 @@ impl<'a, 'gcx, 'tcx> Builder<'a, 'gcx, 'tcx> {
         let source_scope = self.source_scope;
         let tcx = self.hir.tcx();
         if let LintLevel::Explicit(node_id) = lint_level {
-            let same_lint_scopes = tcx.dep_graph.with_ignore(|| {
-                let sets = tcx.lint_levels(LOCAL_CRATE);
-                let parent_hir_id =
-                    tcx.hir().definitions().node_to_hir_id(
-                        self.source_scope_local_data[source_scope].lint_root
-                    );
-                let current_hir_id =
-                    tcx.hir().definitions().node_to_hir_id(node_id);
-                sets.lint_level_set(parent_hir_id) ==
-                    sets.lint_level_set(current_hir_id)
-            });
+            let parent_root = tcx.maybe_lint_level_root_bounded(
+                self.source_scope_local_data[source_scope].lint_root,
+                self.hir.root_lint_level,
+            );
+            let current_root = tcx.maybe_lint_level_root_bounded(node_id, self.hir.root_lint_level);
 
-            if !same_lint_scopes {
-                self.source_scope =
-                    self.new_source_scope(region_scope.1.span, lint_level,
-                                          None);
+            if parent_root != current_root {
+                self.source_scope = self.new_source_scope(
+                    region_scope.1.span,
+                    LintLevel::Explicit(current_root),
+                    None
+                );
             }
         }
         self.push_scope(region_scope);
