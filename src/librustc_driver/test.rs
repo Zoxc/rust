@@ -86,6 +86,7 @@ fn test_env<F>(source_string: &str, args: (Box<dyn Emitter + sync::Send>, usize)
 where
     F: FnOnce(Env) + sync::Send,
 {
+    eprintln!("driver path: {:?}", std::env::args().next());
     syntax::with_globals(|| {
         let mut options = config::Options::default();
         options.debugging_opts.verbose = true;

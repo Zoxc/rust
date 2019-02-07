@@ -271,6 +271,8 @@ fn get_codegen_sysroot(backend_name: &str) -> fn() -> Box<dyn CodegenBackend> {
     let mut sysroot_candidates = vec![filesearch::get_or_default_sysroot()];
     let path = current_dll_path()
         .and_then(|s| s.canonicalize().ok());
+    eprintln!("current_dll_path: {:?}", path);
+
     if let Some(dll) = path {
         // use `parent` twice to chop off the file name and then also the
         // directory containing the dll which should be either `lib` or `bin`.
@@ -294,6 +296,8 @@ fn get_codegen_sysroot(backend_name: &str) -> fn() -> Box<dyn CodegenBackend> {
             }
         }
     }
+
+    eprintln!("sysroot_candidates: {:?}", sysroot_candidates);
 
     let sysroot = sysroot_candidates.iter()
         .map(|sysroot| {
