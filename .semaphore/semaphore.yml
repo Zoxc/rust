@@ -2,7 +2,7 @@ version: v1.0
 name: First pipeline example
 agent:
   machine:
-    type: e1-standard-4
+    type: e1-standard-8
     os_image: ubuntu1804
 execution_time_limit:
   hours: 5
@@ -19,6 +19,11 @@ blocks:
       jobs:
       - name: Build rustc
         commands:
+          - cache list
+          - cache restore llvm-bin
+          - cache restore llvm-include
+          - cache restore llvm-lib
+          - cache restore llvm-touch
           - git clone --depth 2 -b sem2 --single-branch $SEMAPHORE_GIT_URL $SEMAPHORE_GIT_DIR
           - cd $SEMAPHORE_GIT_DIR
           - ./sem.sh
