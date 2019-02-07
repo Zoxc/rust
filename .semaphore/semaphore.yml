@@ -29,7 +29,7 @@ blocks:
           - ./sem.sh
           - ./src/ci/run.sh
           - ./x.py dist
-          - cache store llvm-bin build/x86_64-unknown-linux-gnu/llvm/bin
-          - cache store llvm-include build/x86_64-unknown-linux-gnu/llvm/include
-          - cache store llvm-lib build/x86_64-unknown-linux-gnu/llvm/lib
-          - cache store llvm-touch build/x86_64-unknown-linux-gnu/llvm/llvm-finished-building
+          - cache store llvm-bin $SEMAPHORE_GIT_DIR/build/x86_64-unknown-linux-gnu/llvm/bin
+          - cache store llvm-include $SEMAPHORE_GIT_DIR/build/x86_64-unknown-linux-gnu/llvm/include
+          - cache store llvm-lib $SEMAPHORE_GIT_DIR/build/x86_64-unknown-linux-gnu/llvm/lib
+          - cache store llvm-touch $SEMAPHORE_GIT_DIR/build/x86_64-unknown-linux-gnu/llvm/llvm-finished-building
