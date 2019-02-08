@@ -74,7 +74,7 @@ impl Step for Llvm {
             let config_dir = dir.join("bin");
             (dir, config_dir)
         } else {
-            let mut dir = builder.llvm_out(builder.config.build);
+            let dir = builder.llvm_out(builder.config.build);
             /*if !builder.config.build.contains("msvc") || builder.config.ninja {
                 dir.push("build");
             }*/
