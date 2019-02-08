@@ -20,16 +20,16 @@ blocks:
       - name: Build rustc
         commands:
           - cache list
+          - checkout --use-cache
+          - cd $SEMAPHORE_GIT_DIR
           - cache restore llvm-bin
           - cache restore llvm-include
           - cache restore llvm-lib
           - cache restore llvm-touch
-          - git clone --depth 2 -b sem2 --single-branch $SEMAPHORE_GIT_URL $SEMAPHORE_GIT_DIR
-          - cd $SEMAPHORE_GIT_DIR
           - ./sem.sh
           - ./src/ci/run.sh
           - ./x.py test
-          - cache store llvm-bin $SEMAPHORE_GIT_DIR/build/x86_64-unknown-linux-gnu/llvm/bin
-          - cache store llvm-include $SEMAPHORE_GIT_DIR/build/x86_64-unknown-linux-gnu/llvm/include
-          - cache store llvm-lib $SEMAPHORE_GIT_DIR/build/x86_64-unknown-linux-gnu/llvm/lib
-          - cache store llvm-touch $SEMAPHORE_GIT_DIR/build/x86_64-unknown-linux-gnu/llvm/llvm-finished-building
+          - cache store llvm-bin build/x86_64-unknown-linux-gnu/llvm/bin
+          - cache store llvm-include build/x86_64-unknown-linux-gnu/llvm/include
+          - cache store llvm-lib build/x86_64-unknown-linux-gnu/llvm/lib
+          - cache store llvm-touch build/x86_64-unknown-linux-gnu/llvm/llvm-finished-building
