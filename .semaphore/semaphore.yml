@@ -21,7 +21,6 @@ blocks:
         commands:
           - cache list
           - checkout --use-cache
-          - cd $SEMAPHORE_GIT_DIR
           - cache restore llvm-bin
           - cache restore llvm-include
           - cache restore llvm-lib
