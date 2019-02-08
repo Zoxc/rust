@@ -75,9 +75,9 @@ impl Step for Llvm {
             (dir, config_dir)
         } else {
             let mut dir = builder.llvm_out(builder.config.build);
-            if !builder.config.build.contains("msvc") || builder.config.ninja {
+            /*if !builder.config.build.contains("msvc") || builder.config.ninja {
                 dir.push("build");
-            }
+            }*/
             (builder.llvm_out(target), dir.join("bin"))
         };
         let done_stamp = out_dir.join("llvm-finished-building");
