@@ -272,13 +272,21 @@ impl DepGraph {
                 task_deps.map(|lock| lock.into_inner()),
             );
 
+            let print_status = cfg!(debug_assertions) && hcx.sess().opts.debugging_opts.dep_tasks;
+
             // Determine the color of the new DepNode.
             if let Some(prev_index) = data.previous.node_to_index_opt(&key) {
                 let prev_fingerprint = data.previous.fingerprint_by_index(prev_index);
 
                 let color = if current_fingerprint == prev_fingerprint {
+                        if print_status {
+                            eprintln!("[task::green] {:?}", key);
+                        }
                     DepNodeColor::Green(dep_node_index)
                 } else {
+                        if print_status {
+                            eprintln!("[task::red] {:?}", key);
+                        }
                     DepNodeColor::Red
                 };
 
@@ -288,6 +296,10 @@ impl DepGraph {
                                insertion for {:?}", key);
 
                 colors.insert(prev_index, color);
+            } else {
+                if print_status {
+                    eprintln!("[task::new] {:?}", key);
+                }
             }
 
             (result, dep_node_index)
