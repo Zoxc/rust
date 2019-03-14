@@ -3,7 +3,7 @@ use crate::ty::query::queries;
 use crate::ty::{self, ParamEnvAnd, Ty, TyCtxt};
 use crate::ty::subst::SubstsRef;
 use crate::dep_graph::SerializedDepNodeIndex;
-use crate::hir::def_id::{CrateNum, DefId, DefIndex};
+use crate::hir::def_id::{CrateNum, DefId, DefIndex, LocalCrate};
 use crate::mir::interpret::GlobalId;
 use crate::traits;
 use crate::traits::query::{
@@ -30,6 +30,18 @@ use syntax_pos::symbol::InternedString;
 // as they will raise an fatal error on query cycles instead.
 rustc_queries! {
     Other {
+        query prepare_outputs(_: LocalCrate) -> Result<Arc<OutputFilenames>, ErrorReported> {
+            no_hash
+            eval_always
+            desc { "preparing outputs" }
+        }
+
+        query lower_ast_to_hir(_: LocalCrate) -> Result<&'tcx hir::LoweredHir, ErrorReported> {
+            no_hash
+            eval_always
+            desc { "lowering AST to HIR" }
+        }
+
         query hir_map(_: CrateNum) -> &'tcx hir::map::Map<'tcx> {
             no_hash
             eval_always

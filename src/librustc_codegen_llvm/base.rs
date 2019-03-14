@@ -146,7 +146,7 @@ pub fn compile_codegen_unit<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                                                        tcx,
                                                        cgu_name,
                                                        module_codegen,
-                                                       dep_graph::hash_result);
+                                                       Some(dep_graph::hash_result));
     let time_to_codegen = start_time.elapsed();
 
     // We assume that the cost to run LLVM on a CGU is proportional to

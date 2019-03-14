@@ -1,6 +1,7 @@
 use crate::ty::{self, TyCtxt};
 use crate::hir::map::definitions::FIRST_FREE_HIGH_DEF_INDEX;
 use rustc_data_structures::indexed_vec::Idx;
+use rustc_macros::HashStable;
 use serialize;
 use std::fmt;
 use std::u32;
@@ -95,6 +96,9 @@ impl fmt::Display for CrateNum {
 
 impl serialize::UseSpecializedEncodable for CrateNum {}
 impl serialize::UseSpecializedDecodable for CrateNum {}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, HashStable)]
+pub struct LocalCrate;
 
 /// A DefIndex is an index into the hir-map for a crate, identifying a
 /// particular definition. It should really be considered an interned

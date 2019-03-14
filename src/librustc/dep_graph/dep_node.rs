@@ -50,7 +50,7 @@
 //! fingerprint for a given set of node parameters.
 
 use crate::mir::interpret::GlobalId;
-use crate::hir::def_id::{CrateNum, DefId, DefIndex, CRATE_DEF_INDEX};
+use crate::hir::def_id::{CrateNum, LocalCrate, DefId, DefIndex, CRATE_DEF_INDEX};
 use crate::hir::map::DefPathHash;
 use crate::hir::HirId;
 
@@ -309,8 +309,7 @@ macro_rules! define_dep_nodes {
             pub fn extract_def_id(&self, tcx: TyCtxt<'_, '_, '_>) -> Option<DefId> {
                 if self.kind.can_reconstruct_query_key() {
                     let def_path_hash = DefPathHash(self.hash);
-                    tcx.def_path_hash_to_def_id.as_ref()?
-                        .get(&def_path_hash).cloned()
+                    tcx.def_path_hash_to_def_id()?.get(&def_path_hash).cloned()
                 } else {
                     None
                 }
@@ -444,6 +443,12 @@ pub trait RecoverKey<'tcx>: Sized {
     fn recover(tcx: TyCtxt<'_, 'tcx, 'tcx>, dep_node: &DepNode) -> Option<Self>;
 }
 
+impl RecoverKey<'tcx> for LocalCrate {
+    fn recover(_: TyCtxt<'_, 'tcx, 'tcx>, _: &DepNode) -> Option<Self> {
+        Some(LocalCrate)
+    }
+}
+
 impl RecoverKey<'tcx> for CrateNum {
     fn recover(tcx: TyCtxt<'_, 'tcx, 'tcx>, dep_node: &DepNode) -> Option<Self> {
         dep_node.extract_def_id(tcx).map(|id| id.krate)
@@ -534,6 +539,18 @@ impl<'a, 'gcx: 'tcx + 'a, 'tcx: 'a> DepNodeParams<'a, 'gcx, 'tcx> for CrateNum {
 
     fn to_debug_str(&self, tcx: TyCtxt<'a, 'gcx, 'tcx>) -> String {
         tcx.crate_name(*self).as_str().to_string()
+    }
+}
+
+impl<'a, 'gcx: 'tcx + 'a, 'tcx: 'a> DepNodeParams<'a, 'gcx, 'tcx> for LocalCrate {
+    const CAN_RECONSTRUCT_QUERY_KEY: bool = false;
+
+    fn to_fingerprint(&self, _: TyCtxt<'_, '_, '_>) -> Fingerprint {
+        Fingerprint::ZERO
+    }
+
+    fn to_debug_str(&self, _: TyCtxt<'a, 'gcx, 'tcx>) -> String {
+        "<local crate>".to_string()
     }
 }
 
