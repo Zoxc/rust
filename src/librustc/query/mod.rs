@@ -30,6 +30,12 @@ use syntax_pos::symbol::InternedString;
 // as they will raise an fatal error on query cycles instead.
 rustc_queries! {
     Other {
+        query expand_macros(_: LocalCrate) -> Result<Lrc<ty::ExpansionResult>, ErrorReported> {
+            no_hash
+            eval_always
+            desc { "expanding macros" }
+        }
+
         query prepare_outputs(_: LocalCrate) -> Result<Arc<OutputFilenames>, ErrorReported> {
             no_hash
             eval_always
