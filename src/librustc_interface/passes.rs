@@ -911,6 +911,7 @@ fn load_query_result_cache<'tcx>(
 }
 
 pub fn default_provide(providers: &mut ty::query::Providers<'_>) {
+    providers.ongoing_codegen = ongoing_codegen;
     providers.analysis = analysis;
     providers.hir_map = hir_map;
     providers.lower_ast_to_hir = lower_ast_to_hir;
@@ -968,7 +969,6 @@ impl BoxedGlobalCtxt {
 pub fn create_global_ctxt(
     compiler: &Compiler,
     io: InputsAndOutputs,
-    tx: mpsc::Sender<Box<dyn Any + Send>>,
 ) -> BoxedGlobalCtxt {
     let sess = compiler.session().clone();
     let cstore = compiler.cstore.clone();
@@ -990,6 +990,13 @@ pub fn create_global_ctxt(
         default_provide_extern(&mut extern_providers);
         codegen_backend.provide_extern(&mut extern_providers);
 
+        // Move the dyn Any coercion outside the generator to avoid lifetime issues
+        fn codegen_backend_any(
+            i: Arc<dyn CodegenBackend + Send + Sync>
+        ) -> Box<dyn Any + Send + Sync> {
+            Box::new(i)
+        }
+
         let gcx = TyCtxt::create_global_ctxt(
             sess,
             &**cstore,
@@ -998,7 +1005,7 @@ pub fn create_global_ctxt(
             extern_providers,
             &arenas,
             crate_name,
-            tx,
+            codegen_backend_any(codegen_backend.clone()),
             io,
         );
 
@@ -1164,12 +1171,23 @@ fn analysis<'tcx>(
 
 /// Runs the codegen backend, after which the AST and analysis can
 /// be discarded.
-pub fn start_codegen<'tcx>(
-    codegen_backend: &dyn CodegenBackend,
+fn ongoing_codegen<'tcx>(
     tcx: TyCtxt<'_, 'tcx, 'tcx>,
-    rx: mpsc::Receiver<Box<dyn Any + Send>>,
-    outputs: &OutputFilenames,
-) -> Box<dyn Any> {
+    cnum: CrateNum,
+) -> Result<Lrc<ty::OngoingCodegen>> {
+    tcx.analysis(cnum)?;
+
+    assert_eq!(cnum, LOCAL_CRATE);
+    // Don't do code generation if there were any errors
+    tcx.sess.compile_status()?;
+
+    let outputs = tcx.prepare_outputs(LocalCrate)?;
+
+    let rx = OneThread::into_inner(tcx.rx_to_llvm_workers.steal());
+    let codegen_backend: &dyn Any = &*tcx.codegen_backend;
+    let codegen_backend = codegen_backend.downcast_ref::<Arc<dyn CodegenBackend + Send + Sync>>()
+                                         .unwrap();
+
     if log_enabled!(::log::Level::Info) {
         println!("Pre-codegen");
         tcx.print_debug_stats();
@@ -1189,11 +1207,15 @@ pub fn start_codegen<'tcx>(
     }
 
     if tcx.sess.opts.output_types.contains_key(&OutputType::Mir) {
-        if let Err(e) = mir::transform::dump_mir::emit_mir(tcx, outputs) {
+        if let Err(e) = mir::transform::dump_mir::emit_mir(tcx, &outputs) {
             tcx.sess.err(&format!("could not emit MIR: {}", e));
             tcx.sess.abort_if_errors();
         }
     }
 
-    codegen
+    Ok(Lrc::new(ty::OngoingCodegen {
+        outputs,
+        dep_graph: tcx.dep_graph().clone(),
+        codegen_object: Steal::new(OneThread::new(codegen)),
+    }))
 }

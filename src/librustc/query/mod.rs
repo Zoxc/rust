@@ -101,6 +101,12 @@ rustc_queries! {
             desc { "running analysis passes on this crate" }
         }
 
+        query ongoing_codegen(_: CrateNum) -> Result<Lrc<ty::OngoingCodegen>, ErrorReported> {
+            no_hash
+            eval_always
+            desc { "starting code generation" }
+        }
+
         /// Records the type of every item.
         query type_of(key: DefId) -> Ty<'tcx> {
             cache { key.is_local() }

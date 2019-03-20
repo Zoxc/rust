@@ -177,7 +177,7 @@ pub fn run_compiler(
                             return;
                         }
                         let should_stop = RustcDefaultCalls::print_crate_info(
-                            &***compiler.codegen_backend(),
+                            &**compiler.codegen_backend(),
                             compiler.session(),
                             None,
                             &odir,
@@ -231,7 +231,7 @@ pub fn run_compiler(
     interface::run_compiler(config, |compiler| {
         let sess = compiler.session();
         let should_stop = RustcDefaultCalls::print_crate_info(
-            &***compiler.codegen_backend(),
+            &**compiler.codegen_backend(),
             sess,
             Some(compiler.input()),
             compiler.output_dir(),
