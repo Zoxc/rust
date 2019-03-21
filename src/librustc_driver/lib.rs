@@ -226,6 +226,8 @@ pub fn run_compiler(
 
     callbacks.config(&mut config);
 
+    let pretty_info = parse_pretty(&mut config.opts, &matches);
+
     interface::run_compiler(config, |compiler| {
         let sess = compiler.session();
         let should_stop = RustcDefaultCalls::print_crate_info(
@@ -245,14 +247,9 @@ pub fn run_compiler(
             return sess.compile_status();
         }
 
-        let pretty_info = parse_pretty(sess, &matches);
-
-        compiler.parse()?;
-
         if let Some((ppm, opt_uii)) = pretty_info {
             if ppm.needs_ast_map(&opt_uii) {
-                pretty::visit_crate(sess, &mut compiler.parse()?.peek_mut(), ppm);
-                compiler.global_ctxt()?.peek_mut().enter(|tcx| {
+                compiler.enter(|tcx| {
                     let expansion_result = tcx.expand_macros(LocalCrate)?;
                     pretty::print_after_hir_lowering(
                         tcx,
@@ -266,18 +263,23 @@ pub fn run_compiler(
                 })?;
                 return sess.compile_status();
             } else {
-                let mut krate = compiler.parse()?.take();
-                pretty::visit_crate(sess, &mut krate, ppm);
-                pretty::print_after_parsing(
-                    sess,
-                    &compiler.input(),
-                    &krate,
-                    ppm,
-                    compiler.output_file().as_ref().map(|p| &**p),
-                );
+                compiler.enter(|tcx| {
+                    let krate = tcx.parse(LocalCrate)?;
+                    let krate = krate.borrow();
+                    pretty::print_after_parsing(
+                        sess,
+                        &compiler.input(),
+                        &krate,
+                        ppm,
+                        compiler.output_file().as_ref().map(|p| &**p),
+                    );
+                    Ok(())
+                })?;
                 return sess.compile_status();
             }
         }
+
+        compiler.enter(|tcx| tcx.parse(LocalCrate))?;
 
         if !callbacks.after_parsing(compiler) {
             return sess.compile_status();
@@ -289,7 +291,7 @@ pub fn run_compiler(
             return sess.compile_status();
         }
 
-        compiler.register_plugins()?;
+        compiler.enter(|tcx| tcx.register_plugins(LocalCrate))?;
 
         // Lint plugins are registered; now we can process command line flags.
         if sess.opts.describe_lints {
@@ -297,7 +299,7 @@ pub fn run_compiler(
             return sess.compile_status();
         }
 
-        compiler.global_ctxt()?.peek_mut().enter(|tcx| {
+        compiler.enter(|tcx| {
             tcx.prepare_outputs(LocalCrate)?;
             Ok(())
         })?;
@@ -308,7 +310,7 @@ pub fn run_compiler(
             return sess.compile_status();
         }
 
-        compiler.global_ctxt()?.peek_mut().enter(|tcx| {
+        compiler.enter(|tcx| {
             tcx.lower_ast_to_hir(LocalCrate)?;
             Ok(())
         })?;
@@ -319,10 +321,10 @@ pub fn run_compiler(
         }
 
         if sess.opts.debugging_opts.save_analysis {
-            compiler.global_ctxt()?.peek_mut().enter(|tcx| {
+            compiler.enter(|tcx| {
                 let expansion_result = tcx.expand_macros(LocalCrate)?;
                 let result = tcx.analysis(LOCAL_CRATE);
-                let crate_name = &tcx.crate_name.as_str();
+                let crate_name = &tcx.crate_name(LOCAL_CRATE).as_str();
 
                 time(sess, "save analysis", || {
                     save::process_crate(
@@ -340,20 +342,20 @@ pub fn run_compiler(
                 // (needed by the RLS)
             })?;
         } else {
-            compiler.global_ctxt()?.peek_mut().enter(|tcx| {
+            compiler.enter(|tcx| {
                 // Drop AST after lowering HIR to free memory
                 mem::drop(tcx.expand_macros(LocalCrate).unwrap().ast_crate.steal());
             });
         }
 
-        compiler.global_ctxt()?.peek_mut().enter(|tcx| tcx.analysis(LOCAL_CRATE))?;
+        compiler.enter(|tcx| tcx.analysis(LOCAL_CRATE))?;
 
         if !callbacks.after_analysis(compiler) {
             return sess.compile_status();
         }
 
         if sess.opts.debugging_opts.save_analysis {
-            compiler.global_ctxt()?.peek_mut().enter(|tcx| {
+            compiler.enter(|tcx| {
                 // Drop AST after lowering HIR to free memory
                 mem::drop(tcx.expand_macros(LocalCrate).unwrap().ast_crate.steal());
             });
@@ -426,22 +428,22 @@ fn make_input(free_matches: &[String]) -> Option<(Input, Option<PathBuf>, Option
     }
 }
 
-fn parse_pretty(sess: &Session,
+fn parse_pretty(opts: &mut config::Options,
                 matches: &getopts::Matches)
                 -> Option<(PpMode, Option<UserIdentifiedItem>)> {
-    let pretty = if sess.opts.debugging_opts.unstable_options {
+    let pretty = if opts.debugging_opts.unstable_options {
         matches.opt_default("pretty", "normal").map(|a| {
             // stable pretty-print variants only
-            pretty::parse_pretty(sess, &a, false)
+            pretty::parse_pretty(opts, &a, false)
         })
     } else {
         None
     };
 
     if pretty.is_none() {
-        sess.opts.debugging_opts.unpretty.as_ref().map(|a| {
+        opts.debugging_opts.unpretty.clone().map(|a| {
             // extended with unstable pretty-print variants
-            pretty::parse_pretty(sess, &a, true)
+            pretty::parse_pretty(opts, &a, true)
         })
     } else {
         pretty

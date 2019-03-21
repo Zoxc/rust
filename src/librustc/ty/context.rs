@@ -51,7 +51,7 @@ use rustc_data_structures::stable_hasher::{HashStable, hash_stable_hashmap,
                                            StableVec};
 use arena::{TypedArena, SyncDroplessArena};
 use rustc_data_structures::indexed_vec::{Idx, IndexVec};
-use rustc_data_structures::sync::{Lrc, Lock, WorkerLocal, AtomicOnce, Once, OneThread};
+use rustc_data_structures::sync::{self, Lrc, Lock, WorkerLocal, AtomicOnce, Once};
 use std::any::Any;
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -70,7 +70,7 @@ use syntax::attr;
 use syntax::source_map::MultiSpan;
 use syntax::edition::Edition;
 use syntax::feature_gate;
-use syntax::symbol::{Symbol, keywords, InternedString};
+use syntax::symbol::{keywords, InternedString};
 use syntax_pos::Span;
 
 use crate::hir;
@@ -1021,12 +1021,9 @@ pub struct GlobalCtxt<'tcx> {
 
     /// This stores a `Lrc<CStore>`, but that type depends on
     /// rustc_metadata, so it cannot be used here.
-    pub cstore_rc: OneThread<Steal<Box<dyn Any>>>,
+    pub cstore_rc: &'tcx (dyn Any + sync::Sync),
 
     pub sess_rc: Lrc<Session>,
-
-    /// The AST after registering plugins.
-    pub ast_crate: Steal<(ast::Crate, ty::PluginInfo)>,
 
     lowered_hir: AtomicOnce<&'tcx hir::LoweredHir>,
     hir_map: AtomicOnce<&'tcx hir_map::Map<'tcx>>,
@@ -1047,9 +1044,7 @@ pub struct GlobalCtxt<'tcx> {
     /// Merge this with `selection_cache`?
     pub evaluation_cache: traits::EvaluationCache<'tcx>,
 
-    /// The definite name of the current crate after taking into account
-    /// attributes, commandline parameters, etc.
-    pub crate_name: Symbol,
+    pub crate_name_override: Option<String>,
 
     /// Data layout specification for the current target.
     pub data_layout: TargetDataLayout,
@@ -1210,15 +1205,13 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     pub fn create_global_ctxt(
         s: &'tcx Lrc<Session>,
         cstore: &'tcx CrateStoreDyn,
-        cstore_rc: Box<dyn Any>,
+        cstore_rc: &'tcx (dyn Any + sync::Sync),
         local_providers: ty::query::Providers<'tcx>,
         extern_providers: ty::query::Providers<'tcx>,
         arenas: &'tcx AllArenas<'tcx>,
         dep_graph: DepGraph,
-        ast_crate: ast::Crate,
-        plugin_info: ty::PluginInfo,
         on_disk_query_result_cache: query::OnDiskCache<'tcx>,
-        crate_name: &str,
+        crate_name: Option<String>,
         tx: mpsc::Sender<Box<dyn Any + Send>>,
         io: InputsAndOutputs,
     ) -> GlobalCtxt<'tcx> {
@@ -1234,13 +1227,12 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         GlobalCtxt {
             sess: &**s,
             cstore,
-            cstore_rc: OneThread::new(Steal::new(cstore_rc)),
+            cstore_rc,
             sess_rc: s.clone(),
             global_arenas: &arenas.global,
             global_interners: interners,
             dep_graph,
             types: common_types,
-            ast_crate: Steal::new((ast_crate, plugin_info)),
             lowered_hir: AtomicOnce::new(),
             hir_map: AtomicOnce::new(),
             metadata_dep_nodes: Once::new(),
@@ -1252,7 +1244,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             rcache: Default::default(),
             selection_cache: Default::default(),
             evaluation_cache: Default::default(),
-            crate_name: Symbol::intern(crate_name),
+            crate_name_override: crate_name,
             data_layout,
             layout_interner: Default::default(),
             stability_interner: Default::default(),
@@ -1361,7 +1353,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         // statements within the query system and we'd run into endless
         // recursion otherwise.
         let (crate_name, crate_disambiguator) = if def_id.is_local() {
-            (self.crate_name.clone(),
+            (self.crate_name(LOCAL_CRATE),
              self.sess.local_crate_disambiguator())
         } else {
             (self.cstore.crate_name_untracked(def_id.krate),
@@ -3008,7 +3000,7 @@ pub fn provide(providers: &mut ty::query::Providers<'_>) {
     };
     providers.crate_name = |tcx, id| {
         assert_eq!(id, LOCAL_CRATE);
-        tcx.crate_name
+        tcx.early_crate_name(LocalCrate).unwrap()
     };
     providers.get_lib_features = |tcx, id| {
         assert_eq!(id, LOCAL_CRATE);

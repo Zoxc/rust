@@ -3294,8 +3294,7 @@ fn crate_disambiguator<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
 
 fn original_crate_name<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                                  crate_num: CrateNum) -> Symbol {
-    assert_eq!(crate_num, LOCAL_CRATE);
-    tcx.crate_name.clone()
+    tcx.crate_name(crate_num)
 }
 
 fn crate_hash<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,

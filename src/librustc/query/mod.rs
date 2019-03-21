@@ -30,6 +30,28 @@ use syntax_pos::symbol::InternedString;
 // as they will raise an fatal error on query cycles instead.
 rustc_queries! {
     Other {
+        query parse(_: LocalCrate) -> Result<Lrc<Steal<ast::Crate>>, ErrorReported> {
+            no_hash
+            eval_always
+            desc { "parsing crate" }
+        }
+
+        query register_plugins(
+            _: LocalCrate
+        ) -> Result<Lrc<Steal<(ast::Crate, ty::PluginInfo)>>, ErrorReported> {
+            no_hash
+            eval_always
+            desc { "registering plugins" }
+        }
+
+        /// The definite name of the current crate after taking into account
+        /// attributes, commandline parameters, etc.
+        query early_crate_name(_: LocalCrate) -> Result<Symbol, ErrorReported> {
+            no_hash
+            eval_always
+            desc { "finding the crate name" }
+        }
+
         query expand_macros(_: LocalCrate) -> Result<Lrc<ty::ExpansionResult>, ErrorReported> {
             no_hash
             eval_always
@@ -734,6 +756,7 @@ rustc_queries! {
             eval_always
             desc { "looking up the hash a crate" }
         }
+        // FIXME: Remove this as it's the same as `crate_name`
         query original_crate_name(_: CrateNum) -> Symbol {
             eval_always
             desc { "looking up the original name a crate" }
