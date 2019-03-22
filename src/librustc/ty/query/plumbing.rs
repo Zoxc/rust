@@ -2,13 +2,16 @@
 //! generate the actual methods on tcx which find and execute the provider,
 //! manage the caches, and so forth.
 
-use crate::dep_graph::{DepNodeIndex, DepNode, DepConstructor, DepKind, SerializedDepNodeIndex};
+use crate::dep_graph::{
+    DepGraph, DepNodeIndex, DepNode, DepConstructor, DepKind, SerializedDepNodeIndex
+};
 use crate::ty::tls;
 use crate::ty::{self, TyCtxt};
 use crate::ty::query::Query;
 use crate::ty::query::config::{QueryConfig, QueryDescription};
 use crate::ty::query::job::{QueryJob, QueryResult, QueryInfo};
-use crate::hir::def_id::LOCAL_CRATE;
+use crate::hir::def_id::{LocalCrate, LOCAL_CRATE};
+use crate::ty::query::OnDiskCache;
 
 use crate::util::common::{profq_msg, ProfileQueriesMsg, QueryMsg};
 
@@ -249,6 +252,14 @@ pub(super) enum TryGetJob<'a, 'tcx: 'a, D: QueryDescription<'tcx> + 'a> {
 }
 
 impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
+    #[inline(always)]
+    pub fn on_disk_cache(self) -> &'gcx OnDiskCache<'gcx> {
+        self.queries.on_disk_cache.get_or_init(|| {
+            // Don't track the loading of the query result cache
+            self.dep_graph().with_ignore(|| self.load_query_result_cache(LocalCrate))
+        })
+    }
+
     /// Executes a job by changing the ImplicitCtxt to point to the
     /// new query job while it executes. It returns the diagnostics
     /// captured during execution and the actual result.
@@ -374,16 +385,43 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             TryGetJob::NotYetStarted(job) => job,
             TryGetJob::Cycle(result) => return result,
             TryGetJob::JobCompleted((v, index)) => {
-                self.dep_graph.read_index(index);
+                if !Q::INCREMENTAL {
+                    DepGraph::read_non_incr(self);
+                    return v;
+                }
+
+                self.dep_graph().read_index(index);
                 return v
             }
         };
 
+        if !Q::INCREMENTAL {
+            // Special path which does not use the `dep_graph`
+            let result = self.start_query(job.job.clone(), None, |tcx| {
+                ty::tls::with_context(|icx| {
+                    // Don't track dependencies
+                    let icx = ty::tls::ImplicitCtxt {
+                        task_deps: None,
+                        ..icx.clone()
+                    };
+
+                    ty::tls::enter_context(&icx, |_| {
+                        Q::compute(tcx.global_tcx(), key)
+                    })
+                })
+            });
+            DepGraph::read_non_incr(self);
+            job.complete(&result, DepNodeIndex::INVALID);
+            return result;
+        }
+
+        let dep_graph = self.dep_graph();
+
         // Fast path for when incr. comp. is off. `to_dep_node` is
         // expensive for some DepKinds.
-        if !self.dep_graph.is_fully_enabled() {
+        if !dep_graph.is_fully_enabled() {
             let null_dep_node = DepNode::new_no_params(crate::dep_graph::DepKind::Null);
-            return self.force_query_with_job::<Q>(key, job, null_dep_node).0;
+            return self.force_query_with_job::<Q>(key, job, dep_graph, null_dep_node).0;
         }
 
         let dep_node = Q::to_dep_node(self, &key);
@@ -394,7 +432,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
 
             let ((result, dep_node_index), diagnostics) = with_diagnostics(|diagnostics| {
                 self.start_query(job.job.clone(), diagnostics, |tcx| {
-                    tcx.dep_graph.with_anon_task(dep_node.kind, || {
+                    dep_graph.with_anon_task(dep_node.kind, || {
                         Q::compute(tcx.global_tcx(), key)
                     })
                 })
@@ -403,10 +441,10 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             self.sess.profiler(|p| p.end_query(Q::NAME, Q::CATEGORY));
             profq_msg!(self, ProfileQueriesMsg::ProviderEnd);
 
-            self.dep_graph.read_index(dep_node_index);
+            dep_graph.read_index(dep_node_index);
 
             if unlikely!(!diagnostics.is_empty()) {
-                self.queries.on_disk_cache
+                self.on_disk_cache()
                     .store_diagnostics_for_anon_node(dep_node_index, diagnostics);
             }
 
@@ -420,10 +458,11 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             // promoted to the current session during
             // try_mark_green(), so we can ignore them here.
             let loaded = self.start_query(job.job.clone(), None, |tcx| {
-                let marked = tcx.dep_graph.try_mark_green_and_read(tcx, &dep_node);
+                let marked = dep_graph.try_mark_green_and_read(tcx, &dep_node);
                 marked.map(|(prev_dep_node_index, dep_node_index)| {
                     (tcx.load_from_disk_and_cache_in_memory::<Q>(
                         key.clone(),
+                        dep_graph,
                         prev_dep_node_index,
                         dep_node_index,
                         &dep_node
@@ -436,14 +475,20 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             }
         }
 
-        let (result, dep_node_index) = self.force_query_with_job::<Q>(key, job, dep_node);
-        self.dep_graph.read_index(dep_node_index);
+        let (result, dep_node_index) = self.force_query_with_job::<Q>(
+            key,
+            job,
+            dep_graph,
+            dep_node
+        );
+        dep_graph.read_index(dep_node_index);
         result
     }
 
     fn load_from_disk_and_cache_in_memory<Q: QueryDescription<'gcx>>(
         self,
         key: Q::Key,
+        dep_graph: &'gcx DepGraph,
         prev_dep_node_index: SerializedDepNodeIndex,
         dep_node_index: DepNodeIndex,
         dep_node: &DepNode
@@ -452,7 +497,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         // Note this function can be called concurrently from the same query
         // We must ensure that this is handled correctly
 
-        debug_assert!(self.dep_graph.is_green(dep_node));
+        debug_assert!(dep_graph.is_green(dep_node));
 
         // First we try to load the result from the on-disk cache
         let result = if Q::cache_on_disk(self.global_tcx(), key.clone()) &&
@@ -486,7 +531,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
 
             // The dep-graph for this computation is already in
             // place
-            let result = self.dep_graph.with_ignore(|| {
+            let result = dep_graph.with_ignore(|| {
                 Q::compute(self, key)
             });
 
@@ -501,7 +546,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         }
 
         if unlikely!(self.sess.opts.debugging_opts.query_dep_graph) {
-            self.dep_graph.mark_loaded_from_cache(dep_node_index, true);
+            dep_graph.mark_loaded_from_cache(dep_node_index, true);
         }
 
         result
@@ -517,8 +562,8 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     ) {
         use crate::ich::Fingerprint;
 
-        assert!(Some(self.dep_graph.fingerprint_of(dep_node_index)) ==
-                self.dep_graph.prev_fingerprint_of(dep_node),
+        assert!(Some(self.dep_graph().fingerprint_of(dep_node_index)) ==
+                self.dep_graph().prev_fingerprint_of(dep_node),
                 "Fingerprint for green query instance not loaded \
                     from cache: {:?}", dep_node);
 
@@ -528,7 +573,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         let new_hash = Q::hash_result().map(|h| h(&mut hcx, result)).unwrap_or(Fingerprint::ZERO);
         debug!("END verify_ich({:?})", dep_node);
 
-        let old_hash = self.dep_graph.fingerprint_of(dep_node_index);
+        let old_hash = self.dep_graph().fingerprint_of(dep_node_index);
 
         assert!(new_hash == old_hash, "Found unstable fingerprints \
             for {:?}", dep_node);
@@ -539,9 +584,10 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         self,
         key: Q::Key,
         job: JobOwner<'_, 'gcx, Q>,
+        dep_graph: &'gcx DepGraph,
         dep_node: DepNode)
     -> (Q::Value, DepNodeIndex) {
-        if self.dep_graph.is_fully_enabled() {
+        if dep_graph.is_fully_enabled() {
             debug_assert_eq!(dep_node, Q::to_dep_node(self, &key));
         }
 
@@ -550,7 +596,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         //    in DepGraph::try_mark_green()
         // 2. Two distinct query keys get mapped to the same DepNode
         //    (see for example #48923)
-        assert!(!self.dep_graph.dep_node_exists(&dep_node),
+        assert!(!dep_graph.dep_node_exists(&dep_node),
                 "Forcing query with already existing DepNode.\n\
                  - query-key: {:?}\n\
                  - dep-node: {:?}",
@@ -562,17 +608,21 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         let ((result, dep_node_index), diagnostics) = with_diagnostics(|diagnostics| {
             self.start_query(job.job.clone(), diagnostics, |tcx| {
                 if dep_node.kind.is_eval_always() {
-                    tcx.dep_graph.with_eval_always_task(dep_node,
-                                                        tcx,
-                                                        key,
-                                                        Q::compute,
-                                                        Q::hash_result())
+                    dep_graph.with_eval_always_task(
+                        dep_node,
+                        tcx,
+                        key,
+                        Q::compute,
+                        Q::hash_result()
+                    )
                 } else {
-                    tcx.dep_graph.with_task(dep_node,
-                                            tcx,
-                                            key,
-                                            Q::compute,
-                                            Q::hash_result())
+                    dep_graph.with_task(
+                        dep_node,
+                        tcx,
+                        key,
+                        Q::compute,
+                        Q::hash_result()
+                    )
                 }
             })
         });
@@ -581,12 +631,12 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         profq_msg!(self, ProfileQueriesMsg::ProviderEnd);
 
         if unlikely!(self.sess.opts.debugging_opts.query_dep_graph) {
-            self.dep_graph.mark_loaded_from_cache(dep_node_index, false);
+            dep_graph.mark_loaded_from_cache(dep_node_index, false);
         }
 
         if dep_node.kind != crate::dep_graph::DepKind::Null {
             if unlikely!(!diagnostics.is_empty()) {
-                self.queries.on_disk_cache
+                self.on_disk_cache()
                     .store_diagnostics(dep_node_index, diagnostics);
             }
         }
@@ -606,14 +656,14 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     pub(super) fn ensure_query<Q: QueryDescription<'gcx>>(self, key: Q::Key) -> () {
         let dep_node = Q::to_dep_node(self, &key);
 
-        if dep_node.kind.is_eval_always() {
+        if dep_node.kind.is_eval_always() || !Q::INCREMENTAL {
             let _ = self.get_query::<Q>(DUMMY_SP, key);
             return;
         }
 
         // Ensuring an anonymous query makes no sense
         assert!(!dep_node.kind.is_anon());
-        if self.dep_graph.try_mark_green_and_read(self, &dep_node).is_none() {
+        if self.dep_graph().try_mark_green_and_read(self, &dep_node).is_none() {
             // A None return from `try_mark_green_and_read` means that this is either
             // a new dep node or that the dep node has already been marked red.
             // Either way, we can't call `dep_graph.read()` as we don't have the
@@ -649,7 +699,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                 return
             }
         };
-        self.force_query_with_job::<Q>(key, job, dep_node);
+        self.force_query_with_job::<Q>(key, job, self.dep_graph(), dep_node);
     }
 }
 
@@ -681,6 +731,30 @@ macro_rules! hash_result {
     }};
     ([$other:ident$(, $modifiers:ident)*]) => {
         hash_result!([$($modifiers),*])
+    };
+}
+
+macro_rules! is_no_hash {
+    ([]) => {{
+        false
+    }};
+    ([no_hash$(, $modifiers:ident)*]) => {{
+        true
+    }};
+    ([$other:ident$(, $modifiers:ident)*]) => {
+        is_no_hash!([$($modifiers),*])
+    };
+}
+
+macro_rules! is_eval_always {
+    ([]) => {{
+        false
+    }};
+    ([eval_always$(, $modifiers:ident)*]) => {{
+        true
+    }};
+    ([$other:ident$(, $modifiers:ident)*]) => {
+        is_eval_always!([$($modifiers),*])
     };
 }
 
@@ -720,12 +794,11 @@ macro_rules! define_queries_inner {
             pub fn new(
                 providers: IndexVec<CrateNum, Providers<$tcx>>,
                 fallback_extern_providers: Providers<$tcx>,
-                on_disk_cache: OnDiskCache<'tcx>,
             ) -> Self {
                 Queries {
                     providers,
                     fallback_extern_providers: Box::new(fallback_extern_providers),
-                    on_disk_cache,
+                    on_disk_cache: AtomicOnce::new(),
                     $($name: Default::default()),*
                 }
             }
@@ -972,6 +1045,9 @@ macro_rules! define_queries_inner {
                 })
             }
 
+            const INCREMENTAL: bool = !(is_no_hash!([$($modifiers)*]) &&
+                                        is_eval_always!([$($modifiers)*]));
+
             fn hash_result() -> Option<fn(
                 &mut StableHashingContext<'_>, &Self::Value
             ) -> Fingerprint> {
@@ -1064,10 +1140,11 @@ macro_rules! define_queries_struct {
     (tcx: $tcx:tt,
      input: ($(([$($modifiers:tt)*] [$($attr:tt)*] [$name:ident]))*)) => {
         pub struct Queries<$tcx> {
-            /// This provides access to the incrimental comilation on-disk cache for query results.
+            /// This provides access to the incrimental compilation on-disk cache for query results.
             /// Do not access this directly. It is only meant to be used by
             /// `DepGraph::try_mark_green()` and the query infrastructure.
-            pub(crate) on_disk_cache: OnDiskCache<'tcx>,
+            // FIXME: Load this alongside the dep graph
+            pub(crate) on_disk_cache: AtomicOnce<&'tcx OnDiskCache<'tcx>>,
 
             providers: IndexVec<CrateNum, Providers<$tcx>>,
             fallback_extern_providers: Box<Providers<$tcx>>,
@@ -1165,37 +1242,6 @@ pub fn force_from_dep_node<'tcx>(
         return false
     }
 
-    macro_rules! def_id {
-        () => {
-            if let Some(def_id) = dep_node.extract_def_id(tcx) {
-                def_id
-            } else {
-                // return from the whole function
-                return false
-            }
-        }
-    };
-
-    macro_rules! krate {
-        () => { (def_id!()).krate }
-    };
-
-    macro_rules! force_ex {
-        ($tcx:expr, $query:ident, $key:expr) => {
-            {
-                $tcx.force_query::<crate::ty::query::queries::$query<'_>>(
-                    $key,
-                    DUMMY_SP,
-                    *dep_node
-                );
-            }
-        }
-    };
-
-    macro_rules! force {
-        ($query:ident, $key:expr) => { force_ex!(tcx, $query, $key) }
-    };
-
     let force_hir_map = || {
         tcx.force_query::<crate::ty::query::queries::hir_map<'_>>(
             LOCAL_CRATE,
@@ -1211,7 +1257,9 @@ pub fn force_from_dep_node<'tcx>(
         DepKind::HirBody |
         DepKind::Hir => {
             // Ensure the def_id exists
-            def_id!();
+            if dep_node.extract_def_id(tcx).is_none() {
+                return false
+            }
             force_hir_map();
         }
 
@@ -1222,13 +1270,15 @@ pub fn force_from_dep_node<'tcx>(
         // This are anonymous nodes
         DepKind::TraitSelect |
 
+        // This should always be red
+        DepKind::NonIncremental |
+
         // We don't have enough information to reconstruct the query key of
         // these
         DepKind::CompileCodegenUnit => {
             bug!("force_from_dep_node() - Encountered {:?}", dep_node)
         }
 
-        DepKind::Analysis => { force!(analysis, krate!()); }
     );
 
     true
@@ -1263,7 +1313,7 @@ macro_rules! impl_load_from_cache {
             pub fn load_from_on_disk_cache(&self, tcx: TyCtxt<'_, '_, '_>) {
                 match self.kind {
                     $(DepKind::$dep_kind => {
-                        debug_assert!(tcx.dep_graph
+                        debug_assert!(tcx.dep_graph()
                                          .node_color(self)
                                          .map(|c| c.is_green())
                                          .unwrap_or(false));

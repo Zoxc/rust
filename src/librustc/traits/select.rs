@@ -1190,10 +1190,9 @@ impl<'cx, 'gcx, 'tcx> SelectionContext<'cx, 'gcx, 'tcx> {
     where
         OP: FnOnce(&mut Self) -> R,
     {
-        let (result, dep_node) = self.tcx()
-            .dep_graph
-            .with_anon_task(DepKind::TraitSelect, || op(self));
-        self.tcx().dep_graph.read_index(dep_node);
+        let dep_graph = self.tcx().dep_graph();
+        let (result, dep_node) = dep_graph.with_anon_task(DepKind::TraitSelect, || op(self));
+        dep_graph.read_index(dep_node);
         (result, dep_node)
     }
 
@@ -3944,7 +3943,7 @@ impl<T: Clone> WithDepNode<T> {
     }
 
     pub fn get(&self, tcx: TyCtxt<'_, '_, '_>) -> T {
-        tcx.dep_graph.read_index(self.dep_node);
+        tcx.dep_graph().read_index(self.dep_node);
         self.cached_value.clone()
     }
 }

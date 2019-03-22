@@ -147,7 +147,7 @@ pub trait CodegenUnitExt<'tcx> {
 
     fn work_product(&self, tcx: TyCtxt<'_, '_, '_>) -> WorkProduct {
         let work_product_id = self.work_product_id();
-        tcx.dep_graph
+        tcx.dep_graph()
            .previous_work_product(&work_product_id)
            .unwrap_or_else(|| {
                 panic!("Could not find work-product for CGU `{}`", self.name())

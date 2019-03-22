@@ -163,7 +163,7 @@ impl<'sess> OnDiskCache<'sess> {
         where E: ty_codec::TyEncoder
      {
         // Serializing the DepGraph should not modify it:
-        tcx.dep_graph.with_ignore(|| {
+        tcx.dep_graph().with_ignore(|| {
             // Allocate SourceFileIndices
             let (file_to_file_index, file_index_to_stable_id) = {
                 let files = tcx.sess.source_map().files();
@@ -197,7 +197,7 @@ impl<'sess> OnDiskCache<'sess> {
             // Load everything into memory so we can write it out to the on-disk
             // cache. The vast majority of cacheable query results should already
             // be in memory, so this should be a cheap operation.
-            tcx.dep_graph.exec_cache_promotions(tcx);
+            tcx.dep_graph().exec_cache_promotions(tcx);
 
             // Encode query results
             let mut query_result_index = EncodedQueryResultIndex::new();
@@ -427,7 +427,7 @@ impl<'sess> OnDiskCache<'sess> {
                         prev_cnums: &[(u32, String, CrateDisambiguator)])
                         -> IndexVec<CrateNum, Option<CrateNum>>
     {
-        tcx.dep_graph.with_ignore(|| {
+        tcx.dep_graph().with_ignore(|| {
             let current_cnums = tcx.all_crate_nums(LOCAL_CRATE).iter().map(|&cnum| {
                 let crate_name = tcx.original_crate_name(cnum)
                                     .to_string();

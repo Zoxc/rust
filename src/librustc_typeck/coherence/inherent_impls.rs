@@ -57,7 +57,8 @@ pub fn inherent_impls<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
         static EMPTY_DEF_ID_VEC: Lrc<Vec<DefId>> = Lrc::new(vec![])
     }
 
-    let result = tcx.dep_graph.with_ignore(|| {
+    let dep_graph = tcx.dep_graph();
+    let result = dep_graph.with_ignore(|| {
         let crate_map = tcx.crate_inherent_impls(ty_def_id.krate);
         match crate_map.inherent_impls.get(&ty_def_id) {
             Some(v) => v.clone(),
@@ -67,7 +68,7 @@ pub fn inherent_impls<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
 
     for &impl_def_id in &result[..] {
         let def_path_hash = tcx.def_path_hash(impl_def_id);
-        tcx.dep_graph.read(def_path_hash.to_dep_node(DepKind::Hir));
+        dep_graph.read(def_path_hash.to_dep_node(DepKind::Hir));
     }
 
     result

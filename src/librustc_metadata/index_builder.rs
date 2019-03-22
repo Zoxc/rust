@@ -114,7 +114,7 @@ impl<'a, 'b, 'tcx> IndexBuilder<'a, 'b, 'tcx> {
         // hashes anyway. In theory we could do some tracking here and use it to
         // avoid rehashing things (and instead cache the hashes) but it's
         // unclear whether that would be a win since hashing is cheap enough.
-        self.ecx.tcx.dep_graph.with_ignore(move || {
+        self.ecx.tcx.dep_graph().with_ignore(move || {
             let mut entry_builder = IsolatedEncoder::new(self.ecx);
             let entry = op(&mut entry_builder, data);
             let entry = entry_builder.lazy(&entry);

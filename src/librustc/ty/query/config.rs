@@ -1,6 +1,6 @@
 use crate::dep_graph::SerializedDepNodeIndex;
 use crate::dep_graph::DepNode;
-use crate::hir::def_id::{CrateNum, DefId};
+use crate::hir::def_id::DefId;
 use crate::ty::TyCtxt;
 use crate::ty::query::queries;
 use crate::ty::query::Query;
@@ -36,6 +36,9 @@ pub(crate) trait QueryAccessors<'tcx>: QueryConfig<'tcx> {
     // Don't use this method to compute query results, instead use the methods on TyCtxt
     fn compute(tcx: TyCtxt<'_, 'tcx, '_>, key: Self::Key) -> Self::Value;
 
+    /// Does this query support incremental compilation
+    const INCREMENTAL: bool;
+
     fn hash_result() -> Option<fn(&mut StableHashingContext<'_>, &Self::Value) -> Fingerprint>;
 
     fn handle_cycle_error(tcx: TyCtxt<'_, 'tcx, '_>, error: CycleError<'tcx>) -> Self::Value;
@@ -67,12 +70,6 @@ impl<'tcx, M: QueryAccessors<'tcx, Key=DefId>> QueryDescription<'tcx> for M {
     }
 }
 
-impl<'tcx> QueryDescription<'tcx> for queries::analysis<'tcx> {
-    fn describe(_tcx: TyCtxt<'_, '_, '_>, _: CrateNum) -> Cow<'static, str> {
-        "running analysis passes on this crate".into()
-    }
-}
-
 macro_rules! impl_disk_cacheable_query(
     ($query_name:ident, |$tcx:tt, $key:tt| $cond:expr) => {
         impl<'tcx> QueryDescription<'tcx> for queries::$query_name<'tcx> {
@@ -85,7 +82,7 @@ macro_rules! impl_disk_cacheable_query(
             fn try_load_from_disk<'a>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                                       id: SerializedDepNodeIndex)
                                       -> Option<Self::Value> {
-                tcx.queries.on_disk_cache.try_load_query_result(tcx, id)
+                tcx.on_disk_cache().try_load_query_result(tcx, id)
             }
         }
     }

@@ -1032,7 +1032,7 @@ impl<'a, 'b: 'a, 'tcx: 'b> IsolatedEncoder<'a, 'b, 'tcx> {
 
     fn encode_fn_arg_names_for_body(&mut self, body_id: hir::BodyId)
                                     -> LazySeq<ast::Name> {
-        self.tcx.dep_graph.with_ignore(|| {
+        self.tcx.dep_graph().with_ignore(|| {
             let body = self.tcx.hir().body(body_id);
             self.lazy_seq(body.arguments.iter().map(|arg| {
                 match arg.pat.node {

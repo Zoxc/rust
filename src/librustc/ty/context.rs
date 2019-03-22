@@ -1012,7 +1012,10 @@ pub struct GlobalCtxt<'tcx> {
 
     pub sess: &'tcx Session,
 
-    pub dep_graph: DepGraph,
+    pub dep_graph_store: Once<DepGraph>,
+
+    // FIXME: Get rid of the double indirection here
+    dep_graph: AtomicOnce<&'tcx DepGraph>,
 
     /// Common types, pre-interned for your convenience.
     pub types: CommonTypes<'tcx>,
@@ -1083,16 +1086,24 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     }
 
     #[inline(always)]
+    pub fn dep_graph(self) -> &'gcx DepGraph {
+        self.dep_graph.get_or_init(|| {
+            // We shouldn't be tracking dependencies beforing loading the dep graph
+            DepGraph::assert_ignored();
+            self.load_dep_graph(LocalCrate)
+        })
+    }
+
+    #[inline(always)]
     pub fn lowered_hir(self) -> &'gcx hir::LoweredHir {
         self.lowered_hir.get_or_init(|| {
-            // FIXME: The ignore here is only sound because all queries
-            // used to compute LoweredHir are eval_always
-            self.dep_graph.with_ignore(|| {
-                let map = self.lower_ast_to_hir(LocalCrate).unwrap();
-                self.lowered_hir.init(map);
-                self.allocate_metadata_dep_nodes();
-                map
-            })
+            // We shouldn't have loaded the dep graph yet here,
+            // so we should not be tracking dependencies.
+            DepGraph::assert_ignored();
+            let map = self.lower_ast_to_hir(LocalCrate).unwrap();
+            self.lowered_hir.init(map);
+            self.allocate_metadata_dep_nodes();
+            map
         })
     }
 
@@ -1104,7 +1115,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     pub fn hir(self) -> &'gcx hir_map::Map<'gcx> {
         self.hir_map.get_or_init(|| {
             // We can use `with_ignore` here because the hir map does its own tracking
-            self.dep_graph.with_ignore(|| self.hir_map(LOCAL_CRATE))
+            DepGraph::ignore_deps(|| self.hir_map(LOCAL_CRATE))
         })
     }
 
@@ -1209,7 +1220,6 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         local_providers: ty::query::Providers<'tcx>,
         extern_providers: ty::query::Providers<'tcx>,
         arenas: &'tcx AllArenas<'tcx>,
-        dep_graph: DepGraph,
         on_disk_query_result_cache: query::OnDiskCache<'tcx>,
         crate_name: Option<String>,
         tx: mpsc::Sender<Box<dyn Any + Send>>,
@@ -1231,7 +1241,8 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             sess_rc: s.clone(),
             global_arenas: &arenas.global,
             global_interners: interners,
-            dep_graph,
+            dep_graph: AtomicOnce::new(),
+            dep_graph_store: Once::new(),
             types: common_types,
             lowered_hir: AtomicOnce::new(),
             hir_map: AtomicOnce::new(),
@@ -1400,7 +1411,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     // With full-fledged red/green, the method will probably become unnecessary
     // as this will be done on-demand.
     pub fn allocate_metadata_dep_nodes(self) {
-        if !self.dep_graph.is_fully_enabled() {
+        if !self.dep_graph().is_fully_enabled() {
             return
         }
 
@@ -1410,11 +1421,12 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             for cnum in self.cstore.crates_untracked() {
                 let dep_node = DepNode::new(self, DepConstructor::CrateMetadata(cnum));
                 let crate_hash = self.cstore.crate_hash_untracked(cnum);
-                self.dep_graph.with_task(dep_node,
-                                        self,
-                                        crate_hash,
-                                        |_, x| x, // No transformation needed
-                                        Some(dep_graph::hash_result),
+                self.dep_graph().with_task(
+                    dep_node,
+                    self,
+                    crate_hash,
+                    |_, x| x, // No transformation needed
+                    Some(dep_graph::hash_result),
                 );
             }
         });

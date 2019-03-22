@@ -1,4 +1,4 @@
-use crate::dep_graph::{self, DepNode};
+use crate::dep_graph::{self, DepNode, DepGraph, DepGraphFuture};
 use crate::hir::def_id::{CrateNum, LocalCrate, DefId, DefIndex};
 use crate::hir::def::{Def, Export};
 use crate::hir::{self, TraitCandidate, ItemLocalId, CodegenFnAttrs};
@@ -101,8 +101,5 @@ pub use self::on_disk_cache::OnDiskCache;
 
 rustc_query_append! { [define_queries!][ <'tcx>
     Other {
-        /// Run analysis passes on the crate
-        [] fn analysis: Analysis(CrateNum) -> Result<(), ErrorReported>,
-
     },
 ]}

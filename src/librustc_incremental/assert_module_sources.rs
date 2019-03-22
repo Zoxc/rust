@@ -35,7 +35,7 @@ const CFG: &str = "cfg";
 const KIND: &str = "kind";
 
 pub fn assert_module_sources<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
-    tcx.dep_graph.with_ignore(|| {
+    tcx.dep_graph().with_ignore(|| {
         if tcx.sess.opts.incremental.is_none() {
             return;
         }

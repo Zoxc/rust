@@ -3,7 +3,7 @@ use crate::util;
 use crate::proc_macro_decls;
 
 use log::{debug, info, warn, log_enabled};
-use rustc::dep_graph::DepGraph;
+use rustc::dep_graph::{DepGraphFuture, DepGraph, LoadResult};
 use rustc::hir;
 use rustc::hir::lowering::lower_crate;
 use rustc::hir::def_id::{CrateNum, LocalCrate, LOCAL_CRATE};
@@ -27,7 +27,7 @@ use rustc_data_structures::stable_hasher::{StableHasher, StableVec};
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::sync::{self, Lrc, Lock, OneThread, ParallelIterator, par_iter};
 use rustc_incremental;
-use rustc_incremental::DepGraphFuture;
+use rustc_incremental::open_load_result;
 use rustc_metadata::creader::CrateLoader;
 use rustc_metadata::cstore::{self, CStore};
 use rustc_mir as mir;
@@ -272,6 +272,9 @@ fn register_plugins<'tcx>(
             }
         });
     }
+
+    // If necessary, compute the dependency graph (in the background).
+    tcx.dep_graph_future(LocalCrate);
 
     time(sess, "recursion limit", || {
         middle::recursion_limit::update_limits(sess, &krate);
@@ -568,7 +571,6 @@ fn lower_ast_to_hir<'tcx>(
             let hir_crate = lower_crate(
                 sess,
                 tcx.cstore,
-                &tcx.dep_graph,
                 &expansion_result.ast_crate.borrow(),
                 resolver,
             );
@@ -577,7 +579,7 @@ fn lower_ast_to_hir<'tcx>(
                 hir_stats::print_hir_stats(&hir_crate);
             }
 
-            hir::map::Forest::new(hir_crate, &tcx.dep_graph)
+            hir::map::Forest::new(hir_crate, &tcx.dep_graph())
         })
     });
 
@@ -865,6 +867,38 @@ fn early_crate_name<'tcx>(
     Ok(Symbol::intern(&result))
 }
 
+fn dep_graph_future<'tcx>(
+    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    _: LocalCrate,
+) -> Lrc<Steal<Option<DepGraphFuture>>> {
+    Lrc::new(Steal::new(if tcx.sess.opts.build_dep_graph() {
+        Some(rustc_incremental::load_dep_graph(tcx.sess))
+    } else {
+        None
+    }))
+}
+
+fn load_dep_graph<'tcx>(
+    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    _: LocalCrate,
+) -> &'tcx DepGraph {
+    tcx.dep_graph_store.set(match tcx.dep_graph_future(LocalCrate).steal() {
+        None => DepGraph::new_disabled(),
+        Some(future) => {
+            let (prev_graph, prev_work_products) =
+                time(tcx.sess, "blocked while dep-graph loading finishes", || {
+                    open_load_result(future.open().unwrap_or_else(|e| {
+                        LoadResult::Error {
+                            message: format!("could not decode incremental cache: {:?}", e),
+                        }
+                    }), tcx.sess)
+                });
+            DepGraph::new(prev_graph, prev_work_products)
+        }
+    });
+    tcx.dep_graph_store.get()
+}
+
 pub fn default_provide(providers: &mut ty::query::Providers<'_>) {
     providers.analysis = analysis;
     providers.hir_map = hir_map;
@@ -874,6 +908,8 @@ pub fn default_provide(providers: &mut ty::query::Providers<'_>) {
     providers.register_plugins = register_plugins;
     providers.parse = parse;
     providers.early_crate_name = early_crate_name;
+    providers.dep_graph_future = dep_graph_future;
+    providers.load_dep_graph = load_dep_graph;
     proc_macro_decls::provide(providers);
     plugin::build::provide(providers);
     hir::provide(providers);
@@ -919,7 +955,6 @@ impl BoxedGlobalCtxt {
 
 pub fn create_global_ctxt(
     compiler: &Compiler,
-    dep_graph: DepGraph,
     io: InputsAndOutputs,
     tx: mpsc::Sender<Box<dyn Any + Send>>,
 ) -> BoxedGlobalCtxt {
@@ -954,7 +989,6 @@ pub fn create_global_ctxt(
             local_providers,
             extern_providers,
             &arenas,
-            dep_graph,
             query_result_on_disk_cache,
             crate_name,
             tx,

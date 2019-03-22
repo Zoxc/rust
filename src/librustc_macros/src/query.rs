@@ -341,7 +341,7 @@ fn add_query_description_impl(
                     tcx: TyCtxt<'_, 'tcx, 'tcx>,
                     id: SerializedDepNodeIndex
                 ) -> Option<Self::Value> {
-                    tcx.queries.on_disk_cache.try_load_query_result(tcx, id)
+                    tcx.on_disk_cache().try_load_query_result(tcx, id)
                 }
             }
         };
@@ -423,6 +423,10 @@ pub fn rustc_queries(input: TokenStream) -> TokenStream {
             if modifiers.no_hash {
                 attributes.push(quote! { no_hash });
             };
+            // Pass on the eval_always modifier
+            if modifiers.eval_always {
+                attributes.push(quote! { eval_always });
+            };
 
             let mut attribute_stream = quote! {};
 
@@ -462,7 +466,11 @@ pub fn rustc_queries(input: TokenStream) -> TokenStream {
                 dep_node_force_stream.extend(quote! {
                     DepKind::#name => {
                         if let Some(key) = RecoverKey::recover($tcx, $dep_node) {
-                            force_ex!($tcx, #name, key);
+                            $tcx.force_query::<crate::ty::query::queries::#name<'_>>(
+                                key,
+                                DUMMY_SP,
+                                *$dep_node,
+                            );
                         } else {
                             return false;
                         }

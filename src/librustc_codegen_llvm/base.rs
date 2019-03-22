@@ -142,11 +142,13 @@ pub fn compile_codegen_unit<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
     let start_time = Instant::now();
 
     let dep_node = tcx.codegen_unit(cgu_name).codegen_dep_node(tcx);
-    let ((stats, module), _) = tcx.dep_graph.with_task(dep_node,
-                                                       tcx,
-                                                       cgu_name,
-                                                       module_codegen,
-                                                       Some(dep_graph::hash_result));
+    let ((stats, module), _) = tcx.dep_graph().with_task(
+        dep_node,
+        tcx,
+        cgu_name,
+        module_codegen,
+        Some(dep_graph::hash_result)
+    );
     let time_to_codegen = start_time.elapsed();
 
     // We assume that the cost to run LLVM on a CGU is proportional to
