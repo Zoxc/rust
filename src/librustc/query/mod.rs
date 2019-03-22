@@ -42,6 +42,12 @@ rustc_queries! {
             desc { "loading the dependency graph" }
         }
 
+        query load_query_result_cache(_: LocalCrate) -> &'tcx OnDiskCache<'tcx> {
+            no_hash
+            eval_always
+            desc { "loading the query result cache" }
+        }
+
         query parse(_: LocalCrate) -> Result<Lrc<Steal<ast::Crate>>, ErrorReported> {
             no_hash
             eval_always
@@ -105,7 +111,7 @@ rustc_queries! {
         query generics_of(key: DefId) -> &'tcx ty::Generics {
             cache { key.is_local() }
             load_cached(tcx, id) {
-                let generics: Option<ty::Generics> = tcx.queries.on_disk_cache
+                let generics: Option<ty::Generics> = tcx.on_disk_cache()
                                                         .try_load_query_result(tcx, id);
                 generics.map(|x| tcx.alloc_generics(x))
             }
@@ -181,7 +187,7 @@ rustc_queries! {
         query optimized_mir(key: DefId) -> &'tcx mir::Mir<'tcx> {
             cache { key.is_local() }
             load_cached(tcx, id) {
-                let mir: Option<crate::mir::Mir<'tcx>> = tcx.queries.on_disk_cache
+                let mir: Option<crate::mir::Mir<'tcx>> = tcx.on_disk_cache()
                                                             .try_load_query_result(tcx, id);
                 mir.map(|x| tcx.alloc_mir(x))
             }
@@ -412,7 +418,7 @@ rustc_queries! {
             cache { key.is_local() }
             load_cached(tcx, id) {
                 let typeck_tables: Option<ty::TypeckTables<'tcx>> = tcx
-                    .queries.on_disk_cache
+                    .on_disk_cache()
                     .try_load_query_result(tcx, id);
 
                 typeck_tables.map(|tables| tcx.alloc_tables(tables))
@@ -475,7 +481,7 @@ rustc_queries! {
             }
             cache { true }
             load_cached(tcx, id) {
-                tcx.queries.on_disk_cache.try_load_query_result(tcx, id).map(Ok)
+                tcx.on_disk_cache().try_load_query_result(tcx, id).map(Ok)
             }
         }
 
@@ -490,7 +496,7 @@ rustc_queries! {
             }
             cache { true }
             load_cached(tcx, id) {
-                tcx.queries.on_disk_cache.try_load_query_result(tcx, id).map(Ok)
+                tcx.on_disk_cache().try_load_query_result(tcx, id).map(Ok)
             }
         }
     }

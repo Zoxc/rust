@@ -37,6 +37,7 @@ use crate::ty::{InferConst, ParamConst};
 use crate::ty::GenericParamDefKind;
 use crate::ty::layout::{LayoutDetails, TargetDataLayout, VariantIdx};
 use crate::ty::query;
+use crate::ty::query::OnDiskCache;
 use crate::ty::steal::Steal;
 use crate::ty::subst::{UserSubsts, UnpackedKind};
 use crate::ty::{BoundVar, BindingMode};
@@ -1033,6 +1034,8 @@ pub struct GlobalCtxt<'tcx> {
 
     metadata_dep_nodes: Once<()>,
 
+    pub on_disk_cache_store: Once<OnDiskCache<'tcx>>,
+
     pub queries: query::Queries<'tcx>,
 
     // Internal cache for metadata decoding. No need to track deps on this.
@@ -1114,7 +1117,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     #[inline(always)]
     pub fn hir(self) -> &'gcx hir_map::Map<'gcx> {
         self.hir_map.get_or_init(|| {
-            // We can use `with_ignore` here because the hir map does its own tracking
+            // We can use `ignore_deps` here because the hir map does its own tracking
             DepGraph::ignore_deps(|| self.hir_map(LOCAL_CRATE))
         })
     }
@@ -1220,7 +1223,6 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         local_providers: ty::query::Providers<'tcx>,
         extern_providers: ty::query::Providers<'tcx>,
         arenas: &'tcx AllArenas<'tcx>,
-        on_disk_query_result_cache: query::OnDiskCache<'tcx>,
         crate_name: Option<String>,
         tx: mpsc::Sender<Box<dyn Any + Send>>,
         io: InputsAndOutputs,
@@ -1247,10 +1249,10 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             lowered_hir: AtomicOnce::new(),
             hir_map: AtomicOnce::new(),
             metadata_dep_nodes: Once::new(),
+            on_disk_cache_store: Once::new(),
             queries: query::Queries::new(
                 providers,
                 extern_providers,
-                on_disk_query_result_cache,
             ),
             rcache: Default::default(),
             selection_cache: Default::default(),
@@ -1437,7 +1439,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
                                            -> Result<(), E::Error>
         where E: ty::codec::TyEncoder
     {
-        self.queries.on_disk_cache.serialize(self.global_tcx(), encoder)
+        self.on_disk_cache().serialize(self.global_tcx(), encoder)
     }
 
     /// This checks whether one is allowed to have pattern bindings
