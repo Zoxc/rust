@@ -104,7 +104,7 @@ fn check_and_apply_linkage(
     cx: &CodegenCx<'ll, 'tcx>,
     attrs: &CodegenFnAttrs,
     ty: Ty<'tcx>,
-    sym: LocalInternedString,
+    sym: &str,
     span: Span
 ) -> &'ll Value {
     let llty = cx.layout_of(ty).llvm_type(cx);

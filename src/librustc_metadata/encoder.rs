@@ -1568,7 +1568,7 @@ impl EncodeContext<'tcx> {
                                -> LazySeq<(ExportedSymbol<'tcx>, SymbolExportLevel)> {
         // The metadata symbol name is special. It should not show up in
         // downstream crates.
-        let metadata_symbol_name = SymbolName::new(&metadata_symbol_name(self.tcx));
+        let metadata_symbol_name = SymbolName::new(self.tcx, &metadata_symbol_name(self.tcx));
 
         self.lazy_seq(exported_symbols
             .iter()

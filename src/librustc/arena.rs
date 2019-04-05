@@ -1,5 +1,6 @@
 use arena::{TypedArena, DroplessArena};
 use std::mem;
+use std::str;
 use std::ptr;
 use std::slice;
 use std::cell::RefCell;
@@ -202,6 +203,13 @@ impl<'tcx> Arena<'tcx> {
             return &mut []
         }
         self.dropless.alloc_slice(value)
+    }
+
+    #[inline]
+    pub fn alloc_str(&self, value: &str) -> &str {
+        unsafe {
+            str::from_utf8_unchecked(self.alloc_slice(value.as_bytes()))
+        }
     }
 
     pub fn alloc_from_iter<

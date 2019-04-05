@@ -123,13 +123,11 @@ fn symbol_name(tcx: TyCtxt<'tcx>, instance: Instance<'tcx>) -> InternedString {
     if def_id.is_local() {
         if tcx.plugin_registrar_fn(LOCAL_CRATE) == Some(def_id) {
             let disambiguator = tcx.sess.local_crate_disambiguator();
-            return
-                InternedString::intern(&tcx.sess.generate_plugin_registrar_symbol(disambiguator));
+            return tcx.arena.alloc_str(&tcx.sess.generate_plugin_registrar_symbol(disambiguator));
         }
         if tcx.proc_macro_decls_static(LOCAL_CRATE) == Some(def_id) {
             let disambiguator = tcx.sess.local_crate_disambiguator();
-            return
-                InternedString::intern(&tcx.sess.generate_proc_macro_decls_symbol(disambiguator));
+            return tcx.arena.alloc_str(&tcx.sess.generate_proc_macro_decls_symbol(disambiguator));
         }
     }
 
@@ -146,20 +144,24 @@ fn symbol_name(tcx: TyCtxt<'tcx>, instance: Instance<'tcx>) -> InternedString {
     let attrs = tcx.codegen_fn_attrs(def_id);
     if is_foreign {
         if let Some(name) = attrs.link_name {
-            return name.as_interned_str();
+            // FIXME: Return the interned &str instead of allocating again
+            return tcx.arena.alloc_str(&name.as_str());
         }
         // Don't mangle foreign items.
-        return tcx.item_name(def_id).as_interned_str();
+        // FIXME: Return the interned &str instead of allocating again
+        return tcx.arena.alloc_str(&tcx.item_name(def_id).as_str());
     }
 
     if let Some(name) = &attrs.export_name {
         // Use provided name
-        return name.as_interned_str();
+        // FIXME: Return the interned &str instead of allocating again
+        return tcx.arena.alloc_str(&name.as_str());
     }
 
     if attrs.flags.contains(CodegenFnAttrFlags::NO_MANGLE) {
         // Don't mangle
-        return tcx.item_name(def_id).as_interned_str();
+        // FIXME: Return the interned &str instead of allocating again
+        return tcx.arena.alloc_str(&tcx.item_name(def_id).as_str());
     }
 
 

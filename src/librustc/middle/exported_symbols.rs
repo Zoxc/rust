@@ -34,11 +34,11 @@ impl SymbolExportLevel {
 pub enum ExportedSymbol<'tcx> {
     NonGeneric(DefId),
     Generic(DefId, SubstsRef<'tcx>),
-    NoDefId(ty::SymbolName),
+    NoDefId(ty::SymbolName<'tcx>),
 }
 
 impl<'tcx> ExportedSymbol<'tcx> {
-    pub fn symbol_name(&self, tcx: TyCtxt<'tcx>) -> ty::SymbolName {
+    pub fn symbol_name(&self, tcx: TyCtxt<'tcx>) -> ty::SymbolName<'tcx> {
         match *self {
             ExportedSymbol::NonGeneric(def_id) => {
                 tcx.symbol_name(ty::Instance::mono(tcx, def_id))

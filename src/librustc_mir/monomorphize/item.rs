@@ -48,7 +48,7 @@ pub trait MonoItemExt<'tcx>: fmt::Debug {
         }
     }
 
-    fn symbol_name(&self, tcx: TyCtxt<'tcx>) -> ty::SymbolName {
+    fn symbol_name(&self, tcx: TyCtxt<'tcx>) -> ty::SymbolName<'tcx> {
         match *self.as_mono_item() {
             MonoItem::Fn(instance) => tcx.symbol_name(instance),
             MonoItem::Static(def_id) => {
@@ -56,12 +56,10 @@ pub trait MonoItemExt<'tcx>: fmt::Debug {
             }
             MonoItem::GlobalAsm(hir_id) => {
                 let def_id = tcx.hir().local_def_id(hir_id);
-                ty::SymbolName {
-                    name: InternedString::intern(&format!("global_asm_{:?}", def_id))
-                }
+                ty::SymbolName::new(tcx, &format!("global_asm_{:?}", def_id))
+            }
             }
         }
-    }
     fn instantiation_mode(&self, tcx: TyCtxt<'tcx>) -> InstantiationMode {
         let inline_in_all_cgus =
             tcx.sess.opts.debugging_opts.inline_in_all_cgus.unwrap_or_else(|| {
