@@ -46,7 +46,6 @@ extern crate rustc_driver as _;
 extern crate syntax_pos;
 extern crate rustc_errors as errors;
 extern crate serialize;
-extern crate tempfile;
 
 use rustc_codegen_ssa::traits::*;
 use rustc_codegen_ssa::back::write::{CodegenContext, ModuleConfig, FatLTOInput};

@@ -29,7 +29,6 @@
 #![doc(html_root_url = "https://doc.rust-lang.org/nightly/")]
 
 #![deny(rust_2018_idioms)]
-#![cfg_attr(not(stage0), deny(internal))]
 #![allow(explicit_outlives_requirements)]
 
 #![feature(arbitrary_self_types)]
@@ -85,10 +84,8 @@ extern crate serialize as rustc_serialize;
 
 #[macro_use] extern crate smallvec;
 
-// Note that librustc doesn't actually depend on these crates, see the note in
-// `Cargo.toml` for this crate about why these are here.
-#[allow(unused_extern_crates)]
-extern crate flate2;
+// Use the test crate here so we depend on getopts through it. This allow tools to link to both
+// librustc_driver and libtest.
 #[allow(unused_extern_crates)]
 extern crate test;
 
