@@ -3,7 +3,7 @@
 use rustc_data_structures::fx::FxHashMap;
 use rustc::dep_graph::{
     LoadResult, PreviousDepGraph, SerializedDepGraph, DepGraphFuture,
-    WorkProductMap, MaybeAsync,
+    DepGraphData, MaybeAsync,
 };
 use rustc::session::Session;
 use rustc::ty::query::OnDiskCache;
@@ -18,13 +18,13 @@ use super::file_format;
 use super::work_product;
 
 pub fn open_load_result(
-    result: LoadResult<(PreviousDepGraph, WorkProductMap)>,
+    result: LoadResult<DepGraphData>,
     sess: &Session
-) -> (PreviousDepGraph, WorkProductMap) {
+) -> DepGraphData {
     match result {
         LoadResult::Error { message } => {
             sess.warn(&message);
-            Default::default()
+            DepGraphData::empty()
         },
         LoadResult::DataOutOfDate => {
             if let Err(err) = delete_all_session_dir_contents(sess) {
@@ -32,7 +32,7 @@ pub fn open_load_result(
                                     incremental compilation session directory contents `{}`: {}.",
                                     dep_graph_path(sess).display(), err));
             }
-            Default::default()
+            DepGraphData::empty()
         }
         LoadResult::Ok { data } => data
     }
@@ -73,7 +73,7 @@ pub fn load_dep_graph(sess: &Session) -> DepGraphFuture {
     if sess.opts.incremental.is_none() {
         // No incremental compilation.
         return MaybeAsync::Sync(LoadResult::Ok {
-            data: Default::default(),
+            data: DepGraphData::empty(),
         });
     }
 
@@ -153,7 +153,10 @@ pub fn load_dep_graph(sess: &Session) -> DepGraphFuture {
                     let dep_graph = SerializedDepGraph::decode(&mut decoder)
                         .expect("Error reading cached dep-graph");
 
-                    LoadResult::Ok { data: (PreviousDepGraph::new(dep_graph), prev_work_products) }
+                    LoadResult::Ok { data: DepGraphData::new(
+                        PreviousDepGraph::new(dep_graph),
+                        prev_work_products
+                    ) }
                 }
             }
         })

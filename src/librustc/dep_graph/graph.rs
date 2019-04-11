@@ -44,7 +44,7 @@ impl<T> MaybeAsync<T> {
     }
 }
 
-pub type DepGraphFuture = MaybeAsync<LoadResult<(PreviousDepGraph, WorkProductMap)>>;
+pub type DepGraphFuture = MaybeAsync<LoadResult<DepGraphData>>;
 
 #[derive(Clone)]
 pub struct DepGraph {
@@ -74,7 +74,7 @@ impl DepNodeColor {
     }
 }
 
-struct DepGraphData {
+pub struct DepGraphData {
     /// The new encoding of the dependency graph, optimized for red/green
     /// tracking. The `current` field is the dependency graph of only the
     /// current compilation session: We don't merge the previous dep-graph into
@@ -116,32 +116,7 @@ where
 }
 
 impl DepGraph {
-
-    pub fn new(prev_graph: PreviousDepGraph,
-               prev_work_products: FxHashMap<WorkProductId, WorkProduct>) -> DepGraph {
-        let prev_graph_node_count = prev_graph.node_count();
-
-        let mut data = DepGraphData {
-            previous_work_products: prev_work_products,
-            dep_node_debug: Default::default(),
-            current: Lock::new(CurrentDepGraph::new(prev_graph_node_count)),
-            emitted_diagnostics: Default::default(),
-            emitted_diagnostics_cond_var: Condvar::new(),
-            previous: prev_graph,
-            colors: DepNodeColorMap::new(prev_graph_node_count),
-            loaded_from_cache: Default::default(),
-        };
-
-        let non_incr_dep_node = DepNode::new_no_params(DepKind::NonIncremental);
-
-        // Allocate the NonIncremental node
-        data.current.get_mut().alloc_node(non_incr_dep_node, smallvec![], Fingerprint::ZERO);
-
-        data.previous.node_to_index_opt(&non_incr_dep_node).map(|prev_index| {
-            // Color previous NonIncremental node as red
-            data.colors.insert(prev_index, DepNodeColor::Red);
-        });
-
+    pub fn new(data: DepGraphData) -> DepGraph {
         DepGraph {
             data: Some(Lrc::new(data)),
         }
@@ -1128,6 +1103,40 @@ impl CurrentDepGraph {
 }
 
 impl DepGraphData {
+    pub fn new(
+        prev_graph: PreviousDepGraph,
+        prev_work_products: FxHashMap<WorkProductId, WorkProduct>
+    ) -> Self {
+        let prev_graph_node_count = prev_graph.node_count();
+
+        let mut data = DepGraphData {
+            previous_work_products: prev_work_products,
+            dep_node_debug: Default::default(),
+            current: Lock::new(CurrentDepGraph::new(prev_graph_node_count)),
+            emitted_diagnostics: Default::default(),
+            emitted_diagnostics_cond_var: Condvar::new(),
+            previous: prev_graph,
+            colors: DepNodeColorMap::new(prev_graph_node_count),
+            loaded_from_cache: Default::default(),
+        };
+
+        let non_incr_dep_node = DepNode::new_no_params(DepKind::NonIncremental);
+
+        // Allocate the NonIncremental node
+        data.current.get_mut().alloc_node(non_incr_dep_node, smallvec![], Fingerprint::ZERO);
+
+        data.previous.node_to_index_opt(&non_incr_dep_node).map(|prev_index| {
+            // Color previous NonIncremental node as red
+            data.colors.insert(prev_index, DepNodeColor::Red);
+        });
+
+        data
+    }
+
+    pub fn empty() -> Self {
+        DepGraphData::new(Default::default(), Default::default())
+    }
+
     fn read_index(&self, source: DepNodeIndex) {
         ty::tls::with_context_opt(|icx| {
             let icx = if let Some(icx) = icx { icx } else {  return };

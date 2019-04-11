@@ -886,15 +886,13 @@ fn load_dep_graph<'tcx>(
     tcx.dep_graph_store.set(match tcx.dep_graph_future(LocalCrate).steal() {
         None => DepGraph::new_disabled(),
         Some(future) => {
-            let (prev_graph, prev_work_products) =
-                time(tcx.sess, "blocked while dep-graph loading finishes", || {
-                    open_load_result(future.open().unwrap_or_else(|e| {
-                        LoadResult::Error {
-                            message: format!("could not decode incremental cache: {:?}", e),
-                        }
-                    }), tcx.sess)
-                });
-            DepGraph::new(prev_graph, prev_work_products)
+            DepGraph::new(time(tcx.sess, "blocked while dep-graph loading finishes", || {
+                open_load_result(future.open().unwrap_or_else(|e| {
+                    LoadResult::Error {
+                        message: format!("could not decode incremental cache: {:?}", e),
+                    }
+                }), tcx.sess)
+            }))
         }
     });
     tcx.dep_graph_store.get()
