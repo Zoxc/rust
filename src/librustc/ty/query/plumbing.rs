@@ -560,6 +560,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         dep_node: &DepNode,
         dep_node_index: DepNodeIndex,
     ) {
+        panic!()/*
         use crate::ich::Fingerprint;
 
         assert!(Some(self.dep_graph().fingerprint_of(dep_node_index)) ==
@@ -576,7 +577,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         let old_hash = self.dep_graph().fingerprint_of(dep_node_index);
 
         assert!(new_hash == old_hash, "Found unstable fingerprints \
-            for {:?}", dep_node);
+            for {:?}", dep_node);*/
     }
 
     #[inline(always)]

@@ -1,6 +1,7 @@
 use rustc_data_structures::sync::worker::{Worker, WorkerExecutor};
 use rustc_data_structures::{unlikely, cold_path};
 use rustc_data_structures::indexed_vec::{IndexVec, Idx};
+use std::sync::Arc;
 use super::graph::{DepNodeIndex, DepNodeData};
 use crate::dep_graph::DepNode;
 use crate::ich::Fingerprint;
@@ -13,6 +14,8 @@ newtype_index! {
 #[derive(Debug, RustcEncodable, RustcDecodable, Default)]
 pub struct SerializedDepGraph {
     /// Maps DepNodeIndexes to the index they are stored at
+    // FIXME: Get rid of this by streaming nodes inside the interner lock,
+    // ensuring we can read all dependencies when writing?
     pub index_to_serial: IndexVec<DepNodeIndex, SerializedDepNodeIndex>,
     pub nodes: IndexVec<SerializedDepNodeIndex, SerializedNode>,
 }
@@ -63,21 +66,25 @@ impl Worker for SerializerWorker {
 }
 
 pub struct Serializer {
-    worker: WorkerExecutor<SerializerWorker>,
+    worker: Arc<WorkerExecutor<SerializerWorker>>,
 }
 
 impl Serializer {
     pub fn new(prev_node_count: usize) -> Self {
         Serializer {
-            worker: WorkerExecutor::new(SerializerWorker {
+            worker: Arc::new(WorkerExecutor::new(SerializerWorker {
                 graph: SerializedDepGraph {
                     index_to_serial: (0..prev_node_count).map(|_| {
                         SerializedDepNodeIndex::new(DepNodeIndex::INVALID.as_usize())
                     }).collect(),
                     nodes: IndexVec::with_capacity(prev_node_count),
                 }
-            })
+            })),
         }
+    }
+
+    pub(super) fn serialize(&self, index: DepNodeIndex, data: DepNodeData) {
+        self.worker.message_in_pool((index, data));
     }
 
     pub fn complete(&self) -> SerializedDepGraph {

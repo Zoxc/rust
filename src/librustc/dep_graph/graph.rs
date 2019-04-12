@@ -103,9 +103,6 @@ pub struct DepGraphData {
 
     // Used for testing, only populated when -Zquery-dep-graph is specified.
     loaded_from_cache: Lock<FxHashMap<DepNodeIndex, bool>>,
-
-    /// Produces the serialized dep graph for the next session,
-    serializer: Serializer,
 }
 
 pub fn hash_result<R>(hcx: &mut StableHashingContext<'_>, result: &R) -> Fingerprint
@@ -138,6 +135,8 @@ impl DepGraph {
     }
 
     pub fn query(&self) -> DepGraphQuery {
+        // FIXME
+        panic!()/*
         let current_dep_graph = self.data.as_ref().unwrap().current.borrow();
         let nodes: Vec<_> = current_dep_graph.data.iter().map(|n| n.node).collect();
         let mut edges = Vec::new();
@@ -149,7 +148,7 @@ impl DepGraph {
             }
         }
 
-        DepGraphQuery::new(&nodes[..], &edges[..])
+        DepGraphQuery::new(&nodes[..], &edges[..])*/
     }
 
     pub fn assert_ignored() {
@@ -468,8 +467,9 @@ impl DepGraph {
 
     #[inline]
     pub fn fingerprint_of(&self, dep_node_index: DepNodeIndex) -> Fingerprint {
+        panic!()/*
         let current = self.data.as_ref().expect("dep graph enabled").current.borrow_mut();
-        current.data[dep_node_index].fingerprint
+        current.data[dep_node_index].fingerprint*/
     }
 
     pub fn prev_fingerprint_of(&self, dep_node: &DepNode) -> Option<Fingerprint> {
@@ -533,7 +533,8 @@ impl DepGraph {
     }
 
     pub fn serialize(&self) -> SerializedDepGraph {
-        self.data.as_ref().unwrap().serializer.complete()
+        // FIXME: Can this deadlock?
+        self.data.as_ref().unwrap().current.lock().serializer.complete()
     }
 
     pub fn node_color(&self, dep_node: &DepNode) -> Option<DepNodeColor> {
@@ -866,7 +867,7 @@ impl DepGraph {
     }
 
     pub fn mark_loaded_from_cache(&self, dep_node_index: DepNodeIndex, state: bool) {
-        debug!("mark_loaded_from_cache({:?}, {})",
+        /*debug!("mark_loaded_from_cache({:?}, {})",
                self.data.as_ref().unwrap().current.borrow().data[dep_node_index].node,
                state);
 
@@ -875,13 +876,16 @@ impl DepGraph {
             .unwrap()
             .loaded_from_cache
             .borrow_mut()
-            .insert(dep_node_index, state);
+            .insert(dep_node_index, state);*/
+            panic!()
     }
 
     pub fn was_loaded_from_cache(&self, dep_node: &DepNode) -> Option<bool> {
-        let data = self.data.as_ref().unwrap();
+        /*let data = self.data.as_ref().unwrap();
         let dep_node_index = data.current.borrow().node_to_node_index[dep_node];
         data.loaded_from_cache.borrow().get(&dep_node_index).cloned()
+        */
+        panic!()
     }
 }
 
@@ -938,7 +942,8 @@ pub(super) struct DepNodeData {
 }
 
 pub(super) struct CurrentDepGraph {
-    data: IndexVec<DepNodeIndex, DepNodeData>,
+    // FIXME: Remove this by hashing anon deps inside TaskDeps?
+    nodes: IndexVec<DepNodeIndex, DepNode>,
     node_to_node_index: FxHashMap<DepNode, DepNodeIndex>,
     #[allow(dead_code)]
     forbidden_edge: Option<EdgeFilter>,
@@ -958,6 +963,9 @@ pub(super) struct CurrentDepGraph {
 
     total_read_count: u64,
     total_duplicate_read_count: u64,
+
+    /// Produces the serialized dep graph for the next session,
+    serializer: Serializer,
 }
 
 impl CurrentDepGraph {
@@ -990,7 +998,7 @@ impl CurrentDepGraph {
         let new_node_count_estimate = (prev_graph_node_count * 115) / 100;
 
         CurrentDepGraph {
-            data: IndexVec::with_capacity(new_node_count_estimate),
+            nodes: IndexVec::with_capacity(new_node_count_estimate),
             node_to_node_index: FxHashMap::with_capacity_and_hasher(
                 new_node_count_estimate,
                 Default::default(),
@@ -999,6 +1007,7 @@ impl CurrentDepGraph {
             forbidden_edge,
             total_read_count: 0,
             total_duplicate_read_count: 0,
+            serializer: Serializer::new(new_node_count_estimate),
         }
     }
 
@@ -1018,7 +1027,7 @@ impl CurrentDepGraph {
         let mut hasher = StableHasher::new();
 
         for &read in task_deps.reads.iter() {
-            let read_dep_node = self.data[read].node;
+            let read_dep_node = self.nodes[read];
 
             ::std::mem::discriminant(&read_dep_node.kind).hash(&mut hasher);
 
@@ -1054,13 +1063,14 @@ impl CurrentDepGraph {
         edges: SmallVec<[DepNodeIndex; 8]>,
         fingerprint: Fingerprint
     ) -> (DepNodeIndex, bool) {
-        debug_assert_eq!(self.node_to_node_index.len(), self.data.len());
+        debug_assert_eq!(self.node_to_node_index.len(), self.nodes.len());
 
         match self.node_to_node_index.entry(dep_node) {
             Entry::Occupied(entry) => (*entry.get(), false),
             Entry::Vacant(entry) => {
-                let dep_node_index = DepNodeIndex::new(self.data.len());
-                self.data.push(DepNodeData {
+                let dep_node_index = DepNodeIndex::new(self.nodes.len());
+                self.nodes.push(dep_node);
+                self.serializer.serialize(dep_node_index, DepNodeData {
                     node: dep_node,
                     edges,
                     fingerprint
@@ -1088,7 +1098,6 @@ impl DepGraphData {
             previous: prev_graph,
             colors: DepNodeColorMap::new(prev_graph_node_count),
             loaded_from_cache: Default::default(),
-            serializer: Serializer::new(prev_graph_node_count),
         };
 
         let non_incr_dep_node = DepNode::new_no_params(DepKind::NonIncremental);
