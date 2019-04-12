@@ -67,6 +67,7 @@ impl Compiler {
     pub fn linker(&self, tcx: TyCtxt<'_', '_', '_'>) -> Result<Linker> {
         tcx.ongoing_codegen(LOCAL_CRATE).map(|ongoing_codegen| {
             Linker {
+                sess: self.sess.clone(),
                 ongoing_codegen,
                 codegen_backend: self.codegen_backend.clone(),
             }
@@ -75,17 +76,18 @@ impl Compiler {
 }
 
 pub struct Linker {
+    sess: Lrc<Session>,
     ongoing_codegen: Lrc<ty::OngoingCodegen>,
     codegen_backend: Arc<dyn CodegenBackend + Send + Sync>,
 }
 
 impl Linker {
     pub fn link() {
-        self.codegen_backend().join_codegen_and_link(
-            OneThread::into_inner(ongoing_codegen.codegen_object.steal()),
-            self.session(),
-            &ongoing_codegen.dep_graph,
-            &ongoing_codegen.outputs,
+        self.codegen_backend.join_codegen_and_link(
+            OneThread::into_inner(self.ongoing_codegen.codegen_object.steal()),
+            &self.sess,
+            &self.ongoing_codegen.dep_graph,
+            &self.ongoing_codegen.outputs,
         ).map_err(|_| ErrorReported)?;
     }
 }
