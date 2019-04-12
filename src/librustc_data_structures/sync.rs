@@ -24,6 +24,8 @@ use std::ops::{Deref, DerefMut};
 use crate::cold_path;
 use crate::owning_ref::{Erased, OwningRef};
 
+pub mod worker;
+
 pub struct SerialScopeBuilder<'scope> {
     scope: SerialScope<'scope>,
 }
