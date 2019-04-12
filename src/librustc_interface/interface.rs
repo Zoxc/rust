@@ -59,7 +59,7 @@ impl Compiler {
     }
     pub fn enter<F, R>(self, f: F) -> R
     where
-        F: for<'tcx> FnOnce(TyCtxt<'tcx, 'tcx, 'tcx>) -> R
+        F: for<'tcx> FnOnce(&Compiler, TyCtxt<'tcx, 'tcx, 'tcx>) -> R
     {
         let r = passes::enter_global_ctxt(self, f);
         (r, Compiled)
@@ -73,6 +73,30 @@ impl Compiler {
             }
         })
     }
+    pub fn compile(self) -> Result<()> {
+        let link = self.enter(|compiler, tcx| {
+            tcx.prepare_outputs(LocalCrate)?;
+
+            if self.session().opts.output_types.contains_key(&OutputType::DepInfo)
+                && self.session().opts.output_types.len() == 1
+            {
+                return Ok(None)
+            }
+
+            tcx.lower_ast_to_hir(LocalCrate)?;
+            // Drop AST after lowering HIR to free memory
+            mem::drop(tcx.expand_macros(LocalCrate).unwrap().ast_crate.steal());
+
+            compiler.linker(tcx).map(|linker| Some(linker))
+        })?;
+
+        // Run linker outside `enter` so GlobalCtxt is freed
+        if let Some(linker) = link
+            linker.link()
+        } else {
+            Ok(())
+        }
+    }
 }
 
 pub struct Linker {
@@ -82,7 +106,7 @@ pub struct Linker {
 }
 
 impl Linker {
-    pub fn link() {
+    pub fn link() -> Result<()> {
         self.codegen_backend.join_codegen_and_link(
             OneThread::into_inner(self.ongoing_codegen.codegen_object.steal()),
             &self.sess,
