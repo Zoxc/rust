@@ -91,7 +91,7 @@ impl Compiler {
         })?;
 
         // Run linker outside `enter` so GlobalCtxt is freed
-        if let Some(linker) = link
+        if let Some(linker) = link {
             linker.link()
         } else {
             Ok(())
