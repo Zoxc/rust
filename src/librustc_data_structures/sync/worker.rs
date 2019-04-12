@@ -1,5 +1,6 @@
 use super::{Lock, Scope};
 use std::mem;
+use std::sync::Arc;
 #[cfg(parallel_compiler)]
 use crate::jobserver;
 #[cfg(parallel_compiler)]
@@ -44,10 +45,8 @@ impl<T: Worker> WorkerExecutor<T> {
             cond_var: Condvar::new(),
         }
     }
-}
 
-impl<'a, T: Worker + 'a> WorkerExecutor<T> {
-    fn run_worker(&'a self) {
+    fn run_worker(&self) {
         let mut worker = self.worker.lock();
         {
             let worker = worker.as_mut().expect("worker has completed");
@@ -60,21 +59,6 @@ impl<'a, T: Worker + 'a> WorkerExecutor<T> {
             let result = worker.take().unwrap().complete();
             *self.result.lock() = Some(result);
             self.cond_var.notify_all();
-        }
-    }
-
-    pub fn message(&'a self, scope: &Scope<'a>, msg: T::Message) {
-        let was_active = {
-            let mut queue = self.queue.lock();
-            queue.messages.push(msg);
-            let was_active = queue.active;
-            if !was_active {
-                queue.active = true;
-            }
-            was_active
-        };
-        if !was_active {
-            scope.spawn(|_| self.run_worker());
         }
     }
 
@@ -102,5 +86,33 @@ impl<'a, T: Worker + 'a> WorkerExecutor<T> {
             }
         }
         self.result.lock().take().unwrap()
+    }
+
+    fn queue_message(&self, msg: T::Message) -> bool {
+        let mut queue = self.queue.lock();
+        queue.messages.push(msg);
+        let was_active = queue.active;
+        if !was_active {
+            queue.active = true;
+        }
+        was_active
+    }
+
+    pub fn message_in_pool(self: &Arc<Self>, msg: T::Message)
+    where
+        T: 'static
+    {
+        if !self.queue_message(msg) {
+            let this = self.clone();
+            rayon::spawn(move || this.run_worker());
+        }
+    }
+}
+
+impl<'a, T: Worker + 'a> WorkerExecutor<T> {
+    pub fn message_in_scope(&'a self, scope: &Scope<'a>, msg: T::Message) {
+        if !self.queue_message(msg) {
+            scope.spawn(|_| self.run_worker());
+        }
     }
 }
