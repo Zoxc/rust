@@ -57,11 +57,36 @@ impl Compiler {
     pub fn output_file(&self) -> &Option<PathBuf> {
         &self.io.output_file
     }
-    pub fn enter<F, R>(&self, f: F) -> R
+    pub fn enter<F, R>(self, f: F) -> R
     where
         F: for<'tcx> FnOnce(TyCtxt<'tcx, 'tcx, 'tcx>) -> R
     {
-        self.global_ctxt().unwrap().peek_mut().enter(f)
+        let r = passes::enter_global_ctxt(self, f);
+        (r, Compiled)
+    }
+    pub fn linker(&self, tcx: TyCtxt<'_', '_', '_'>) -> Result<Linker> {
+        tcx.ongoing_codegen(LOCAL_CRATE).map(|ongoing_codegen| {
+            Linker {
+                ongoing_codegen,
+                codegen_backend: self.codegen_backend.clone(),
+            }
+        })
+    }
+}
+
+pub struct Linker {
+    ongoing_codegen: Lrc<ty::OngoingCodegen>,
+    codegen_backend: Arc<dyn CodegenBackend + Send + Sync>,
+}
+
+impl Linker {
+    pub fn link() {
+        self.codegen_backend().join_codegen_and_link(
+            OneThread::into_inner(ongoing_codegen.codegen_object.steal()),
+            self.session(),
+            &ongoing_codegen.dep_graph,
+            &ongoing_codegen.outputs,
+        ).map_err(|_| ErrorReported)?;
     }
 }
 

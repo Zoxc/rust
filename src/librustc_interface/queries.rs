@@ -89,6 +89,13 @@ pub(crate) struct Queries {
 }
 
 impl Compiler {
+    pub fn enter<F, R>(self, f: F) -> (R, Compiled)
+    where
+        F: for<'tcx> FnOnce(TyCtxt<'tcx, 'tcx, 'tcx>) -> R
+    {
+        self.access(|gcx| ty::tls::enter_global(gcx, |tcx| f(tcx)))
+    }
+
     pub fn global_ctxt(&self) -> Result<&Query<BoxedGlobalCtxt>> {
         self.queries.global_ctxt.compute(|| {
             Ok(passes::create_global_ctxt(
