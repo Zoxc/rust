@@ -24,6 +24,29 @@ use std::ops::{Deref, DerefMut};
 use crate::cold_path;
 use crate::owning_ref::{Erased, OwningRef};
 
+pub struct SerialScopeBuilder<'scope> {
+    scope: SerialScope<'scope>,
+}
+
+impl<'scope> SerialScopeBuilder<'scope> {
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            scope: SerialScope(PhantomData),
+        }
+    }
+
+    #[inline]
+    pub fn scope<OP, R>(&'scope mut self, f: OP) -> R
+    where
+        OP: FnOnce(&'scope SerialScope<'scope>) -> R + 'scope + Send,
+        R: Send,
+    {
+        f(&self.scope)
+    }
+}
+
+#[inline]
 pub fn serial_join<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB)
     where A: FnOnce() -> RA,
           B: FnOnce() -> RB
@@ -31,20 +54,22 @@ pub fn serial_join<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB)
     (oper_a(), oper_b())
 }
 
-pub struct SerialScope;
+pub struct SerialScope<'scope>(PhantomData<&'scope ()>);
 
-impl SerialScope {
+impl<'scope> SerialScope<'scope> {
+    #[inline]
     pub fn spawn<F>(&self, f: F)
-        where F: FnOnce(&SerialScope)
+        where F: FnOnce(&SerialScope<'scope>)
     {
         f(self)
     }
 }
 
-pub fn serial_scope<F, R>(f: F) -> R
-    where F: FnOnce(&SerialScope) -> R
+#[inline]
+pub fn serial_scope<'scope, F, R>(f: F) -> R
+    where F: FnOnce(&SerialScope<'scope>) -> R
 {
-    f(&SerialScope)
+    f(&SerialScope(PhantomData))
 }
 
 pub use std::sync::atomic::Ordering::SeqCst;
@@ -183,6 +208,8 @@ cfg_if! {
 
         pub use self::serial_join as join;
         pub use self::serial_scope as scope;
+        pub use self::SerialScope as Scope;
+        pub use self::SerialScopeBuilder as ScopeBuilder;
 
         #[macro_export]
         macro_rules! parallel {
@@ -369,7 +396,8 @@ cfg_if! {
 
         use std;
         use std::thread;
-        pub use rayon::{join, scope};
+        pub use rayon::{join, scope, Scope};
+        pub use rayon_core::{ScopeBuilder};
 
         /// Runs a list of blocks in parallel. The first block is executed immediately on
         /// the current thread. Use that for the longest running block.

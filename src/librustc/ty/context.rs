@@ -52,7 +52,10 @@ use rustc_data_structures::stable_hasher::{HashStable, hash_stable_hashmap,
                                            StableVec};
 use arena::{TypedArena, SyncDroplessArena};
 use rustc_data_structures::indexed_vec::{Idx, IndexVec};
-use rustc_data_structures::sync::{self, Lrc, Lock, WorkerLocal, AtomicOnce, Once, OneThread};
+use rustc_data_structures::sync::{
+    self, Lrc, Lock, WorkerLocal, AtomicOnce, Once, OneThread,
+    Scope,
+};
 use std::any::Any;
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -1067,6 +1070,8 @@ pub struct GlobalCtxt<'tcx> {
 
     layout_interner: Lock<FxHashMap<&'tcx LayoutDetails, ()>>,
 
+    pub scope: &'tcx Scope<'tcx>,
+
     /// A general purpose channel to throw data out the back towards LLVM worker
     /// threads.
     ///
@@ -1226,6 +1231,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         cstore_rc: &'tcx (dyn Any + sync::Sync),
         local_providers: ty::query::Providers<'tcx>,
         extern_providers: ty::query::Providers<'tcx>,
+        scope: &'tcx Scope<'tcx>,
         arenas: &'tcx AllArenas<'tcx>,
         crate_name: Option<String>,
         codegen_backend: Box<dyn Any + Send + Sync>,
@@ -1269,6 +1275,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
             stability_interner: Default::default(),
             allocation_interner: Default::default(),
             alloc_map: Lock::new(interpret::AllocMap::new()),
+            scope,
             tx_to_llvm_workers: Lock::new(tx),
             rx_to_llvm_workers: Steal::new(OneThread::new(rx)),
             io,

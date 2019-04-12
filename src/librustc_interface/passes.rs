@@ -26,7 +26,9 @@ use rustc_data_structures::{box_region_allow_access, declare_box_region_type, pa
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::stable_hasher::{StableHasher, StableVec};
 use rustc_data_structures::fx::FxHashMap;
-use rustc_data_structures::sync::{self, Lrc, Lock, OneThread, ParallelIterator, par_iter};
+use rustc_data_structures::sync::{
+    self, Lrc, Lock, OneThread, ParallelIterator, par_iter, ScopeBuilder
+};
 use rustc_incremental;
 use rustc_incremental::open_load_result;
 use rustc_metadata::creader::CrateLoader;
@@ -960,7 +962,7 @@ where
     let sess = &*compiler.session();
     let cstore = &compiler.cstore.clone();
 
-    let global_ctxt: Option<GlobalCtxt<'_>>;
+    let mut global_ctxt: Option<GlobalCtxt<'_>> = None;
     let arenas = AllArenas::new();
 
     let mut local_providers = ty::query::Providers::default();
@@ -971,30 +973,35 @@ where
     default_provide_extern(&mut extern_providers);
     codegen_backend.provide_extern(&mut extern_providers);
 
-    let gcx = TyCtxt::create_global_ctxt(
-        sess,
-        &**cstore,
-        cstore,
-        local_providers,
-        extern_providers,
-        &arenas,
-        compiler.crate_name.clone(),
-        Box::new(codegen_backend),
-        compiler.io.clone(),
-    );
+    let mut scope_builder = ScopeBuilder::new();
 
-    global_ctxt = Some(gcx);
-    let gcx = global_ctxt.as_ref().unwrap();
+    scope_builder.scope(|scope| {
+        let gcx = TyCtxt::create_global_ctxt(
+            sess,
+            &**cstore,
+            cstore,
+            local_providers,
+            extern_providers,
+            scope,
+            &arenas,
+            compiler.crate_name.clone(),
+            Box::new(codegen_backend),
+            compiler.io.clone(),
+        );
 
-    let result = ty::tls::enter_global(gcx, |tcx| f(compiler, tcx));
+        global_ctxt = Some(gcx);
+        let gcx = global_ctxt.as_ref().unwrap();
 
-    gcx.queries.record_computed_queries(sess);
+        let result = ty::tls::enter_global(gcx, |tcx| f(compiler, tcx));
 
-    if sess.opts.debugging_opts.query_stats {
-        gcx.queries.print_stats();
-    }
+        gcx.queries.record_computed_queries(sess);
 
-    result
+        if sess.opts.debugging_opts.query_stats {
+            gcx.queries.print_stats();
+        }
+
+        result
+    })
 }
 
 fn hir_map<'tcx>(
