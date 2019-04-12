@@ -1,8 +1,9 @@
-//! The data that we will serialize and deserialize.
-
+use rustc_data_structures::sync::worker::{Worker, WorkerExecutor};
+use rustc_data_structures::{unlikely, cold_path};
+use rustc_data_structures::indexed_vec::{IndexVec, Idx};
+use super::graph::{DepNodeIndex, DepNodeData};
 use crate::dep_graph::DepNode;
 use crate::ich::Fingerprint;
-use rustc_data_structures::indexed_vec::{IndexVec, Idx};
 
 newtype_index! {
     pub struct SerializedDepNodeIndex { .. }
@@ -11,26 +12,75 @@ newtype_index! {
 /// Data for use when recompiling the **current crate**.
 #[derive(Debug, RustcEncodable, RustcDecodable, Default)]
 pub struct SerializedDepGraph {
-    /// The set of all DepNodes in the graph
-    pub nodes: IndexVec<SerializedDepNodeIndex, DepNode>,
-    /// The set of all Fingerprints in the graph. Each Fingerprint corresponds to
-    /// the DepNode at the same index in the nodes vector.
-    pub fingerprints: IndexVec<SerializedDepNodeIndex, Fingerprint>,
-    /// For each DepNode, stores the list of edges originating from that
-    /// DepNode. Encoded as a [start, end) pair indexing into edge_list_data,
-    /// which holds the actual DepNodeIndices of the target nodes.
-    pub edge_list_indices: IndexVec<SerializedDepNodeIndex, (u32, u32)>,
-    /// A flattened list of all edge targets in the graph. Edge sources are
-    /// implicit in edge_list_indices.
-    pub edge_list_data: Vec<SerializedDepNodeIndex>,
+    /// Maps DepNodeIndexes to the index they are stored at
+    pub index_to_serial: IndexVec<DepNodeIndex, SerializedDepNodeIndex>,
+    pub nodes: IndexVec<SerializedDepNodeIndex, SerializedNode>,
 }
 
-impl SerializedDepGraph {
-    #[inline]
-    pub fn edge_targets_from(&self,
-                             source: SerializedDepNodeIndex)
-                             -> &[SerializedDepNodeIndex] {
-        let targets = self.edge_list_indices[source];
-        &self.edge_list_data[targets.0 as usize..targets.1 as usize]
+#[derive(Debug, RustcEncodable, RustcDecodable)]
+pub struct SerializedNode {
+    pub node: DepNode,
+    pub deps: Vec<DepNodeIndex>,
+    pub fingerprint: Fingerprint,
+}
+
+#[derive(Debug, RustcEncodable, RustcDecodable, Default)]
+struct SerializerWorker {
+    graph: SerializedDepGraph,
+}
+
+impl SerializerWorker {
+    fn write_index(&mut self, index: DepNodeIndex, value: SerializedDepNodeIndex) {
+        if unlikely!(self.graph.index_to_serial.len() <= index.as_usize()) {
+            cold_path(|| {
+                self.graph.index_to_serial.resize(
+                    index.as_usize() + 500,
+                    SerializedDepNodeIndex::new(DepNodeIndex::INVALID.as_usize()),
+                );
+            });
+        }
+        self.graph.index_to_serial[index] = value;
+    }
+}
+
+impl Worker for SerializerWorker {
+    type Message = (DepNodeIndex, DepNodeData);
+    type Result = SerializedDepGraph;
+
+    fn message(&mut self, (index, data): (DepNodeIndex, DepNodeData)) {
+        let serial_index = SerializedDepNodeIndex::new(self.graph.nodes.len());
+        self.write_index(index, serial_index);
+        self.graph.nodes.push(SerializedNode {
+            node: data.node,
+            deps: data.edges.into_iter().collect(),
+            fingerprint: data.fingerprint,
+        });
+    }
+
+    fn complete(self) -> SerializedDepGraph {
+        self.graph
+    }
+}
+
+pub struct Serializer {
+    worker: WorkerExecutor<SerializerWorker>,
+}
+
+impl Serializer {
+    pub fn new(prev_node_count: usize) -> Self {
+        Serializer {
+            worker: WorkerExecutor::new(SerializerWorker {
+                graph: SerializedDepGraph {
+                    index_to_serial: (0..prev_node_count).map(|_| {
+                        SerializedDepNodeIndex::new(DepNodeIndex::INVALID.as_usize())
+                    }).collect(),
+                    nodes: IndexVec::with_capacity(prev_node_count),
+                }
+            })
+        }
+    }
+
+    pub fn complete(&self) -> SerializedDepGraph {
+        self.worker.complete()
     }
 }

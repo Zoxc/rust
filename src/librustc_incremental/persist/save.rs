@@ -148,20 +148,19 @@ fn encode_dep_graph(tcx: TyCtxt<'_, '_, '_>,
         }
 
         let total_node_count = serialized_graph.nodes.len();
-        let total_edge_count = serialized_graph.edge_list_data.len();
+        let total_edge_count: usize = serialized_graph.nodes.iter().map(|d| d.deps.len()).sum();
 
         let mut counts: FxHashMap<_, Stat> = FxHashMap::default();
 
-        for (i, &node) in serialized_graph.nodes.iter_enumerated() {
-            let stat = counts.entry(node.kind).or_insert(Stat {
-                kind: node.kind,
+        for node in serialized_graph.nodes.iter() {
+            let stat = counts.entry(node.node.kind).or_insert(Stat {
+                kind: node.node.kind,
                 node_counter: 0,
                 edge_counter: 0,
             });
 
             stat.node_counter += 1;
-            let (edge_start, edge_end) = serialized_graph.edge_list_indices[i];
-            stat.edge_counter += (edge_end - edge_start) as u64;
+            stat.edge_counter += node.deps.len() as u64;
         }
 
         let mut counts: Vec<_> = counts.values().cloned().collect();

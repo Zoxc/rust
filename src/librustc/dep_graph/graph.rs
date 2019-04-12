@@ -17,7 +17,7 @@ use super::debug::EdgeFilter;
 use super::dep_node::{DepNode, DepKind, WorkProductId};
 use super::query::DepGraphQuery;
 use super::safe::DepGraphSafe;
-use super::serialized::{SerializedDepGraph, SerializedDepNodeIndex};
+use super::serialized::{SerializedDepGraph, SerializedDepNodeIndex, Serializer};
 use super::prev::PreviousDepGraph;
 
 pub type WorkProductMap = FxHashMap<WorkProductId, WorkProduct>;
@@ -103,6 +103,9 @@ pub struct DepGraphData {
 
     // Used for testing, only populated when -Zquery-dep-graph is specified.
     loaded_from_cache: Lock<FxHashMap<DepNodeIndex, bool>>,
+
+    /// Produces the serialized dep graph for the next session,
+    serializer: Serializer,
 }
 
 pub fn hash_result<R>(hcx: &mut StableHashingContext<'_>, result: &R) -> Fingerprint
@@ -530,40 +533,7 @@ impl DepGraph {
     }
 
     pub fn serialize(&self) -> SerializedDepGraph {
-        let current_dep_graph = self.data.as_ref().unwrap().current.borrow();
-
-        let fingerprints: IndexVec<SerializedDepNodeIndex, _> =
-            current_dep_graph.data.iter().map(|d| d.fingerprint).collect();
-        let nodes: IndexVec<SerializedDepNodeIndex, _> =
-            current_dep_graph.data.iter().map(|d| d.node).collect();
-
-        let total_edge_count: usize = current_dep_graph.data.iter()
-                                                            .map(|d| d.edges.len())
-                                                            .sum();
-
-        let mut edge_list_indices = IndexVec::with_capacity(nodes.len());
-        let mut edge_list_data = Vec::with_capacity(total_edge_count);
-
-        for (current_dep_node_index, edges) in current_dep_graph.data.iter_enumerated()
-                                                                .map(|(i, d)| (i, &d.edges)) {
-            let start = edge_list_data.len() as u32;
-            // This should really just be a memcpy :/
-            edge_list_data.extend(edges.iter().map(|i| SerializedDepNodeIndex::new(i.index())));
-            let end = edge_list_data.len() as u32;
-
-            debug_assert_eq!(current_dep_node_index.index(), edge_list_indices.len());
-            edge_list_indices.push((start, end));
-        }
-
-        debug_assert!(edge_list_data.len() <= ::std::u32::MAX as usize);
-        debug_assert_eq!(edge_list_data.len(), total_edge_count);
-
-        SerializedDepGraph {
-            nodes,
-            fingerprints,
-            edge_list_indices,
-            edge_list_data,
-        }
+        self.data.as_ref().unwrap().serializer.complete()
     }
 
     pub fn node_color(&self, dep_node: &DepNode) -> Option<DepNodeColor> {
@@ -961,10 +931,10 @@ pub enum WorkProductFileKind {
 }
 
 #[derive(Clone)]
-struct DepNodeData {
-    node: DepNode,
-    edges: SmallVec<[DepNodeIndex; 8]>,
-    fingerprint: Fingerprint,
+pub(super) struct DepNodeData {
+    pub(super) node: DepNode,
+    pub(super) edges: SmallVec<[DepNodeIndex; 8]>,
+    pub(super) fingerprint: Fingerprint,
 }
 
 pub(super) struct CurrentDepGraph {
@@ -1118,6 +1088,7 @@ impl DepGraphData {
             previous: prev_graph,
             colors: DepNodeColorMap::new(prev_graph_node_count),
             loaded_from_cache: Default::default(),
+            serializer: Serializer::new(prev_graph_node_count),
         };
 
         let non_incr_dep_node = DepNode::new_no_params(DepKind::NonIncremental);
