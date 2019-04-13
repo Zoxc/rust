@@ -5,6 +5,7 @@ use std::sync::Arc;
 use super::graph::{DepNodeIndex, DepNodeData};
 use crate::dep_graph::DepNode;
 use crate::ich::Fingerprint;
+use crate::ty;
 
 newtype_index! {
     pub struct SerializedDepNodeIndex { .. }
@@ -51,6 +52,8 @@ impl Worker for SerializerWorker {
     type Result = SerializedDepGraph;
 
     fn message(&mut self, (index, data): (DepNodeIndex, DepNodeData)) {
+        eprintln!("SerializerWorker TLV {:x}", ty::tls::get_tlv());
+        eprintln!("message {:?} {:?}, nodes {:?}", index, data, self.graph.nodes.len());
         let serial_index = SerializedDepNodeIndex::new(self.graph.nodes.len());
         self.write_index(index, serial_index);
         self.graph.nodes.push(SerializedNode {
@@ -71,7 +74,7 @@ pub struct Serializer {
 
 impl Serializer {
     pub fn new(prev_node_count: usize) -> Self {
-        Serializer {
+        let r = Serializer {
             worker: Arc::new(WorkerExecutor::new(SerializerWorker {
                 graph: SerializedDepGraph {
                     index_to_serial: (0..prev_node_count).map(|_| {
@@ -80,14 +83,28 @@ impl Serializer {
                     nodes: IndexVec::with_capacity(prev_node_count),
                 }
             })),
-        }
+        };
+        eprintln!("creating worker exec {:x}", &*r.worker as *const _ as usize);
+        r
     }
 
     pub(super) fn serialize(&self, index: DepNodeIndex, data: DepNodeData) {
+        eprintln!("Serializer TLV {:x}", ty::tls::get_tlv());
+        
+        /*ty::tls::with(|tcx| {
+            eprintln!("serialize with worker exec {:x} tcx {:x}", 
+                &*self.worker as *const _ as usize,
+                *tcx as *const _ as usize);
+        });*/
         self.worker.message_in_pool((index, data));
+        
+        //ty::tls::with(|tcx| self.worker.message_in_scope(tcx.scope, (index, data)));
     }
 
     pub fn complete(&self) -> SerializedDepGraph {
-        self.worker.complete()
+        eprintln!("ser-start");
+        let r = self.worker.complete();
+        eprintln!("ser-start");
+        r
     }
 }

@@ -128,6 +128,20 @@ impl DepGraph {
         }
     }
 
+    pub fn setup(&mut self) {
+        self.data.as_ref().map(|data| {
+            let non_incr_dep_node = DepNode::new_no_params(DepKind::NonIncremental);
+
+            // Allocate the NonIncremental node
+            data.current.lock().alloc_node(non_incr_dep_node, smallvec![], Fingerprint::ZERO);
+
+            data.previous.node_to_index_opt(&non_incr_dep_node).map(|prev_index| {
+                // Color previous NonIncremental node as red
+                data.colors.insert(prev_index, DepNodeColor::Red);
+            });
+        });
+    }
+
     /// Returns `true` if we are actually building the full dep-graph, and `false` otherwise.
     #[inline]
     pub fn is_fully_enabled(&self) -> bool {
@@ -934,7 +948,7 @@ pub enum WorkProductFileKind {
     BytecodeCompressed,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct DepNodeData {
     pub(super) node: DepNode,
     pub(super) edges: SmallVec<[DepNodeIndex; 8]>,

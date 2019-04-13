@@ -11,7 +11,7 @@ crate-type = ["dylib"]
 
 [dependencies]
 log = "0.4"
-rayon = { version = "0.1.1", package = "rustc-rayon" }
+rayon = { git = "https://github.com/Zoxc/rayon.git", branch = "alt_scope", package = "rustc-rayon" }
 smallvec = { version = "0.6.7", features = ["union", "may_dangle"] }
 scoped-tls = "1.0"
 syntax = { path = "../libsyntax" }

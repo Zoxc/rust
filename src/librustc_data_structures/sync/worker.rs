@@ -47,18 +47,32 @@ impl<T: Worker> WorkerExecutor<T> {
     }
 
     fn run_worker(&self) {
+        eprintln!("running worker exec {:x}", self as *const _ as usize);
         let mut worker = self.worker.lock();
-        {
-            let worker = worker.as_mut().expect("worker has completed");
-            let msgs = mem::replace(&mut self.queue.lock().messages, Vec::new());
+        let worker_ref = worker.as_mut().expect("worker has completed");
+        eprintln!("worker exec got lock {:x}", self as *const _ as usize);
+
+        loop {
+            let msgs = {
+                let mut queue = self.queue.lock();
+                let mut msgs = mem::replace(&mut queue.messages, Vec::new());
+                if msgs.is_empty() {
+                    queue.active = false;
+                    if queue.complete {
+                        eprintln!("completing");
+                        let result = worker.take().unwrap().complete();
+                        *self.result.lock() = Some(result);
+                        self.cond_var.notify_all();
+                    } else {
+                        eprintln!("no completing");
+                    }
+                    break;
+                }
+                msgs
+            };
             for msg in msgs {
-                worker.message(msg);
+                worker_ref.message(msg);
             }
-        }
-        if self.queue.lock().complete {
-            let result = worker.take().unwrap().complete();
-            *self.result.lock() = Some(result);
-            self.cond_var.notify_all();
         }
     }
 
@@ -74,9 +88,11 @@ impl<T: Worker> WorkerExecutor<T> {
             was_active
         };
         if !was_active {
+            eprintln!("compl-inactive");
             // Just run the worker on the current thread
             self.run_worker();
         } else {
+            eprintln!("compl-active");
             #[cfg(parallel_compiler)]
             {
                 // Wait for the result

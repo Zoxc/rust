@@ -371,12 +371,14 @@ impl fmt::Debug for DepNode {
 
         crate::ty::tls::with_opt(|opt_tcx| {
             if let Some(tcx) = opt_tcx {
-                if let Some(def_id) = self.extract_def_id(tcx) {
-                    write!(f, "{}", tcx.def_path_debug_str(def_id))?;
-                } else if let Some(ref s) = tcx.dep_graph().dep_node_debug_str(*self) {
-                    write!(f, "{}", s)?;
-                } else {
-                    write!(f, "{}", self.hash)?;
+                if tcx.is_hir_lowered() {
+                    if let Some(def_id) = self.extract_def_id(tcx) {
+                        write!(f, "{}", tcx.def_path_debug_str(def_id))?;
+                    } else if let Some(ref s) = tcx.dep_graph().dep_node_debug_str(*self) {
+                        write!(f, "{}", s)?;
+                    } else {
+                        write!(f, "{}", self.hash)?;
+                    }
                 }
             } else {
                 write!(f, "{}", self.hash)?;
