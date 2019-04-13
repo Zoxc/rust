@@ -481,7 +481,7 @@ impl DepGraph {
     }
 
     #[inline]
-    pub fn fingerprint_of(&self, dep_node_index: DepNodeIndex) -> Fingerprint {
+    pub fn fingerprint_of(&self, _dep_node_index: DepNodeIndex) -> Fingerprint {
         panic!()/*
         let current = self.data.as_ref().expect("dep graph enabled").current.borrow_mut();
         current.data[dep_node_index].fingerprint*/
@@ -881,7 +881,7 @@ impl DepGraph {
         }
     }
 
-    pub fn mark_loaded_from_cache(&self, dep_node_index: DepNodeIndex, state: bool) {
+    pub fn mark_loaded_from_cache(&self, _dep_node_index: DepNodeIndex, _state: bool) {
         /*debug!("mark_loaded_from_cache({:?}, {})",
                self.data.as_ref().unwrap().current.borrow().data[dep_node_index].node,
                state);
@@ -895,7 +895,7 @@ impl DepGraph {
             panic!()
     }
 
-    pub fn was_loaded_from_cache(&self, dep_node: &DepNode) -> Option<bool> {
+    pub fn was_loaded_from_cache(&self, _dep_node: &DepNode) -> Option<bool> {
         /*let data = self.data.as_ref().unwrap();
         let dep_node_index = data.current.borrow().node_to_node_index[dep_node];
         data.loaded_from_cache.borrow().get(&dep_node_index).cloned()

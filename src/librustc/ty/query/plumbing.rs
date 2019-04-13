@@ -556,9 +556,9 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     #[cold]
     fn incremental_verify_ich<Q: QueryDescription<'gcx>>(
         self,
-        result: &Q::Value,
-        dep_node: &DepNode,
-        dep_node_index: DepNodeIndex,
+        _result: &Q::Value,
+        _dep_node: &DepNode,
+        _dep_node_index: DepNodeIndex,
     ) {
         panic!()/*
         use crate::ich::Fingerprint;
