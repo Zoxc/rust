@@ -10,12 +10,14 @@ use rustc::ty::query::OnDiskCache;
 use rustc::util::common::time_ext;
 use rustc_serialize::Decodable as RustcDecodable;
 use rustc_serialize::opaque::Decoder;
+use rustc_serialize::Encodable;
 use std::path::Path;
 
 use super::data::*;
 use super::fs::*;
 use super::file_format;
 use super::work_product;
+use super::save::save_in;
 
 pub fn open_load_result(
     result: LoadResult<DepGraphData>,
@@ -24,7 +26,7 @@ pub fn open_load_result(
     match result {
         LoadResult::Error { message } => {
             sess.warn(&message);
-            DepGraphData::empty()
+            DepGraphData::empty(&temp_dep_graph_path_from(&sess.incr_comp_session_dir()))
         },
         LoadResult::DataOutOfDate => {
             if let Err(err) = delete_all_session_dir_contents(sess) {
@@ -32,7 +34,7 @@ pub fn open_load_result(
                                     incremental compilation session directory contents `{}`: {}.",
                                     dep_graph_path(sess).display(), err));
             }
-            DepGraphData::empty()
+            DepGraphData::empty(&temp_dep_graph_path_from(&sess.incr_comp_session_dir()))
         }
         LoadResult::Ok { data } => data
     }
@@ -70,18 +72,20 @@ pub fn load_dep_graph(sess: &Session) -> DepGraphFuture {
 
     let time_passes = sess.time_passes();
 
-    if sess.opts.incremental.is_none() {
-        // No incremental compilation.
-        return MaybeAsync::Sync(LoadResult::Ok {
-            data: DepGraphData::empty(),
-        });
-    }
+    assert!(sess.opts.incremental.is_some());
 
     // Calling `sess.incr_comp_session_dir()` will panic if `sess.opts.incremental.is_none()`.
     // Fortunately, we just checked that this isn't the case.
     let path = dep_graph_path_from(&sess.incr_comp_session_dir());
+    let temp_path = temp_dep_graph_path_from(&sess.incr_comp_session_dir());
     let report_incremental_info = sess.opts.debugging_opts.incremental_info;
     let expected_hash = sess.opts.dep_tracking_hash();
+
+    // Write the file header to the temp file
+    save_in(sess, temp_path.clone(), |encoder| {
+        // Encode the commandline arguments hash
+        sess.opts.dep_tracking_hash().encode(encoder).unwrap();
+    });
 
     let mut prev_work_products = FxHashMap::default();
 
@@ -155,7 +159,8 @@ pub fn load_dep_graph(sess: &Session) -> DepGraphFuture {
 
                     LoadResult::Ok { data: DepGraphData::new(
                         PreviousDepGraph::new(dep_graph),
-                        prev_work_products
+                        prev_work_products,
+                        &temp_path,
                     ) }
                 }
             }

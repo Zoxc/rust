@@ -24,6 +24,7 @@ pub fn save_dep_graph<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
         }
 
         let query_cache_path = query_cache_path(sess);
+        let temp_dep_graph_path = temp_dep_graph_path_from(&sess.incr_comp_session_dir());
         let dep_graph_path = dep_graph_path(sess);
 
         join(move || {
@@ -35,14 +36,8 @@ pub fn save_dep_graph<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) {
                 });
             }
         }, || {
-            time(sess, "persist dep-graph", || {
-                save_in(sess,
-                        dep_graph_path,
-                        |e| {
-                            time(sess, "encode dep-graph", || {
-                                encode_dep_graph(tcx, e)
-                            })
-                        });
+            time(sess, "swap dep-graph", || {
+                swap_dep_graph(tcx, temp_dep_graph_path, dep_graph_path)
             });
         });
 
@@ -86,7 +81,7 @@ pub fn save_work_product_index(sess: &Session,
     });
 }
 
-fn save_in<F>(sess: &Session, path_buf: PathBuf, encode: F)
+pub(super) fn save_in<F>(sess: &Session, path_buf: PathBuf, encode: F)
     where F: FnOnce(&mut Encoder)
 {
     debug!("save: storing data in {}", path_buf.display());
@@ -129,16 +124,35 @@ fn save_in<F>(sess: &Session, path_buf: PathBuf, encode: F)
     }
 }
 
-fn encode_dep_graph(tcx: TyCtxt<'_, '_, '_>,
-                    encoder: &mut Encoder) {
-    // First encode the commandline arguments hash
-    tcx.sess.opts.dep_tracking_hash().encode(encoder).unwrap();
-
+fn swap_dep_graph(tcx: TyCtxt<'_, '_, '_>, temp: PathBuf, old: PathBuf) {
+    let sess = tcx.sess;
     // Encode the graph data.
     let serialized_graph = time(tcx.sess, "getting serialized graph", || {
-        tcx.dep_graph().serialize2()
+        tcx.dep_graph().serialize();
     });
 
+    // delete the old dep-graph, if any
+    // Note: It's important that we actually delete the old file and not just
+    // truncate and overwrite it, since it might be a shared hard-link, the
+    // underlying data of which we don't want to modify
+    if old.exists() {
+        match fs::remove_file(&old) {
+            Ok(()) => {
+                debug!("save: remove old file");
+            }
+            Err(err) => {
+                sess.err(&format!("unable to delete old dep-graph at `{}`: {}",
+                                  old.display(),
+                                  err));
+                return;
+            }
+        }
+    }
+
+    fs::rename(temp, old).expect("unable to rename temp dep graph");
+
+
+/*
     if tcx.sess.opts.debugging_opts.incremental_info {
         #[derive(Clone)]
         struct Stat {
@@ -212,10 +226,7 @@ fn encode_dep_graph(tcx: TyCtxt<'_, '_, '_>,
         println!("{}", SEPARATOR);
         println!("[incremental]");
     }
-
-    time(tcx.sess, "encoding serialized graph", || {
-        serialized_graph.encode(encoder).unwrap();
-    });
+*/
 }
 
 fn encode_work_product_index(work_products: &FxHashMap<WorkProductId, WorkProduct>,

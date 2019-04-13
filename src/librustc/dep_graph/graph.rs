@@ -5,6 +5,7 @@ use rustc_data_structures::indexed_vec::{Idx, IndexVec};
 use smallvec::SmallVec;
 use rustc_data_structures::sync::{Lrc, Lock, AtomicU32, Ordering};
 use std::env;
+use std::path::Path;
 use std::hash::Hash;
 use std::collections::hash_map::Entry;
 use crate::ty::{self, TyCtxt};
@@ -17,7 +18,7 @@ use super::debug::EdgeFilter;
 use super::dep_node::{DepNode, DepKind, WorkProductId};
 use super::query::DepGraphQuery;
 use super::safe::DepGraphSafe;
-use super::serialized::{SerializedDepGraph, SerializedDepNodeIndex, Serializer};
+use super::serialized::{SerializedDepNodeIndex, Serializer};
 use super::prev::PreviousDepGraph;
 
 pub type WorkProductMap = FxHashMap<WorkProductId, WorkProduct>;
@@ -546,7 +547,7 @@ impl DepGraph {
         }
     }
 
-    pub fn serialize2(&self) -> SerializedDepGraph {
+    pub fn serialize(&self) {
         // FIXME: Can this deadlock?
         self.data.as_ref().unwrap().current.lock().serializer.complete()
     }
@@ -983,7 +984,7 @@ pub(super) struct CurrentDepGraph {
 }
 
 impl CurrentDepGraph {
-    fn new(prev_graph_node_count: usize) -> CurrentDepGraph {
+    fn new(prev_graph_node_count: usize, path: &Path) -> CurrentDepGraph {
         use std::time::{SystemTime, UNIX_EPOCH};
 
         let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
@@ -1021,7 +1022,7 @@ impl CurrentDepGraph {
             forbidden_edge,
             total_read_count: 0,
             total_duplicate_read_count: 0,
-            serializer: Serializer::new(new_node_count_estimate),
+            serializer: Serializer::new(new_node_count_estimate, path),
         }
     }
 
@@ -1099,14 +1100,15 @@ impl CurrentDepGraph {
 impl DepGraphData {
     pub fn new(
         prev_graph: PreviousDepGraph,
-        prev_work_products: FxHashMap<WorkProductId, WorkProduct>
+        prev_work_products: FxHashMap<WorkProductId, WorkProduct>,
+        path: &Path,
     ) -> Self {
         let prev_graph_node_count = prev_graph.node_count();
 
         let mut data = DepGraphData {
             previous_work_products: prev_work_products,
             dep_node_debug: Default::default(),
-            current: Lock::new(CurrentDepGraph::new(prev_graph_node_count)),
+            current: Lock::new(CurrentDepGraph::new(prev_graph_node_count, path)),
             emitted_diagnostics: Default::default(),
             emitted_diagnostics_cond_var: Condvar::new(),
             previous: prev_graph,
@@ -1127,8 +1129,8 @@ impl DepGraphData {
         data
     }
 
-    pub fn empty() -> Self {
-        DepGraphData::new(Default::default(), Default::default())
+    pub fn empty(path: &Path) -> Self {
+        DepGraphData::new(Default::default(), Default::default(), path)
     }
 
     fn read_index(&self, source: DepNodeIndex) {

@@ -57,7 +57,6 @@ impl<T: Worker> WorkerExecutor<T> {
                 if msgs.is_empty() {
                     queue.active = false;
                     if queue.complete {
-                        eprintln!("completing");
                         let result = worker.take().unwrap().complete();
                         *self.result.lock() = Some(result);
                         self.cond_var.notify_all();
@@ -84,11 +83,9 @@ impl<T: Worker> WorkerExecutor<T> {
             was_active
         };
         if !was_active {
-            eprintln!("compl-inactive");
             // Just run the worker on the current thread
             self.run_worker();
         } else {
-            eprintln!("compl-active");
             #[cfg(parallel_compiler)]
             {
                 // Wait for the result
