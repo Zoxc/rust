@@ -2,7 +2,7 @@ use rustc_data_structures::sync::worker::{Worker, WorkerExecutor};
 use rustc_data_structures::{unlikely, cold_path};
 use rustc_data_structures::indexed_vec::{IndexVec, Idx};
 use rustc_serialize::opaque::Encoder;
-use rustc_serialize::Encodable;
+use rustc_serialize::{Decodable, Decoder, Encodable};
 use std::sync::Arc;
 use std::mem;
 use std::path::Path;
@@ -17,7 +17,7 @@ newtype_index! {
 }
 
 /// Data for use when recompiling the **current crate**.
-#[derive(Debug, RustcEncodable, RustcDecodable, Default)]
+#[derive(Debug, Default)]
 pub struct SerializedDepGraph {
     /// Maps DepNodeIndexes to the index they are stored at
     // FIXME: Get rid of this by streaming nodes inside the interner lock,
@@ -26,7 +26,27 @@ pub struct SerializedDepGraph {
     pub index_to_serial: IndexVec<DepNodeIndex, SerializedDepNodeIndex>,
 }
 
-#[derive(Debug, RustcEncodable, RustcDecodable)]
+impl Decodable for SerializedDepGraph {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        let nodes = Vec::new();
+        loop {
+            let count = d.read_usize()?;
+            if count == 0 {
+                break;
+            }
+            for _ in 0..count {
+                nodes.push(d.decode()?);
+            }
+        }
+        let index_to_serial = d.decode()?;
+        SerializedDepGraph {
+            nodes,
+            index_to_serial,
+        }
+    }
+}
+
+#[derive(Debug, RustcDecodable)]
 pub struct SerializedNode {
     pub node: DepNode,
     pub deps: Vec<DepNodeIndex>,
@@ -58,28 +78,36 @@ impl Worker for SerializerWorker {
     type Result = ();
 
     fn message(&mut self, nodes: Vec<(DepNodeIndex, DepNodeData)>) {
+        use std::time::Instant;
         let now = Instant::now();
         let mut encoder = Encoder::new(Vec::with_capacity(nodes.len() * BYTES_PER_NODE));
+        assert!(!nodes.is_empty());
+        encoder.emit_usize(nodes.len());
         for (index, data) in nodes {
             let serial_index = SerializedDepNodeIndex::from_u32(self.count);
             self.count += 1;
             self.write_index(index, serial_index);
-            SerializedNode {
-                node: data.node,
-                deps: data.edges.into_iter().collect(),
-                fingerprint: data.fingerprint,
-            }.encode(&mut encoder);
+            data.node.encode(&mut encoder);
+            data.deps.encode(&mut encoder);
+            data.fingerprint.encode(&mut encoder);
         }
         self.file.write_all(&encoder.into_inner()).expect("unable to write to temp dep graph");
-        print_time_passes_entry(true, "SerializerWorker", now.elapsed());
+        eprintln!("SerializerWorker {}", now.elapsed().as_secs_f32());
     }
 
-    fn complete(self) {
-        self.file.sync_data().expect("unable to write to temp dep graph");
+    fn complete(mut self) {
+        use std::time::Instant;
+        let now = Instant::now();
+        let bytes = self.index_to_serial.len() * mem::size_of::<SerializedDepNodeIndex>();
+        let mut encoder = Encoder::new(Vec::with_capacity(bytes));
+        encoder.emit_usize(0);
+        self.index_to_serial.encode(&mut encoder);
+        self.file.write_all(&encoder.into_inner()).expect("unable to write to temp dep graph");
+        eprintln!("SerializerWorker final {}", now.elapsed().as_secs_f32());
     }
 }
 
-const BUFFER_SIZE: usize = 90000;
+const BUFFER_SIZE: usize = 50000;
 const BYTES_PER_NODE: usize =
     mem::size_of::<DepNodeData>() + mem::size_of::<SerializedDepNodeIndex>();
 
@@ -90,8 +118,6 @@ pub struct Serializer {
 
 impl Serializer {
     pub fn new(prev_node_count: usize, path: &Path) -> Self {
-    eprintln!("opening dep graph file = {:?}", path);
-
         let file = OpenOptions::new()
             .write(true)
             .open(path)
@@ -124,7 +150,9 @@ impl Serializer {
     }
 
     pub fn complete(&mut self) {
-        self.flush();
+        if self.buffer.len() > 0 {
+            self.flush();
+        }
         self.worker.complete()
     }
 }
