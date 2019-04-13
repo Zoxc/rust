@@ -122,6 +122,7 @@ const DEP_GRAPH_FILENAME: &str = "dep-graph.bin";
 const TEMP_DEP_GRAPH_FILENAME: &str = "dep-graph.bin.tmp";
 const WORK_PRODUCTS_FILENAME: &str = "work-products.bin";
 const QUERY_CACHE_FILENAME: &str = "query-cache.bin";
+const TEMP_QUERY_CACHE_FILENAME: &str = "query-cache.bin.tmp";
 
 // We encode integers using the following base, so they are shorter than decimal
 // or hexadecimal numbers (we want short file and directory names). Since these
@@ -145,6 +146,10 @@ pub fn work_products_path(sess: &Session) -> PathBuf {
 
 pub fn query_cache_path(sess: &Session) -> PathBuf {
     in_incr_comp_dir_sess(sess, QUERY_CACHE_FILENAME)
+}
+
+pub fn temp_query_cache_path(sess: &Session) -> PathBuf {
+    in_incr_comp_dir_sess(sess, TEMP_QUERY_CACHE_FILENAME)
 }
 
 pub fn lock_file_path(session_dir: &Path) -> PathBuf {

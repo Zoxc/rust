@@ -168,14 +168,18 @@ pub fn load_dep_graph(sess: &Session) -> DepGraphFuture {
     }))
 }
 
-pub fn load_query_result_cache<'sess>(sess: &'sess Session) -> OnDiskCache<'sess> {
-    if sess.opts.incremental.is_none() ||
-       !sess.opts.debugging_opts.incremental_queries {
-        return OnDiskCache::new_empty(sess.source_map());
-    }
+pub fn load_query_result_cache<'tcx>(tcx: TyCtxt<'_, 'tcx, 'tcx>) -> OnDiskCache<'tcx> {
+    let sess = tcx.sess;
+    assert!(sess.opts.incremental.is_some());
+    let temp_path = temp_query_cache_path(sess);
 
+    if !sess.opts.debugging_opts.incremental_queries {
+        return OnDiskCache::new_empty(tcx, &temp_path);
+    }
     match load_data(sess.opts.debugging_opts.incremental_info, &query_cache_path(sess)) {
-        LoadResult::Ok{ data: (bytes, start_pos) } => OnDiskCache::new(sess, bytes, start_pos),
-        _ => OnDiskCache::new_empty(sess.source_map())
+        LoadResult::Ok{ data: (bytes, start_pos) } => {
+            OnDiskCache::new(tcx, bytes, start_pos, &temp_path)
+        },
+        _ => OnDiskCache::new_empty(tcx, &temp_path)
     }
 }

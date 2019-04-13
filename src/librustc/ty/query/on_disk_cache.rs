@@ -17,9 +17,14 @@ use crate::util::common::{time, time_ext};
 use errors::Diagnostic;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::thin_vec::ThinVec;
-use rustc_data_structures::sync::{Lrc, Lock, HashMapExt, Once};
+use rustc_data_structures::sync::{Lrc, Lock, HashMapExt, Once, Scope};
+use rustc_data_structures::sync::worker::{Worker, WorkerExecutor};
 use rustc_data_structures::indexed_vec::{IndexVec, Idx};
+use rustc_data_structures::{unlikely, cold_path};
 use std::mem;
+use std::path::Path;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
 use syntax::ast::NodeId;
 use syntax::source_map::{SourceMap, StableSourceFileId};
 use syntax_pos::{BytePos, Span, DUMMY_SP, SourceFile};
@@ -69,6 +74,8 @@ pub struct OnDiskCache<'sess> {
     prev_diagnostics_index: FxHashMap<SerializedDepNodeIndex, AbsoluteBytePos>,
 
     alloc_decoding_state: AllocDecodingState,
+
+    serializer: Serializer<'sess>,
 }
 
 // This type is used only for (de-)serialization.
@@ -105,8 +112,13 @@ impl AbsoluteBytePos {
 
 impl<'sess> OnDiskCache<'sess> {
     /// Creates a new OnDiskCache instance from the serialized data in `data`.
-    pub fn new(sess: &'sess Session, data: Vec<u8>, start_pos: usize) -> OnDiskCache<'sess> {
-        debug_assert!(sess.opts.incremental.is_some());
+    pub fn new(
+        tcx: TyCtxt<'_, 'sess, 'sess>,
+        data: Vec<u8>,
+        start_pos: usize,
+        path: &Path,
+    ) -> OnDiskCache<'sess> {
+        debug_assert!(tcx.sess.opts.incremental.is_some());
 
         // Wrapping in a scope so we can borrow `data`
         let footer: Footer = {
@@ -131,73 +143,42 @@ impl<'sess> OnDiskCache<'sess> {
             file_index_to_file: Default::default(),
             prev_cnums: footer.prev_cnums,
             cnum_map: Once::new(),
-            source_map: sess.source_map(),
+            source_map: tcx.sess.source_map(),
             current_diagnostics: Default::default(),
             query_result_index: footer.query_result_index.into_iter().collect(),
             prev_diagnostics_index: footer.diagnostics_index.into_iter().collect(),
             synthetic_expansion_infos: Default::default(),
             alloc_decoding_state: AllocDecodingState::new(footer.interpret_alloc_index),
+            serializer: Serializer::new(tcx, path),
         }
     }
 
-    pub fn new_empty(source_map: &'sess SourceMap) -> OnDiskCache<'sess> {
+    pub fn new_empty(tcx: TyCtxt<'_, 'sess, 'sess>, path: &Path) -> OnDiskCache<'sess> {
         OnDiskCache {
             serialized_data: Vec::new(),
             file_index_to_stable_id: Default::default(),
             file_index_to_file: Default::default(),
             prev_cnums: vec![],
             cnum_map: Once::new(),
-            source_map,
+            source_map: tcx.sess.source_map(),
             current_diagnostics: Default::default(),
             query_result_index: Default::default(),
             prev_diagnostics_index: Default::default(),
             synthetic_expansion_infos: Default::default(),
             alloc_decoding_state: AllocDecodingState::new(Vec::new()),
+            serializer: Serializer::new(tcx, path),
         }
     }
 
-    pub fn serialize<'a, 'tcx, E>(&self,
-                                  tcx: TyCtxt<'a, 'tcx, 'tcx>,
-                                  encoder: &mut E)
-                                  -> Result<(), E::Error>
-        where E: ty_codec::TyEncoder
-     {
+    pub fn serialize<'a, 'tcx, E>(&self, tcx: TyCtxt<'a, 'tcx, 'tcx>) {
         // Serializing the DepGraph should not modify it:
         tcx.dep_graph().with_ignore(|| {
-            // Allocate SourceFileIndices
-            let (file_to_file_index, file_index_to_stable_id) = {
-                let files = tcx.sess.source_map().files();
-                let mut file_to_file_index = FxHashMap::with_capacity_and_hasher(
-                    files.len(), Default::default());
-                let mut file_index_to_stable_id = FxHashMap::with_capacity_and_hasher(
-                    files.len(), Default::default());
-
-                for (index, file) in files.iter().enumerate() {
-                    let index = SourceFileIndex(index as u32);
-                    let file_ptr: *const SourceFile = &**file as *const _;
-                    file_to_file_index.insert(file_ptr, index);
-                    file_index_to_stable_id.insert(index, StableSourceFileId::new(&file));
-                }
-
-                (file_to_file_index, file_index_to_stable_id)
-            };
-
-            let mut encoder = CacheEncoder {
-                tcx,
-                encoder,
-                type_shorthands: Default::default(),
-                predicate_shorthands: Default::default(),
-                expn_info_shorthands: Default::default(),
-                interpret_allocs: Default::default(),
-                interpret_allocs_inverse: Vec::new(),
-                source_map: CachingSourceMapView::new(tcx.sess.source_map()),
-                file_to_file_index,
-            };
-
             // Load everything into memory so we can write it out to the on-disk
             // cache. The vast majority of cacheable query results should already
             // be in memory, so this should be a cheap operation.
             tcx.dep_graph().exec_cache_promotions(tcx);
+
+            let mut encoder = self.serializer.complete(tcx.scope);
 
             // Encode query results
             let mut query_result_index = EncodedQueryResultIndex::new();
@@ -296,6 +277,7 @@ impl<'sess> OnDiskCache<'sess> {
             }).collect();
 
             // Encode the file footer
+            let file_index_to_stable_id = encoder.file_index_to_stable_id.take();
             let footer_pos = encoder.position() as u64;
             encoder.encode_tagged(TAG_FILE_FOOTER, &Footer {
                 file_index_to_stable_id,
@@ -744,26 +726,24 @@ for CacheDecoder<'a, 'tcx, 'x> {
 
 //- ENCODING -------------------------------------------------------------------
 
-struct CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder,
-             'tcx: 'a,
-{
-    tcx: TyCtxt<'a, 'tcx, 'tcx>,
-    encoder: &'enc mut E,
+struct CacheEncoder<'tcx> {
+    tcx: TyCtxt<'tcx, 'tcx, 'tcx>,
+    file_offset: usize,
+    encoder: opaque::Encoder,
     type_shorthands: FxHashMap<ty::Ty<'tcx>, usize>,
     predicate_shorthands: FxHashMap<ty::Predicate<'tcx>, usize>,
     expn_info_shorthands: FxHashMap<Mark, AbsoluteBytePos>,
     interpret_allocs: FxHashMap<interpret::AllocId, usize>,
     interpret_allocs_inverse: Vec<interpret::AllocId>,
     source_map: CachingSourceMapView<'tcx>,
-    file_to_file_index: FxHashMap<*const SourceFile, SourceFileIndex>,
+    /// Maps from pointers to SourceFile to an index
+    file_to_file_index: FxHashMap<usize, SourceFileIndex>,
+    file_index_to_stable_id: Option<FxHashMap<SourceFileIndex, StableSourceFileId>>,
 }
 
-impl<'enc, 'a, 'tcx, E> CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> CacheEncoder<'tcx> {
     fn source_file_index(&mut self, source_file: Lrc<SourceFile>) -> SourceFileIndex {
-        self.file_to_file_index[&(&*source_file as *const SourceFile)]
+        self.file_to_file_index[&(&*source_file as *const SourceFile as usize)]
     }
 
     /// Encode something with additional information that allows to do some
@@ -774,7 +754,7 @@ impl<'enc, 'a, 'tcx, E> CacheEncoder<'enc, 'a, 'tcx, E>
     fn encode_tagged<T: Encodable, V: Encodable>(&mut self,
                                                  tag: T,
                                                  value: &V)
-                                                 -> Result<(), E::Error>
+                                                 -> Result<(), !>
     {
         let start_pos = self.position();
 
@@ -786,9 +766,7 @@ impl<'enc, 'a, 'tcx, E> CacheEncoder<'enc, 'a, 'tcx, E>
     }
 }
 
-impl<'enc, 'a, 'tcx, E> SpecializedEncoder<interpret::AllocId> for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> SpecializedEncoder<interpret::AllocId> for CacheEncoder<'tcx> {
     fn specialized_encode(&mut self, alloc_id: &interpret::AllocId) -> Result<(), Self::Error> {
         use std::collections::hash_map::Entry;
         let index = match self.interpret_allocs.entry(*alloc_id) {
@@ -805,9 +783,7 @@ impl<'enc, 'a, 'tcx, E> SpecializedEncoder<interpret::AllocId> for CacheEncoder<
     }
 }
 
-impl<'enc, 'a, 'tcx, E> SpecializedEncoder<Span> for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> SpecializedEncoder<Span> for CacheEncoder<'tcx> {
     fn specialized_encode(&mut self, span: &Span) -> Result<(), Self::Error> {
 
         if *span == DUMMY_SP {
@@ -862,27 +838,21 @@ impl<'enc, 'a, 'tcx, E> SpecializedEncoder<Span> for CacheEncoder<'enc, 'a, 'tcx
     }
 }
 
-impl<'enc, 'a, 'tcx, E> ty_codec::TyEncoder for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> ty_codec::TyEncoder for CacheEncoder<'tcx> {
     #[inline]
     fn position(&self) -> usize {
         self.encoder.position()
     }
 }
 
-impl<'enc, 'a, 'tcx, E> SpecializedEncoder<CrateNum> for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> SpecializedEncoder<CrateNum> for CacheEncoder<'tcx> {
     #[inline]
     fn specialized_encode(&mut self, cnum: &CrateNum) -> Result<(), Self::Error> {
         self.emit_u32(cnum.as_u32())
     }
 }
 
-impl<'enc, 'a, 'tcx, E> SpecializedEncoder<ty::Ty<'tcx>> for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> SpecializedEncoder<ty::Ty<'tcx>> for CacheEncoder<'tcx> {
     #[inline]
     fn specialized_encode(&mut self, ty: &ty::Ty<'tcx>) -> Result<(), Self::Error> {
         ty_codec::encode_with_shorthand(self, ty,
@@ -890,10 +860,8 @@ impl<'enc, 'a, 'tcx, E> SpecializedEncoder<ty::Ty<'tcx>> for CacheEncoder<'enc, 
     }
 }
 
-impl<'enc, 'a, 'tcx, E> SpecializedEncoder<ty::GenericPredicates<'tcx>>
-    for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> SpecializedEncoder<ty::GenericPredicates<'tcx>>
+    for CacheEncoder<'tcx> {
     #[inline]
     fn specialized_encode(&mut self,
                           predicates: &ty::GenericPredicates<'tcx>)
@@ -903,9 +871,7 @@ impl<'enc, 'a, 'tcx, E> SpecializedEncoder<ty::GenericPredicates<'tcx>>
     }
 }
 
-impl<'enc, 'a, 'tcx, E> SpecializedEncoder<hir::HirId> for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> SpecializedEncoder<hir::HirId> for CacheEncoder<'tcx> {
     #[inline]
     fn specialized_encode(&mut self, id: &hir::HirId) -> Result<(), Self::Error> {
         let hir::HirId {
@@ -921,9 +887,7 @@ impl<'enc, 'a, 'tcx, E> SpecializedEncoder<hir::HirId> for CacheEncoder<'enc, 'a
 }
 
 
-impl<'enc, 'a, 'tcx, E> SpecializedEncoder<DefId> for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> SpecializedEncoder<DefId> for CacheEncoder<'tcx> {
     #[inline]
     fn specialized_encode(&mut self, id: &DefId) -> Result<(), Self::Error> {
         let def_path_hash = self.tcx.def_path_hash(*id);
@@ -931,18 +895,14 @@ impl<'enc, 'a, 'tcx, E> SpecializedEncoder<DefId> for CacheEncoder<'enc, 'a, 'tc
     }
 }
 
-impl<'enc, 'a, 'tcx, E> SpecializedEncoder<LocalDefId> for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> SpecializedEncoder<LocalDefId> for CacheEncoder<'tcx> {
     #[inline]
     fn specialized_encode(&mut self, id: &LocalDefId) -> Result<(), Self::Error> {
         id.to_def_id().encode(self)
     }
 }
 
-impl<'enc, 'a, 'tcx, E> SpecializedEncoder<DefIndex> for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> SpecializedEncoder<DefIndex> for CacheEncoder<'tcx> {
     fn specialized_encode(&mut self, _: &DefIndex) -> Result<(), Self::Error> {
         bug!("Encoding DefIndex without context.")
     }
@@ -950,9 +910,7 @@ impl<'enc, 'a, 'tcx, E> SpecializedEncoder<DefIndex> for CacheEncoder<'enc, 'a, 
 
 // NodeIds are not stable across compilation sessions, so we store them in their
 // HirId representation. This allows use to map them to the current NodeId.
-impl<'enc, 'a, 'tcx, E> SpecializedEncoder<NodeId> for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
+impl<'tcx> SpecializedEncoder<NodeId> for CacheEncoder<'tcx> {
     #[inline]
     fn specialized_encode(&mut self, node_id: &NodeId) -> Result<(), Self::Error> {
         let hir_id = self.tcx.hir().node_to_hir_id(*node_id);
@@ -960,19 +918,13 @@ impl<'enc, 'a, 'tcx, E> SpecializedEncoder<NodeId> for CacheEncoder<'enc, 'a, 't
     }
 }
 
-impl<'enc, 'a, 'tcx> SpecializedEncoder<Fingerprint>
-for CacheEncoder<'enc, 'a, 'tcx, opaque::Encoder>
-{
+impl<'tcx> SpecializedEncoder<Fingerprint> for CacheEncoder<'tcx> {
     fn specialized_encode(&mut self, f: &Fingerprint) -> Result<(), Self::Error> {
         f.encode_opaque(&mut self.encoder)
     }
 }
 
-impl<'enc, 'a, 'tcx, E, T> SpecializedEncoder<mir::ClearCrossCrate<T>>
-for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder,
-          T: Encodable,
-{
+impl<'tcx, T: Encodable> SpecializedEncoder<mir::ClearCrossCrate<T>> for CacheEncoder<'tcx> {
     #[inline]
     fn specialized_encode(&mut self,
                           val: &mir::ClearCrossCrate<T>)
@@ -997,10 +949,8 @@ macro_rules! encoder_methods {
     }
 }
 
-impl<'enc, 'a, 'tcx, E> Encoder for CacheEncoder<'enc, 'a, 'tcx, E>
-    where E: 'enc + ty_codec::TyEncoder
-{
-    type Error = E::Error;
+impl<'tcx> Encoder for CacheEncoder<'tcx> {
+    type Error = !;
 
     fn emit_unit(&mut self) -> Result<(), Self::Error> {
         Ok(())
@@ -1069,9 +1019,9 @@ impl<'enc> SpecializedDecoder<IntEncodedWithFixedSize> for opaque::Decoder<'enc>
 }
 
 fn encode_query_results<'enc, 'a, 'tcx, Q, E>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
-                                              encoder: &mut CacheEncoder<'enc, 'a, 'tcx, E>,
+                                              encoder: &mut CacheEncoder<'tcx>,
                                               query_result_index: &mut EncodedQueryResultIndex)
-                                              -> Result<(), E::Error>
+                                              -> Result<(), !>
     where Q: super::config::QueryDescription<'tcx>,
           E: 'enc + TyEncoder,
           Q::Value: Encodable,
@@ -1097,4 +1047,118 @@ fn encode_query_results<'enc, 'a, 'tcx, Q, E>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
 
         Ok(())
     })
+}
+
+struct SerializerWorker<'tcx> {
+    encoder: CacheEncoder<'tcx>,
+    file: File,
+}
+
+impl SerializerWorker<'tcx> {
+}
+
+impl Worker for SerializerWorker<'tcx> {
+    type Message = Vec<()>;
+    type Result = CacheEncoder<'tcx>;
+
+    fn message(&mut self, nodes: Vec<()>) {
+        let mut encoder = opaque::Encoder::new(Vec::with_capacity(nodes.len()));
+        assert!(!nodes.is_empty());
+        for (index, data) in nodes {
+        }
+        self.file
+            .write_all(&encoder.into_inner())
+            .expect("unable to write to temp query result file");
+    }
+
+    fn complete(mut self) {
+        let bytes = self.index_to_serial.len() * mem::size_of::<bool>();
+        let mut encoder = opaque::Encoder::new(Vec::with_capacity(bytes));
+        encoder.emit_usize(0);
+        self.index_to_serial.encode(&mut encoder).ok();
+        self.file
+            .write_all(&encoder.into_inner())
+            .expect("unable to write to temp query result file");
+    }
+}
+
+fn file_indices(sess: &Session) -> (
+    FxHashMap<usize, SourceFileIndex>,
+    FxHashMap<SourceFileIndex, StableSourceFileId>,
+ ) {
+    // Allocate SourceFileIndices
+    let files = sess.source_map().files();
+    let mut file_to_file_index = FxHashMap::with_capacity_and_hasher(
+        files.len(), Default::default());
+    let mut file_index_to_stable_id = FxHashMap::with_capacity_and_hasher(
+        files.len(), Default::default());
+
+    for (index, file) in files.iter().enumerate() {
+        let index = SourceFileIndex(index as u32);
+        let file_ptr: *const SourceFile = &**file as *const _;
+        file_to_file_index.insert(file_ptr as usize, index);
+        file_index_to_stable_id.insert(index, StableSourceFileId::new(&file));
+    }
+
+    (file_to_file_index, file_index_to_stable_id)
+}
+
+const BUFFER_SIZE: usize = 70000;
+
+pub struct Serializer<'tcx> {
+    worker: WorkerExecutor<SerializerWorker<'tcx>>,
+    buffer: Vec<()>,
+}
+
+impl<'tcx> Serializer<'tcx> {
+    pub fn new(tcx: TyCtxt<'_, 'tcx, 'tcx>, path: &Path) -> Self {
+        let file = OpenOptions::new()
+            .write(true)
+            .open(path)
+            .expect("unable to open temp query result file");
+        let (file_to_file_index, file_index_to_stable_id) = file_indices(tcx.sess);
+        let encoder = CacheEncoder {
+            tcx: tcx.global_tcx(),
+            file_offset: 0,
+            encoder: opaque::Encoder::new(Vec::new()),
+            type_shorthands: Default::default(),
+            predicate_shorthands: Default::default(),
+            expn_info_shorthands: Default::default(),
+            interpret_allocs: Default::default(),
+            interpret_allocs_inverse: Vec::new(),
+            source_map: CachingSourceMapView::new(tcx.sess.source_map()),
+            file_to_file_index,
+            file_index_to_stable_id: Some(file_index_to_stable_id),
+        };
+
+        Serializer {
+            worker: WorkerExecutor::new(SerializerWorker {
+                encoder,
+                file,
+            }),
+            buffer: Vec::with_capacity(BUFFER_SIZE),
+        }
+    }
+
+    fn flush(&mut self, scope: &'tcx Scope<'tcx>) {
+        let msgs = mem::replace(&mut self.buffer, Vec::with_capacity(BUFFER_SIZE));
+        self.worker.message_in_scope(scope, msgs);
+    }
+
+    #[inline]
+    pub(super) fn serialize(&mut self, scope: &'tcx Scope<'tcx>) {
+        self.buffer.push(());
+        if unlikely!(self.buffer.len() >= BUFFER_SIZE) {
+            cold_path(|| {
+                self.flush();
+            })
+        }
+    }
+
+    pub fn complete(&mut self, scope: &'tcx Scope<'tcx>) -> CacheEncoder<'tcx> {
+        if self.buffer.len() > 0 {
+            self.flush(scope);
+        }
+        self.worker.complete()
+    }
 }

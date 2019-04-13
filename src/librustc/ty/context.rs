@@ -1448,12 +1448,8 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         });
     }
 
-    pub fn serialize_query_result_cache<E>(self,
-                                           encoder: &mut E)
-                                           -> Result<(), E::Error>
-        where E: ty::codec::TyEncoder
-    {
-        self.on_disk_cache().serialize(self.global_tcx(), encoder)
+    pub fn serialize_query_result_cache(self) {
+        self.on_disk_cache().serialize(self.global_tcx())
     }
 
     /// This checks whether one is allowed to have pattern bindings
