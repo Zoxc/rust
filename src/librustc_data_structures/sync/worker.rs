@@ -47,15 +47,13 @@ impl<T: Worker> WorkerExecutor<T> {
     }
 
     fn run_worker(&self) {
-        eprintln!("running worker exec {:x}", self as *const _ as usize);
         let mut worker = self.worker.lock();
         let worker_ref = worker.as_mut().expect("worker has completed");
-        eprintln!("worker exec got lock {:x}", self as *const _ as usize);
 
         loop {
             let msgs = {
                 let mut queue = self.queue.lock();
-                let mut msgs = mem::replace(&mut queue.messages, Vec::new());
+                let msgs = mem::replace(&mut queue.messages, Vec::new());
                 if msgs.is_empty() {
                     queue.active = false;
                     if queue.complete {
@@ -63,8 +61,6 @@ impl<T: Worker> WorkerExecutor<T> {
                         let result = worker.take().unwrap().complete();
                         *self.result.lock() = Some(result);
                         self.cond_var.notify_all();
-                    } else {
-                        eprintln!("no completing");
                     }
                     break;
                 }
@@ -120,7 +116,10 @@ impl<T: Worker> WorkerExecutor<T> {
     {
         if !self.queue_message(msg) {
             let this = self.clone();
+            #[cfg(parallel_compiler)]
             rayon::spawn(move || this.run_worker());
+            #[cfg(not(parallel_compiler))]
+            this.run_worker();
         }
     }
 }

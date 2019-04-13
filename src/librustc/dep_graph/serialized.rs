@@ -52,8 +52,8 @@ impl Worker for SerializerWorker {
     type Result = SerializedDepGraph;
 
     fn message(&mut self, (index, data): (DepNodeIndex, DepNodeData)) {
-        eprintln!("SerializerWorker TLV {:x}", ty::tls::get_tlv());
-        eprintln!("message {:?} {:?}, nodes {:?}", index, data, self.graph.nodes.len());
+        //eprintln!("SerializerWorker TLV {:x}", ty::tls::get_tlv());
+        //eprintln!("message {:?} {:?}, nodes {:?}", index, data, self.graph.nodes.len());
         let serial_index = SerializedDepNodeIndex::new(self.graph.nodes.len());
         self.write_index(index, serial_index);
         self.graph.nodes.push(SerializedNode {
@@ -89,16 +89,7 @@ impl Serializer {
     }
 
     pub(super) fn serialize(&self, index: DepNodeIndex, data: DepNodeData) {
-        eprintln!("Serializer TLV {:x}", ty::tls::get_tlv());
-        
-        /*ty::tls::with(|tcx| {
-            eprintln!("serialize with worker exec {:x} tcx {:x}", 
-                &*self.worker as *const _ as usize,
-                *tcx as *const _ as usize);
-        });*/
         self.worker.message_in_pool((index, data));
-        
-        //ty::tls::with(|tcx| self.worker.message_in_scope(tcx.scope, (index, data)));
     }
 
     pub fn complete(&self) -> SerializedDepGraph {

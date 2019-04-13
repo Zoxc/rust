@@ -136,7 +136,7 @@ fn encode_dep_graph(tcx: TyCtxt<'_, '_, '_>,
 
     // Encode the graph data.
     let serialized_graph = time(tcx.sess, "getting serialized graph", || {
-        tcx.dep_graph().serialize()
+        tcx.dep_graph().serialize2()
     });
 
     if tcx.sess.opts.debugging_opts.incremental_info {

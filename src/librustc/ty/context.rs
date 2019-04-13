@@ -1872,7 +1872,7 @@ pub mod tls {
     /// This is used to get the pointer to the current ImplicitCtxt.
     #[cfg(parallel_compiler)]
     #[inline]
-    fn get_tlv() -> usize {
+    pub fn get_tlv() -> usize {
         rayon_core::tlv::get()
     }
 

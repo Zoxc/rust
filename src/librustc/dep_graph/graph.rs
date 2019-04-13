@@ -546,7 +546,7 @@ impl DepGraph {
         }
     }
 
-    pub fn serialize(&self) -> SerializedDepGraph {
+    pub fn serialize2(&self) -> SerializedDepGraph {
         // FIXME: Can this deadlock?
         self.data.as_ref().unwrap().current.lock().serializer.complete()
     }

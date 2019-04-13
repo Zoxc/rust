@@ -2484,7 +2484,7 @@ dependencies = [
 [[package]]
 name = "rustc-rayon"
 version = "0.1.2"
-source = "git+https://github.com/Zoxc/rayon.git?branch=alt_scope#fdc63f85dfbe12849995ca11daf581d5357ae6f7"
+source = "git+https://github.com/Zoxc/rayon.git?branch=alt_scope#12b4cab3dc34543b2509b31c910c912939f5b36f"
 dependencies = [
  "crossbeam-deque 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "either 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2504,7 +2504,7 @@ dependencies = [
 [[package]]
 name = "rustc-rayon-core"
 version = "0.1.2"
-source = "git+https://github.com/Zoxc/rayon.git?branch=alt_scope#fdc63f85dfbe12849995ca11daf581d5357ae6f7"
+source = "git+https://github.com/Zoxc/rayon.git?branch=alt_scope#12b4cab3dc34543b2509b31c910c912939f5b36f"
 dependencies = [
  "crossbeam-deque 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
