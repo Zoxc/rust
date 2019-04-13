@@ -103,7 +103,7 @@ pub struct DepGraphData {
     dep_node_debug: Lock<FxHashMap<DepNode, String>>,
 
     // Used for testing, only populated when -Zquery-dep-graph is specified.
-    loaded_from_cache: Lock<FxHashMap<DepNodeIndex, bool>>,
+    _loaded_from_cache: Lock<FxHashMap<DepNodeIndex, bool>>,
 }
 
 pub fn hash_result<R>(hcx: &mut StableHashingContext<'_>, result: &R) -> Fingerprint
@@ -1113,7 +1113,7 @@ impl DepGraphData {
             emitted_diagnostics_cond_var: Condvar::new(),
             previous: prev_graph,
             colors: DepNodeColorMap::new(prev_graph_node_count),
-            loaded_from_cache: Default::default(),
+            _loaded_from_cache: Default::default(),
         };
 
         let non_incr_dep_node = DepNode::new_no_params(DepKind::NonIncremental);

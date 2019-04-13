@@ -78,32 +78,26 @@ impl Worker for SerializerWorker {
     type Result = ();
 
     fn message(&mut self, nodes: Vec<(DepNodeIndex, DepNodeData)>) {
-        use std::time::Instant;
-        let now = Instant::now();
         let mut encoder = opaque::Encoder::new(Vec::with_capacity(nodes.len() * BYTES_PER_NODE));
         assert!(!nodes.is_empty());
-        encoder.emit_usize(nodes.len());
+        encoder.emit_usize(nodes.len()).ok();
         for (index, data) in nodes {
             let serial_index = SerializedDepNodeIndex::from_u32(self.count);
             self.count += 1;
             self.write_index(index, serial_index);
-            data.node.encode(&mut encoder);
-            data.edges.encode(&mut encoder);
-            data.fingerprint.encode(&mut encoder);
+            data.node.encode(&mut encoder).ok();
+            data.edges.encode(&mut encoder).ok();
+            data.fingerprint.encode(&mut encoder).ok();
         }
         self.file.write_all(&encoder.into_inner()).expect("unable to write to temp dep graph");
-        eprintln!("SerializerWorker {}", now.elapsed().as_secs_f32());
     }
 
     fn complete(mut self) {
-        use std::time::Instant;
-        let now = Instant::now();
         let bytes = self.index_to_serial.len() * mem::size_of::<SerializedDepNodeIndex>();
         let mut encoder = opaque::Encoder::new(Vec::with_capacity(bytes));
-        encoder.emit_usize(0);
-        self.index_to_serial.encode(&mut encoder);
+        encoder.emit_usize(0).ok();
+        self.index_to_serial.encode(&mut encoder).ok();
         self.file.write_all(&encoder.into_inner()).expect("unable to write to temp dep graph");
-        eprintln!("SerializerWorker final {}", now.elapsed().as_secs_f32());
     }
 }
 
