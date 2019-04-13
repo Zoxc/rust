@@ -107,7 +107,7 @@ impl Worker for SerializerWorker {
     }
 }
 
-const BUFFER_SIZE: usize = 50000;
+const BUFFER_SIZE: usize = 70000;
 const BYTES_PER_NODE: usize =
     mem::size_of::<DepNodeData>() + mem::size_of::<SerializedDepNodeIndex>();
 

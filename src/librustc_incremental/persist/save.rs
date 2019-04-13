@@ -1,4 +1,4 @@
-use rustc::dep_graph::{DepGraph, DepKind, WorkProduct, WorkProductId};
+use rustc::dep_graph::{DepGraph, /*DepKind,*/ WorkProduct, WorkProductId};
 use rustc::session::Session;
 use rustc::ty::TyCtxt;
 use rustc::util::common::time;
@@ -127,7 +127,7 @@ pub(super) fn save_in<F>(sess: &Session, path_buf: PathBuf, encode: F)
 fn swap_dep_graph(tcx: TyCtxt<'_, '_, '_>, temp: PathBuf, old: PathBuf) {
     let sess = tcx.sess;
     // Encode the graph data.
-    let serialized_graph = time(tcx.sess, "getting serialized graph", || {
+    time(tcx.sess, "finish graph serialization", || {
         tcx.dep_graph().serialize();
     });
 
