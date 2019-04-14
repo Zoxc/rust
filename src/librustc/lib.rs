@@ -86,7 +86,8 @@ extern crate serialize as rustc_serialize;
 
 // Use the test crate here so we depend on getopts through it. This allow tools to link to both
 // librustc_driver and libtest.
-#[cfg_attr(not(stage0), allow(unused_extern_crates))]
+#[allow(unused_extern_crates)]
+#[cfg(not(stage0))]
 extern crate test;
 
 #[macro_use]
