@@ -919,8 +919,7 @@ pub(super) struct DepNodeData {
 }
 
 pub(super) struct CurrentDepGraph {
-    // FIXME: Remove this by hashing anon deps inside TaskDeps?
-    nodes: IndexVec<DepNodeIndex, DepNode>,
+    nodes: usize,
     node_to_node_index: FxHashMap<DepNode, DepNodeIndex>,
     read_map: FxHashMap<DepNode, DepNodeIndex>,
     #[allow(dead_code)]
@@ -977,7 +976,7 @@ impl CurrentDepGraph {
         let new_node_count_estimate = (prev_graph_node_count * 102) / 100 + 200;
 
         CurrentDepGraph {
-            nodes: IndexVec::with_capacity(new_node_count_estimate),
+            nodes: 0,
             node_to_node_index: FxHashMap::with_capacity_and_hasher(
                 new_node_count_estimate,
                 Default::default(),
@@ -1003,25 +1002,17 @@ impl CurrentDepGraph {
     fn complete_anon_task(&mut self, kind: DepKind, task_deps: TaskDeps) -> DepNodeIndex {
         debug_assert!(!kind.is_eval_always());
 
-        let mut fingerprint = self.anon_id_seed;
         let mut hasher = StableHasher::new();
 
-        for &read in task_deps.reads.iter() {
-            let read_dep_node = self.nodes[read];
+        task_deps.reads.hash(&mut hasher);
 
-            ::std::mem::discriminant(&read_dep_node.kind).hash(&mut hasher);
+        let target_dep_node = DepNode {
+            kind,
 
             // Fingerprint::combine() is faster than sending Fingerprint
             // through the StableHasher (at least as long as StableHasher
             // is so slow).
-            fingerprint = fingerprint.combine(read_dep_node.hash);
-        }
-
-        fingerprint = fingerprint.combine(hasher.finish());
-
-        let target_dep_node = DepNode {
-            kind,
-            hash: fingerprint,
+            hash: self.anon_id_seed.combine(hasher.finish()),
         };
 
         self.intern_node(target_dep_node, task_deps.reads, Fingerprint::ZERO).0
@@ -1043,13 +1034,13 @@ impl CurrentDepGraph {
         edges: SmallVec<[DepNodeIndex; 8]>,
         fingerprint: Fingerprint
     ) -> (DepNodeIndex, bool) {
-        debug_assert_eq!(self.node_to_node_index.len(), self.nodes.len());
+        debug_assert_eq!(self.node_to_node_index.len(), self.nodes);
 
         match self.node_to_node_index.entry(dep_node) {
             Entry::Occupied(entry) => (*entry.get(), false),
             Entry::Vacant(entry) => {
-                let dep_node_index = DepNodeIndex::new(self.nodes.len());
-                self.nodes.push(dep_node);
+                let dep_node_index = DepNodeIndex::new(self.nodes);
+                self.nodes += 1;
                 self.serializer.serialize(dep_node_index, DepNodeData {
                     node: dep_node,
                     edges,

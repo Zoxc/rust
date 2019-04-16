@@ -110,10 +110,10 @@ pub struct Serializer {
 }
 
 impl Serializer {
-    pub fn new(prev_node_count: usize, file: File) -> Self {
+    pub fn new(new_node_count_estimate: usize, file: File) -> Self {
         Serializer {
             worker: Lrc::new(WorkerExecutor::new(SerializerWorker {
-                index_to_serial: (0..prev_node_count).map(|_| {
+                index_to_serial: (0..new_node_count_estimate).map(|_| {
                     SerializedDepNodeIndex::new(DepNodeIndex::INVALID.as_usize())
                 }).collect(),
                 file,
