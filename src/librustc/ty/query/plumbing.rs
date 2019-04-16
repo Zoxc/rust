@@ -500,7 +500,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         }
 
         if unlikely!(self.sess.opts.debugging_opts.query_dep_graph) {
-            self.dep_graph.mark_loaded_from_cache(dep_node_index, true);
+            self.dep_graph.mark_loaded_from_cache(*dep_node, true);
         }
 
         result
@@ -510,10 +510,11 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
     #[cold]
     fn incremental_verify_ich<Q: QueryDescription<'gcx>>(
         self,
-        result: &Q::Value,
-        dep_node: &DepNode,
-        dep_node_index: DepNodeIndex,
+        _result: &Q::Value,
+        _dep_node: &DepNode,
+        _dep_node_index: DepNodeIndex,
     ) {
+        panic!()/*
         use crate::ich::Fingerprint;
 
         assert!(Some(self.dep_graph.fingerprint_of(dep_node_index)) ==
@@ -530,7 +531,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         let old_hash = self.dep_graph.fingerprint_of(dep_node_index);
 
         assert!(new_hash == old_hash, "Found unstable fingerprints \
-            for {:?}", dep_node);
+            for {:?}", dep_node);*/
     }
 
     #[inline(always)]
@@ -576,7 +577,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         profq_msg!(self, ProfileQueriesMsg::ProviderEnd);
 
         if unlikely!(self.sess.opts.debugging_opts.query_dep_graph) {
-            self.dep_graph.mark_loaded_from_cache(dep_node_index, false);
+            self.dep_graph.mark_loaded_from_cache(dep_node, false);
         }
 
         if dep_node.kind != crate::dep_graph::DepKind::Null {
