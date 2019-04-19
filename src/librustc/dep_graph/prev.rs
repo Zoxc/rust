@@ -20,6 +20,8 @@ pub struct PreviousDepGraph {
     /// A flattened list of all edge targets in the graph. Edge sources are
     /// implicit in edge_list_indices.
     edge_list_data: Vec<SerializedDepNodeIndex>,
+    /// A list of nodes which are no longer valid.
+    pub(super) invalidated: IndexVec<DepNodeIndex, bool>,
 }
 
 impl PreviousDepGraph {
@@ -34,15 +36,17 @@ impl PreviousDepGraph {
         let nodes: IndexVec<SerializedDepNodeIndex, _> =
             graph.nodes.iter().map(|d| d.node).collect();
 
-        let total_edge_count: usize = graph.nodes.iter().map(|d| d.deps.len()).sum();
+        let total_edge_count: usize = graph.nodes.iter().map(|d| d.edges.len()).sum();
 
         let mut edge_list_indices = IndexVec::with_capacity(nodes.len());
         let mut edge_list_data = Vec::with_capacity(total_edge_count);
 
         for (current_dep_node_index, edges) in graph.nodes.iter_enumerated()
-                                                                .map(|(i, d)| (i, &d.deps)) {
+                                                                .map(|(i, d)| (i, &d.edges)) {
             let start = edge_list_data.len() as u32;
-            edge_list_data.extend(edges.iter().cloned());
+            edge_list_data.extend(edges.iter().map(|i| {
+                SerializedDepNodeIndex::from_u32(i.as_u32())
+            }).cloned());
             let end = edge_list_data.len() as u32;
 
             debug_assert_eq!(current_dep_node_index.index(), edge_list_indices.len());

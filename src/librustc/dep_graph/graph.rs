@@ -925,7 +925,7 @@ pub enum WorkProductFileKind {
     BytecodeCompressed,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, RustcDecodable, RustcEncodable)]
 pub(super) struct DepNodeData {
     pub(super) node: DepNode,
     pub(super) edges: TaskReads,

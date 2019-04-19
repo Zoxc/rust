@@ -21,35 +21,51 @@ impl SerializedDepNodeIndex {
     }
 }
 
-/// Data for use when recompiling the **current crate**.
 #[derive(Debug, Default)]
 pub struct SerializedDepGraph {
-    pub nodes: IndexVec<SerializedDepNodeIndex, SerializedNode>,
+    pub nodes: IndexVec<DepNodeIndex, DepNodeData>,
+    pub invalidated: IndexVec<DepNodeIndex, bool>,
 }
 
-impl Decodable for SerializedDepGraph {
-    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+impl SerializedDepGraph {
+    fn decode(d: &mut opaque::Decoder<'_>) -> Result<Self, String> {
         let mut nodes = IndexVec::new();
+        let mut invalidated_list = Vec::new();
         loop {
-            let count = d.read_usize()?;
-            if count == 0 {
+            if d.position() == d.data.len() {
                 break;
             }
-            for _ in 0..count {
-                nodes.push(SerializedNode::decode(d)?);
+            match Action::decode(d)? {
+                Action::NewNodes(nodes) => {
+                    nodes.extend(nodes);
+                }
+                Action::UpdateNodes(changed) => {
+                    for (i, data) in changed {
+                        nodes[i] = data;
+                    }
+                }
+                Action::InvalidateNodes(nodes) => {
+                    invalidated_list.extend(nodes);
+                }
             }
+        }
+        let mut invalidated = (0..nodes.len()).map(|_| false).collect();
+        for i in invalidated_list {
+            invalidated[i] = true;
         }
         Ok(SerializedDepGraph {
             nodes,
+            invalidated,
         })
     }
 }
 
-#[derive(Debug, RustcDecodable)]
-pub struct SerializedNode {
-    pub node: DepNode,
-    pub deps: Vec<SerializedDepNodeIndex>,
-    pub fingerprint: Fingerprint,
+#[derive(Debug, RustcEncodable, RustcDecodable)]
+pub enum Action {
+    NewNodes(Vec<DepNodeData>),
+    UpdateNodes(Vec<(DepNodeIndex, DepNodeData)>),
+    /// FIXME: Is this redundant since these nodes will be also be updated?
+    InvalidateNodes(Vec<DepNodeIndex>)
 }
 
 struct SerializerWorker {
@@ -57,34 +73,26 @@ struct SerializerWorker {
 }
 
 impl Worker for SerializerWorker {
-    type Message = (usize, Vec<DepNodeData>);
+    type Message = (usize, Action);
     type Result = ();
 
-    fn message(&mut self, (buffer_size_est, nodes): (usize, Vec<DepNodeData>)) {
-        let mut encoder = opaque::Encoder::new(Vec::with_capacity(buffer_size_est * 4));
-        assert!(!nodes.is_empty());
-        encoder.emit_usize(nodes.len()).ok();
-        for data in nodes {
-            data.node.encode(&mut encoder).ok();
-            data.edges.encode(&mut encoder).ok();
-            data.fingerprint.encode(&mut encoder).ok();
-        }
+    fn message(&mut self, (buffer_size_est, action): (usize, Vec<DepNodeData>)) {
+        let mut encoder = opaque::Encoder::new(Vec::with_capacity(buffer_size_est * 5));
+        action.encode(&mut encoder).ok();
         self.file.write_all(&encoder.into_inner()).expect("unable to write to temp dep graph");
     }
 
-    fn complete(mut self) {
-        let mut encoder = opaque::Encoder::new(Vec::with_capacity(16));
-        encoder.emit_usize(0).ok();
-        self.file.write_all(&encoder.into_inner()).expect("unable to write to temp dep graph");
-    }
+    fn complete(mut self) {}
 }
 
 const BUFFER_SIZE: usize = 800000;
 
 pub struct Serializer {
     worker: Lrc<WorkerExecutor<SerializerWorker>>,
-    buffer: Vec<DepNodeData>,
-    buffer_size: usize,
+    new_buffer: Vec<DepNodeData>,
+    new_buffer_size: usize,
+    updated_buffer: Vec<(DepNodeIndex, DepNodeData)>,
+    updated_buffer_size: usize,
 }
 
 impl Serializer {
@@ -93,34 +101,60 @@ impl Serializer {
             worker: Lrc::new(WorkerExecutor::new(SerializerWorker {
                 file,
             })),
-            buffer: Vec::with_capacity(BUFFER_SIZE),
-            buffer_size: 0,
+            new_buffer: Vec::with_capacity(BUFFER_SIZE),
+            new_buffer_size: 0,
+            updated_buffer: Vec::with_capacity(BUFFER_SIZE),
+            updated_buffer_size: 0,
         }
     }
 
-    fn flush(&mut self) {
+    fn flush_new(&mut self) {
         let msgs = mem::replace(&mut self.buffer, Vec::with_capacity(BUFFER_SIZE));
-        let buffer_size = self.buffer_size;
-        self.buffer_size = 0;
-        self.worker.message_in_pool((buffer_size, msgs));
+        let buffer_size = self.new_buffer_size;
+        self.new_buffer_size = 0;
+        self.worker.message_in_pool((buffer_size, Action::NewNodes(msgs)));
     }
 
     #[inline]
-    pub(super) fn serialize(&mut self, _index: DepNodeIndex, data: DepNodeData) {
+    pub(super) fn serialize_new(&mut self, data: DepNodeData) {
         let edges = data.edges.len();
-        self.buffer.push(data);
-        self.buffer_size += 8 + edges;
-        if unlikely!(self.buffer_size >= BUFFER_SIZE) {
+        self.new_buffer.push(data);
+        self.new_buffer_size += 8 + edges;
+        if unlikely!(self.new_buffer_size >= BUFFER_SIZE) {
             cold_path(|| {
-                self.flush();
+                self.flush_new();
             })
         }
     }
 
-    pub fn complete(&mut self) {
-        if self.buffer.len() > 0 {
-            self.flush();
+    fn flush_updated(&mut self) {
+        let msgs = mem::replace(&mut self.buffer, Vec::with_capacity(BUFFER_SIZE));
+        let buffer_size = self.updated_buffer_size;
+        self.updated_buffer_size = 0;
+        self.worker.message_in_pool((buffer_size, Action::UpdateNodes(msgs)));
+    }
+
+    #[inline]
+    pub(super) fn serialize_updated(&mut self, _index: DepNodeIndex, data: DepNodeData) {
+        let edges = data.edges.len();
+        self.updated_buffer.push(data);
+        self.updated_buffer_size += 9 + edges;
+        if unlikely!(self.updated_buffer_size >= BUFFER_SIZE) {
+            cold_path(|| {
+                self.flush_updated();
+            })
         }
+    }
+
+    pub fn complete(&mut self, data: &DepGraphData) {
+        if self.new_buffer.len() > 0 {
+            self.flush_new();
+        }
+        if self.updated_buffer.len() > 0 {
+            self.flush_updated();
+        }
+        data.previous.invalidated
+        self.worker.message_in_pool((buffer_size, Action::UpdateNodes(msgs)));
         self.worker.complete()
     }
 }
