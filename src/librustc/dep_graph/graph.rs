@@ -916,6 +916,7 @@ pub(super) struct DepNodeData {
 }
 
 pub(super) struct CurrentDepGraph {
+    data: FxHashMap<DepNodeIndex, DepNodeData>,
     nodes: usize,
     node_to_node_index: FxHashMap<DepNode, DepNodeIndex>,
     #[allow(dead_code)]
@@ -1060,12 +1061,12 @@ impl DepGraphData {
                 if task_deps.read_set.insert(source) {
                     task_deps.reads.push(source);
 
-                    /*#[cfg(debug_assertions)]
+                    #[cfg(debug_assertions)]
                     {
                         if let Some(target) = task_deps.node {
                             let graph = self.current.lock();
                             if let Some(ref forbidden_edge) = graph.forbidden_edge {
-                                let source = graph.data[source].node;
+                                let source = graph.data[&source].node;
                                 if forbidden_edge.test(&source, &target) {
                                     bug!("forbidden edge {:?} -> {:?} created",
                                         source,
@@ -1073,7 +1074,7 @@ impl DepGraphData {
                                 }
                             }
                         }
-                    }*/
+                    }
                 } else if cfg!(debug_assertions) {
                     self.current.lock().total_duplicate_read_count += 1;
                 }
