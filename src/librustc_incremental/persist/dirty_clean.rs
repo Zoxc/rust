@@ -459,7 +459,7 @@ impl<'a, 'tcx> DirtyCleanVisitor<'a, 'tcx> {
             })
     }
 
-    fn dep_node_str(&self, dep_node: &DepNode) -> String {
+    fn _dep_node_str(&self, dep_node: &DepNode) -> String {
         if let Some(def_id) = dep_node.extract_def_id(self.tcx) {
             format!("{:?}({})",
                     dep_node.kind,
