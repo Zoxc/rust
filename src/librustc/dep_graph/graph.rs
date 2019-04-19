@@ -37,16 +37,21 @@ impl DepNodeIndex {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DepNodeColor {
     Red,
-    Green(DepNodeIndex)
+
+    /// The node will eventually be green,
+    /// but its side effects (like error messages) have not yet happened.
+    WillBeGreen,
+
+    Green,
 }
 
 impl DepNodeColor {
-    pub fn is_green(self) -> bool {
+    /*pub fn is_green(self) -> bool {
         match self {
             DepNodeColor::Red => false,
-            DepNodeColor::Green(_) => true,
+            DepNodeColor::Green => true,
         }
-    }
+    }*/
 }
 
 struct DepGraphData {
@@ -218,7 +223,8 @@ impl DepGraph {
             hash_result)
     }
 
-    /// Creates a new dep-graph input with value `input`
+    /// Creates a new dep-graph input with value `input`.
+    /// Dep nodes created by this function can be used by the `read` method.
     pub fn input_task<'a, C, R>(&self,
                                    key: DepNode,
                                    cx: C,
@@ -233,8 +239,13 @@ impl DepGraph {
 
         self.with_task_impl(key, cx, input, true, identity_fn,
             |_| None,
-            |data, key, fingerprint, _| {
-                data.borrow_mut().alloc_node(key, SmallVec::new(), fingerprint)
+            |data, key, prev, fingerprint, _| {
+                let current = data.borrow_mut();
+                let idx = prev.map(|p| p.0.current()).unwrap_or_else(|| {
+                    current.new_node(key, SmallVec::new(), fingerprint, self.previous)
+                });
+                assert!(current.input_node_to_node_index.insert(key, idx).is_none());
+                idx
             },
             hash_result::<R>)
     }
@@ -249,6 +260,7 @@ impl DepGraph {
         create_task: fn(DepNode) -> Option<TaskDeps>,
         finish_task_and_alloc_depnode: fn(&Lock<CurrentDepGraph>,
                                           DepNode,
+                                          Option<(SerializedDepNodeIndex, DepNodeColor)>,
                                           Fingerprint,
                                           Option<TaskDeps>) -> DepNodeIndex,
         hash_result: impl FnOnce(&mut StableHashingContext<'_>, &R) -> Option<Fingerprint>,
@@ -291,17 +303,12 @@ impl DepGraph {
 
             let current_fingerprint = hash_result(&mut hcx, &result);
 
-            let dep_node_index = finish_task_and_alloc_depnode(
-                &data.current,
-                key,
-                current_fingerprint.unwrap_or(Fingerprint::ZERO),
-                task_deps.map(|lock| lock.into_inner()),
-            );
-
             let print_status = cfg!(debug_assertions) && hcx.sess().opts.debugging_opts.dep_tasks;
 
+            let prev_index = data.previous.node_to_index_opt(&key);
+
             // Determine the color of the new DepNode.
-            if let Some(prev_index) = data.previous.node_to_index_opt(&key) {
+            let prev_index_and_color = prev_index.map(|prev_index| {
                 let prev_fingerprint = data.previous.fingerprint_by_index(prev_index);
 
                 let color = if let Some(current_fingerprint) = current_fingerprint {
@@ -309,7 +316,7 @@ impl DepGraph {
                         if print_status {
                             eprintln!("[task::green] {:?}", key);
                         }
-                        DepNodeColor::Green(dep_node_index)
+                        DepNodeColor::Green
                     } else {
                         if print_status {
                             eprintln!("[task::red] {:?}", key);
@@ -329,11 +336,23 @@ impl DepGraph {
                             insertion for {:?}", key);
 
                 data.colors.insert(prev_index, color);
-            } else {
+
+                (prev_index, color)
+            });
+
+            if prev_index_and_color.is_none() {
                 if print_status {
                     eprintln!("[task::new] {:?}", key);
                 }
             }
+
+            let dep_node_index = finish_task_and_alloc_depnode(
+                &data.current,
+                key,
+                prev_index_and_color,
+                current_fingerprint.unwrap_or(Fingerprint::ZERO),
+                task_deps.map(|lock| lock.into_inner()),
+            );
 
             (result, dep_node_index)
         } else {
@@ -403,7 +422,7 @@ impl DepGraph {
     pub fn read(&self, v: DepNode) {
         if let Some(ref data) = self.data {
             let current = data.current.borrow_mut();
-            if let Some(&dep_node_index) = current.node_to_node_index.get(&v) {
+            if let Some(&dep_node_index) = current.input_node_to_node_index.get(&v) {
                 std::mem::drop(current);
                 data.read_index(dep_node_index);
             } else {
@@ -754,6 +773,7 @@ impl DepGraph {
                       "DepGraph::try_mark_previous_green() - Duplicate DepNodeColor \
                       insertion for {:?}", dep_node);
 
+        // FIXME: Mark as green-promoted?
         data.colors.insert(prev_dep_node_index, DepNodeColor::Green(dep_node_index));
 
         debug!("try_mark_previous_green({:?}) - END - successfully marked as green", dep_node);
@@ -916,8 +936,15 @@ pub(super) struct DepNodeData {
 }
 
 pub(super) struct CurrentDepGraph {
-    data: FxHashMap<DepNodeIndex, DepNodeData>,
+    //data: FxHashMap<DepNodeIndex, DepNodeData>,
     nodes: usize,
+
+    /// Used to map input nodes to a node index
+    input_node_to_node_index: FxHashMap<DepNode, DepNodeIndex>,
+
+    /// Used to map input nodes to a node index
+    anon_node_to_node_index: FxHashMap<DepNode, DepNodeIndex>,
+
     node_to_node_index: FxHashMap<DepNode, DepNodeIndex>,
     #[allow(dead_code)]
     forbidden_edge: Option<EdgeFilter>,
@@ -973,6 +1000,7 @@ impl CurrentDepGraph {
         let new_node_count_estimate = (prev_graph_node_count * 102) / 100 + 200;
 
         CurrentDepGraph {
+            //data: FxHashMap::default(),
             nodes: 0,
             node_to_node_index: FxHashMap::with_capacity_and_hasher(
                 new_node_count_estimate,
@@ -1024,6 +1052,24 @@ impl CurrentDepGraph {
         self.intern_node(dep_node, edges, fingerprint).0
     }
 
+    fn new_node(
+        &mut self,
+        dep_node: DepNode,
+        edges: SmallVec<[DepNodeIndex; 8]>,
+        fingerprint: Fingerprint,
+        previous: PreviousDepGraph,
+    ) -> DepNodeIndex {
+        debug_assert!(!self.previous.index.contains_key(&dep_node));
+        let dep_node_index = DepNodeIndex::new(self.nodes);
+        self.nodes += 1;
+        self.serializer.serialize(DepNodeData {
+            node: dep_node,
+            edges,
+            fingerprint
+        });
+        dep_node_index
+    }
+
     fn intern_node(
         &mut self,
         dep_node: DepNode,
@@ -1061,7 +1107,7 @@ impl DepGraphData {
                 if task_deps.read_set.insert(source) {
                     task_deps.reads.push(source);
 
-                    #[cfg(debug_assertions)]
+                    /*#[cfg(debug_assertions)]
                     {
                         if let Some(target) = task_deps.node {
                             let graph = self.current.lock();
@@ -1074,7 +1120,7 @@ impl DepGraphData {
                                 }
                             }
                         }
-                    }
+                    }*/
                 } else if cfg!(debug_assertions) {
                     self.current.lock().total_duplicate_read_count += 1;
                 }
@@ -1094,7 +1140,7 @@ pub struct TaskDeps {
 // A data structure that stores Option<DepNodeColor> values as a contiguous
 // array, using one u32 per entry.
 struct DepNodeColorMap {
-    values: IndexVec<SerializedDepNodeIndex, AtomicU32>,
+    values: IndexVec<SerializedDepNodeIndex, AtomicCell<DepNodeColor>>,
 }
 
 const COMPRESSED_NONE: u32 = 0;

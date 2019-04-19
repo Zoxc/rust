@@ -7,12 +7,18 @@ use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
 use std::mem;
 use std::fs::File;
 use std::io::Write;
-use super::graph::DepNodeData;
+use super::graph::{DepNodeData, DepNodeIndex};
 use crate::dep_graph::DepNode;
 use crate::ich::Fingerprint;
 
 newtype_index! {
     pub struct SerializedDepNodeIndex { .. }
+}
+
+impl SerializedDepNodeIndex {
+    pub fn current(self) -> DepNodeIndex {
+        DepNodeIndex::from_u32(self.as_u32())
+    }
 }
 
 /// Data for use when recompiling the **current crate**.
