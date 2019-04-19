@@ -106,7 +106,7 @@ impl Serializer {
     }
 
     #[inline]
-    pub(super) fn serialize(&mut self, data: DepNodeData) {
+    pub(super) fn serialize(&mut self, _index: DepNodeIndex, data: DepNodeData) {
         let edges = data.edges.len();
         self.buffer.push(data);
         self.buffer_size += 8 + edges;

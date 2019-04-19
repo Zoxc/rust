@@ -469,10 +469,10 @@ impl<'a, 'tcx> DirtyCleanVisitor<'a, 'tcx> {
         }
     }
 
-    fn assert_dirty(&self, item_span: Span, dep_node: DepNode) {
+    fn assert_dirty(&self, _item_span: Span, dep_node: DepNode) {
         debug!("assert_dirty({:?})", dep_node);
-
-        let dep_node_index = self.tcx.dep_graph.dep_node_index_of(&dep_node);
+        panic!()
+        /*let dep_node_index = self.tcx.dep_graph.dep_node_index_of(&dep_node);
         let current_fingerprint = self.tcx.dep_graph.fingerprint_of(dep_node_index);
         let prev_fingerprint = self.tcx.dep_graph.prev_fingerprint_of(&dep_node);
 
@@ -481,13 +481,13 @@ impl<'a, 'tcx> DirtyCleanVisitor<'a, 'tcx> {
             self.tcx.sess.span_err(
                 item_span,
                 &format!("`{}` should be dirty but is not", dep_node_str));
-        }
+        }*/
     }
 
-    fn assert_clean(&self, item_span: Span, dep_node: DepNode) {
+    fn assert_clean(&self, _item_span: Span, dep_node: DepNode) {
         debug!("assert_clean({:?})", dep_node);
-
-        let dep_node_index = self.tcx.dep_graph.dep_node_index_of(&dep_node);
+        panic!()
+        /*let dep_node_index = self.tcx.dep_graph.dep_node_index_of(&dep_node);
         let current_fingerprint = self.tcx.dep_graph.fingerprint_of(dep_node_index);
         let prev_fingerprint = self.tcx.dep_graph.prev_fingerprint_of(&dep_node);
 
@@ -496,7 +496,7 @@ impl<'a, 'tcx> DirtyCleanVisitor<'a, 'tcx> {
             self.tcx.sess.span_err(
                 item_span,
                 &format!("`{}` should be clean but is not", dep_node_str));
-        }
+        }*/
     }
 
     fn check_item(&mut self, item_id: hir::HirId, item_span: Span) {
