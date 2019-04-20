@@ -52,6 +52,10 @@ impl DepNodeColor {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DepNodeState {
+    /// The node is invalid since its result is older than the previous session.
+    Invalidated,
+
+    /// The node is from the previous session, but its state is unknown
     Unknown,
 
     /// The node will eventually be green,
@@ -66,6 +70,7 @@ pub enum DepNodeState {
 impl DepNodeState {
     pub fn color(self) -> Option<DepNodeColor> {
         match self {
+            DepNodeState::Invalidated |
             DepNodeState::Unknown |
             DepNodeState::WillBeGreen => None,
             DepNodeState::Red => Some(DepNodeColor::Red),
@@ -123,6 +128,9 @@ impl DepGraph {
         file: File,
     ) -> DepGraph {
         let prev_graph_node_count = prev_graph.node_count();
+        let colors = DepNodeColorMap {
+            values: prev_graph.state.lock().take().unwrap(),
+        };
 
         DepGraph {
             data: Some(Lrc::new(DepGraphData {
@@ -131,8 +139,8 @@ impl DepGraph {
                 current: CurrentDepGraph::new(prev_graph_node_count, file),
                 emitted_diagnostics: Default::default(),
                 emitted_diagnostics_cond_var: Condvar::new(),
+                colors,
                 previous: prev_graph,
-                colors: DepNodeColorMap::new(prev_graph_node_count),
                 loaded_from_cache: Default::default(),
             })),
         }
@@ -541,8 +549,19 @@ impl DepGraph {
     }
 
     pub fn serialize(&self) {
+        let data = self.data.as_ref().unwrap();
+        // Invalidate dep nodes with unknown state as these cannot safely
+        // be marked green in the next session.
+        let invalidate = data.colors.values.indices().filter_map(|prev_index| {
+            match data.colors.get(prev_index) {
+                DepNodeState::Unknown => {
+                    Some(prev_index.current())
+                }
+                _ => None,
+            }
+        }).collect();
         // FIXME: Can this deadlock?
-        self.data.as_ref().unwrap().current.serializer.lock().complete()
+        data.current.serializer.lock().complete(invalidate)
     }
 
     pub fn node_color(&self, dep_node: &DepNode) -> Option<DepNodeColor> {
@@ -590,6 +609,7 @@ impl DepGraph {
 
         match data.colors.get(prev_index) {
             DepNodeState::Green => Some((prev_index, prev_index.current())),
+            DepNodeState::Invalidated |
             DepNodeState::Red => None,
             DepNodeState::Unknown |
             DepNodeState::WillBeGreen => {
@@ -658,6 +678,7 @@ impl DepGraph {
                             data.previous.index_to_node(dep_dep_node_index));
                     return false
                 }
+                DepNodeState::Invalidated => panic!("can this happen?"),
                 DepNodeState::WillBeGreen |
                 DepNodeState::Unknown => {
                     let dep_dep_node = &data.previous.index_to_node(dep_dep_node_index);
@@ -722,6 +743,7 @@ impl DepGraph {
                                        dep_dep_node);
                                 return false
                             }
+                            DepNodeState::Invalidated |
                             DepNodeState::Unknown |
                             DepNodeState::WillBeGreen => {
                                 bug!("try_mark_previous_green() - Forcing the DepNode \
@@ -847,6 +869,7 @@ impl DepGraph {
                         }
                     }
                     DepNodeState::WillBeGreen => bug!("no tasks should be in progress"),
+                    DepNodeState::Invalidated |
                     DepNodeState::Unknown |
                     DepNodeState::Red => {
                         // We can skip red nodes because a node can only be marked
@@ -1056,7 +1079,11 @@ impl CurrentDepGraph {
     ) -> DepNodeIndex {
         debug_assert!(previous.node_to_index_opt(&dep_node).is_none());
         let dep_node_index = DepNodeIndex::new(self.node_count.fetch_add(1, SeqCst) - 1);
-        self.update_node(dep_node_index, dep_node, edges, fingerprint);
+        self.serializer.lock().serialize_new(DepNodeData {
+            node: dep_node,
+            edges,
+            fingerprint
+        });
         dep_node_index
     }
 
@@ -1067,7 +1094,7 @@ impl CurrentDepGraph {
         edges: TaskReads,
         fingerprint: Fingerprint,
     ) {
-        self.serializer.lock().serialize(index, DepNodeData {
+        self.serializer.lock().serialize_updated(index, DepNodeData {
             node: dep_node,
             edges,
             fingerprint
@@ -1124,12 +1151,6 @@ struct DepNodeColorMap {
 }
 
 impl DepNodeColorMap {
-    fn new(size: usize) -> DepNodeColorMap {
-        DepNodeColorMap {
-            values: (0..size).map(|_| AtomicCell::new(DepNodeState::Unknown)).collect(),
-        }
-    }
-
     /// Tries to mark the node as WillBeGreen. Returns false if another thread did it before us.
     #[inline]
     fn mark_as_will_be_green(&self, index: SerializedDepNodeIndex) -> bool {

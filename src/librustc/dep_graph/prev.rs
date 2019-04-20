@@ -1,10 +1,12 @@
 use crate::ich::Fingerprint;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::indexed_vec::IndexVec;
+use rustc_data_structures::sync::{AtomicCell, Lock};
 use super::dep_node::DepNode;
+use super::graph::DepNodeState;
 use super::serialized::{SerializedDepGraph, SerializedDepNodeIndex};
 
-#[derive(Debug, RustcEncodable, RustcDecodable, Default)]
+#[derive(Debug, /*RustcEncodable, RustcDecodable,*/ Default)]
 pub struct PreviousDepGraph {
     /// Maps from dep nodes to their previous index, if any.
     index: FxHashMap<DepNode, SerializedDepNodeIndex>,
@@ -20,15 +22,17 @@ pub struct PreviousDepGraph {
     /// A flattened list of all edge targets in the graph. Edge sources are
     /// implicit in edge_list_indices.
     edge_list_data: Vec<SerializedDepNodeIndex>,
-    /// A list of nodes which are no longer valid.
-    pub(super) invalidated: IndexVec<DepNodeIndex, bool>,
+    /// A set of nodes which are no longer valid.
+    pub(super) state: Lock<Option<IndexVec<SerializedDepNodeIndex, AtomicCell<DepNodeState>>>>,
 }
 
 impl PreviousDepGraph {
     pub fn new(graph: SerializedDepGraph) -> PreviousDepGraph {
         let index: FxHashMap<_, _> = graph.nodes
             .iter_enumerated()
-            .map(|(idx, dep_node)| (dep_node.node, idx))
+            .map(|(idx, dep_node)| {
+                (dep_node.node, SerializedDepNodeIndex::from_u32(idx.as_u32()))
+            })
             .collect();
 
         let fingerprints: IndexVec<SerializedDepNodeIndex, _> =
@@ -46,7 +50,7 @@ impl PreviousDepGraph {
             let start = edge_list_data.len() as u32;
             edge_list_data.extend(edges.iter().map(|i| {
                 SerializedDepNodeIndex::from_u32(i.as_u32())
-            }).cloned());
+            }));
             let end = edge_list_data.len() as u32;
 
             debug_assert_eq!(current_dep_node_index.index(), edge_list_indices.len());
@@ -62,6 +66,7 @@ impl PreviousDepGraph {
             edge_list_indices,
             edge_list_data,
             index,
+            state: Lock::new(Some(graph.state.convert_index_type())),
         }
     }
 

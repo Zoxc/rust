@@ -1,15 +1,13 @@
 use rustc_data_structures::sync::worker::{Worker, WorkerExecutor};
-use rustc_data_structures::sync::Lrc;
+use rustc_data_structures::sync::{Lrc, AtomicCell};
 use rustc_data_structures::{unlikely, cold_path};
 use rustc_data_structures::indexed_vec::{IndexVec, Idx};
 use rustc_serialize::opaque;
-use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
+use rustc_serialize::{Decodable, Encodable};
 use std::mem;
 use std::fs::File;
 use std::io::Write;
-use super::graph::{DepNodeData, DepNodeIndex};
-use crate::dep_graph::DepNode;
-use crate::ich::Fingerprint;
+use super::graph::{DepNodeData, DepNodeIndex, DepNodeState};
 
 newtype_index! {
     pub struct SerializedDepNodeIndex { .. }
@@ -23,12 +21,12 @@ impl SerializedDepNodeIndex {
 
 #[derive(Debug, Default)]
 pub struct SerializedDepGraph {
-    pub nodes: IndexVec<DepNodeIndex, DepNodeData>,
-    pub invalidated: IndexVec<DepNodeIndex, bool>,
+    pub(super) nodes: IndexVec<DepNodeIndex, DepNodeData>,
+    pub(super) state: IndexVec<DepNodeIndex, AtomicCell<DepNodeState>>,
 }
 
 impl SerializedDepGraph {
-    fn decode(d: &mut opaque::Decoder<'_>) -> Result<Self, String> {
+    pub fn decode(d: &mut opaque::Decoder<'_>) -> Result<Self, String> {
         let mut nodes = IndexVec::new();
         let mut invalidated_list = Vec::new();
         loop {
@@ -36,8 +34,8 @@ impl SerializedDepGraph {
                 break;
             }
             match Action::decode(d)? {
-                Action::NewNodes(nodes) => {
-                    nodes.extend(nodes);
+                Action::NewNodes(new_nodes) => {
+                    nodes.extend(new_nodes);
                 }
                 Action::UpdateNodes(changed) => {
                     for (i, data) in changed {
@@ -49,22 +47,28 @@ impl SerializedDepGraph {
                 }
             }
         }
-        let mut invalidated = (0..nodes.len()).map(|_| false).collect();
+        let mut state: IndexVec<_, _> = (0..nodes.len()).map(|_| {
+            AtomicCell::new(DepNodeState::Unknown)
+        }).collect();
         for i in invalidated_list {
-            invalidated[i] = true;
+            state[i] = AtomicCell::new(DepNodeState::Invalidated);
         }
         Ok(SerializedDepGraph {
             nodes,
-            invalidated,
+            state,
         })
     }
 }
 
 #[derive(Debug, RustcEncodable, RustcDecodable)]
-pub enum Action {
+enum Action {
     NewNodes(Vec<DepNodeData>),
     UpdateNodes(Vec<(DepNodeIndex, DepNodeData)>),
-    /// FIXME: Is this redundant since these nodes will be also be updated?
+    // FIXME: Is this redundant since these nodes will be also be updated?
+    // Could one of the indirect dependencies of a dep node change its result and
+    // cause a red node to be incorrectly green again?
+    // What about nodes which are in an unknown state?
+    // We must invalidate unknown nodes. Red nodes will have an entry in UpdateNodes
     InvalidateNodes(Vec<DepNodeIndex>)
 }
 
@@ -76,13 +80,13 @@ impl Worker for SerializerWorker {
     type Message = (usize, Action);
     type Result = ();
 
-    fn message(&mut self, (buffer_size_est, action): (usize, Vec<DepNodeData>)) {
+    fn message(&mut self, (buffer_size_est, action): (usize, Action)) {
         let mut encoder = opaque::Encoder::new(Vec::with_capacity(buffer_size_est * 5));
         action.encode(&mut encoder).ok();
         self.file.write_all(&encoder.into_inner()).expect("unable to write to temp dep graph");
     }
 
-    fn complete(mut self) {}
+    fn complete(self) {}
 }
 
 const BUFFER_SIZE: usize = 800000;
@@ -109,7 +113,7 @@ impl Serializer {
     }
 
     fn flush_new(&mut self) {
-        let msgs = mem::replace(&mut self.buffer, Vec::with_capacity(BUFFER_SIZE));
+        let msgs = mem::replace(&mut self.new_buffer, Vec::with_capacity(BUFFER_SIZE));
         let buffer_size = self.new_buffer_size;
         self.new_buffer_size = 0;
         self.worker.message_in_pool((buffer_size, Action::NewNodes(msgs)));
@@ -128,16 +132,16 @@ impl Serializer {
     }
 
     fn flush_updated(&mut self) {
-        let msgs = mem::replace(&mut self.buffer, Vec::with_capacity(BUFFER_SIZE));
+        let msgs = mem::replace(&mut self.updated_buffer, Vec::with_capacity(BUFFER_SIZE));
         let buffer_size = self.updated_buffer_size;
         self.updated_buffer_size = 0;
         self.worker.message_in_pool((buffer_size, Action::UpdateNodes(msgs)));
     }
 
     #[inline]
-    pub(super) fn serialize_updated(&mut self, _index: DepNodeIndex, data: DepNodeData) {
+    pub(super) fn serialize_updated(&mut self, index: DepNodeIndex, data: DepNodeData) {
         let edges = data.edges.len();
-        self.updated_buffer.push(data);
+        self.updated_buffer.push((index, data));
         self.updated_buffer_size += 9 + edges;
         if unlikely!(self.updated_buffer_size >= BUFFER_SIZE) {
             cold_path(|| {
@@ -146,15 +150,21 @@ impl Serializer {
         }
     }
 
-    pub fn complete(&mut self, data: &DepGraphData) {
+    pub fn complete(
+        &mut self,
+        invalidate: Vec<DepNodeIndex>,
+    ) {
         if self.new_buffer.len() > 0 {
             self.flush_new();
         }
         if self.updated_buffer.len() > 0 {
             self.flush_updated();
         }
-        data.previous.invalidated
-        self.worker.message_in_pool((buffer_size, Action::UpdateNodes(msgs)));
+        if !invalidate.is_empty() {
+            self.worker.message_in_pool(
+                (invalidate.len(), Action::InvalidateNodes(invalidate))
+            );
+        }
         self.worker.complete()
     }
 }
