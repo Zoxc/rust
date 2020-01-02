@@ -192,7 +192,11 @@ pub fn check_crate(tcx: TyCtxt<'_>) -> Result<(), ErrorGuaranteed> {
     // FIXME(matthewjasper) We shouldn't need to use `track_errors`.
     tcx.sess.track_errors(|| {
         tcx.sess.time("type_collecting", || {
-            tcx.hir().for_each_module(|module| tcx.ensure().collect_mod_item_types(module))
+            // Run dependencies of type collecting before entering the loop
+            tcx.ensure_with_value().inferred_outlives_crate(());
+
+            let _prof_timer = tcx.sess.timer("type_collecting_loop");
+            tcx.hir().par_for_each_module(|module| tcx.ensure().collect_mod_item_types(module));
         });
     })?;
 

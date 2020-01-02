@@ -1445,9 +1445,7 @@ pub(super) fn check_type_params_are_used<'tcx>(
 
 pub(super) fn check_mod_item_types(tcx: TyCtxt<'_>, module_def_id: LocalModDefId) {
     let module = tcx.hir_module_items(module_def_id);
-    for id in module.items() {
-        check_item_type(tcx, id);
-    }
+    module.par_items(|id| check_item_type(tcx, id));
     if module_def_id == LocalModDefId::CRATE_DEF_ID {
         super::entry::check_for_entry_fn(tcx);
     }

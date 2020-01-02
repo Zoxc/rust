@@ -618,6 +618,34 @@ impl<'hir> Map<'hir> {
         }
     }
 
+    /// A parallel version of `visit_item_likes_in_module`.
+    pub fn par_visit_item_likes_in_module<V>(
+        &self,
+        module: LocalModDefId,
+        make_visitor: impl Fn() -> V + DynSync,
+    ) where
+        V: Visitor<'hir>,
+    {
+        let module = self.tcx.hir_module_items(module);
+
+        parallel!(
+            {
+                module.par_items(|id| make_visitor().visit_item(self.item(id)));
+            },
+            {
+                module.par_trait_items(|id| make_visitor().visit_trait_item(self.trait_item(id)));
+            },
+            {
+                module.par_impl_items(|id| make_visitor().visit_impl_item(self.impl_item(id)));
+            },
+            {
+                module.par_foreign_items(|id| {
+                    make_visitor().visit_foreign_item(self.foreign_item(id))
+                });
+            }
+        );
+    }
+
     pub fn for_each_module(self, mut f: impl FnMut(LocalModDefId)) {
         let crate_items = self.tcx.hir_crate_items(());
         for module in crate_items.submodules.iter() {

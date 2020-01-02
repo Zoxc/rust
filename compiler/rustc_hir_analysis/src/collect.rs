@@ -49,7 +49,7 @@ mod type_of;
 // Main entry point
 
 fn collect_mod_item_types(tcx: TyCtxt<'_>, module_def_id: LocalModDefId) {
-    tcx.hir().visit_item_likes_in_module(module_def_id, &mut CollectItemTypesVisitor { tcx });
+    tcx.hir().par_visit_item_likes_in_module(module_def_id, || CollectItemTypesVisitor { tcx });
 }
 
 pub fn provide(providers: &mut Providers) {
