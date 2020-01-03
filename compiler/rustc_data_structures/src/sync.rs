@@ -40,6 +40,7 @@
 //! [^2] `MTLockRef` is a typedef.
 
 pub use crate::marker::*;
+use std::any::Any;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
 use std::ops::{Deref, DerefMut};
@@ -91,6 +92,23 @@ mod mode {
 }
 
 pub use mode::{is_dyn_thread_safe, set_dyn_thread_safe_mode};
+
+fn catch<R>(
+    store: &Lock<Option<Box<dyn Any + std::marker::Send + 'static>>>,
+    f: impl FnOnce() -> R,
+) -> Option<R> {
+    catch_unwind(AssertUnwindSafe(f))
+        .map_err(|err| {
+            *store.lock() = Some(err);
+        })
+        .ok()
+}
+
+fn resume(store: Lock<Option<Box<dyn Any + std::marker::Send + 'static>>>) {
+    if let Some(panic) = store.into_inner() {
+        resume_unwind(panic);
+    }
+}
 
 cfg_if! {
     if #[cfg(not(parallel_compiler))] {
@@ -186,7 +204,11 @@ cfg_if! {
             where A: FnOnce() -> RA,
                   B: FnOnce() -> RB
         {
-            (oper_a(), oper_b())
+            let panic = Lock::new(None);
+            let a = catch(&panic, oper_a);
+            let b = catch(&panic, oper_b);
+            resume(panic);
+            (a.unwrap(), b.unwrap())
         }
 
         #[macro_export]
@@ -372,7 +394,11 @@ cfg_if! {
                 let (a, b) = rayon::join(move || FromDyn::from(oper_a.into_inner()()), move || FromDyn::from(oper_b.into_inner()()));
                 (a.into_inner(), b.into_inner())
             } else {
-                (oper_a(), oper_b())
+                let panic = Lock::new(None);
+                let a = catch(&panic, oper_a);
+                let b = catch(&panic, oper_b);
+                resume(panic);
+                (a.unwrap(), b.unwrap())
             }
         }
 
