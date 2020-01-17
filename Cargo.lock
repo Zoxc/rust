@@ -1632,9 +1632,8 @@ dependencies = [
 
 [[package]]
 name = "jobserver"
-version = "0.1.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "230ae9adf468173aecd4176c7233bddc84a15871a586c5971ace9a55f881c075"
+version = "0.1.19"
+source = "git+https://github.com/Zoxc/jobserver-rs.git?branch=join-helper-thread#57ceb626a7f624a3fb41225936cb114ebd6280e5"
 dependencies = [
  "libc",
 ]
