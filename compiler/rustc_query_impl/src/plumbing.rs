@@ -46,6 +46,10 @@ impl QueryContext for QueryCtxt<'tcx> {
         self.tcx.def_path_str(def_id)
     }
 
+    fn local_def_index_count(&self) -> usize {
+        self.tcx.hir().definitions().def_index_count()
+    }
+
     fn current_query_job(&self) -> Option<QueryJobId<Self::DepKind>> {
         tls::with_related_context(**self, |icx| icx.query)
     }

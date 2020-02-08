@@ -73,6 +73,12 @@ impl<C: QueryCache> QueryCacheStore<C> {
         (QueryLookup { key_hash, shard }, lock)
     }
 
+    pub(super) fn create_lookup<'tcx>(&'tcx self, key: &C::Key) -> QueryLookup {
+        let key_hash = hash_for_shard(key);
+        let shard = get_shard_index_by_hash(key_hash);
+        QueryLookup { key_hash, shard }
+    }
+
     pub fn iter_results(&self, f: &mut dyn FnMut(&C::Key, &C::Value, DepNodeIndex)) {
         self.cache.iter(&self.shards, f)
     }
@@ -298,7 +304,12 @@ where
 
     /// Completes the query by updating the query cache with the `result`,
     /// signals the waiter and forgets the JobOwner, so it won't poison the query
-    fn complete(self, result: C::Value, dep_node_index: DepNodeIndex) -> C::Stored {
+    fn complete<CTX: QueryContext>(
+        self,
+        tcx: CTX,
+        result: C::Value,
+        dep_node_index: DepNodeIndex,
+    ) -> C::Stored {
         // We can move out of `self` here because we `mem::forget` it below
         let key = unsafe { ptr::read(&self.key) };
         let state = self.state;
@@ -319,7 +330,7 @@ where
             };
             let result = {
                 let mut lock = cache.shards.get_shard_by_index(shard).lock();
-                cache.cache.complete(&mut lock, key, result, dep_node_index)
+                cache.cache.complete(tcx, &mut lock, key, result, dep_node_index)
             };
             (job, result)
         };
@@ -480,7 +491,7 @@ where
             tcx.store_diagnostics_for_anon_node(dep_node_index, diagnostics);
         }
 
-        return job.complete(result, dep_node_index);
+        return job.complete(tcx, result, dep_node_index);
     }
 
     let dep_node = query.to_dep_node(*tcx.dep_context(), &key);
@@ -506,7 +517,7 @@ where
             })
         });
         if let Some((result, dep_node_index)) = loaded {
-            return job.complete(result, dep_node_index);
+            return job.complete(tcx, result, dep_node_index);
         }
     }
 
@@ -669,7 +680,7 @@ where
         tcx.store_diagnostics(dep_node_index, diagnostics);
     }
 
-    let result = job.complete(result, dep_node_index);
+    let result = job.complete(tcx, result, dep_node_index);
 
     (result, dep_node_index)
 }

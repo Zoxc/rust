@@ -1,13 +1,18 @@
 use crate::dep_graph::DepNodeIndex;
 use crate::query::plumbing::{QueryCacheStore, QueryLookup};
+use crate::query::QueryContext;
 
 use rustc_arena::TypedArena;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::sharded::Sharded;
 use rustc_data_structures::sync::WorkerLocal;
+use rustc_index::vec::IndexVec;
+use rustc_span::def_id::LocalDefId;
+use std::cell::RefCell;
 use std::default::Default;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::intrinsics::unlikely;
 use std::marker::PhantomData;
 
 pub trait CacheSelector<K, V> {
@@ -41,8 +46,9 @@ pub trait QueryCache: QueryStorage + Sized {
     where
         OnHit: FnOnce(&Self::Stored, DepNodeIndex) -> R;
 
-    fn complete(
+    fn complete<CTX: QueryContext>(
         &self,
+        tcx: CTX,
         lock_sharded_storage: &mut Self::Sharded,
         key: Self::Key,
         value: Self::Value,
@@ -111,8 +117,9 @@ where
     }
 
     #[inline]
-    fn complete(
+    fn complete<CTX: QueryContext>(
         &self,
+        _tcx: CTX,
         lock_sharded_storage: &mut Self::Sharded,
         key: K,
         value: V,
@@ -195,8 +202,9 @@ where
     }
 
     #[inline]
-    fn complete(
+    fn complete<CTX: QueryContext>(
         &self,
+        _tcx: CTX,
         lock_sharded_storage: &mut Self::Sharded,
         key: K,
         value: V,
@@ -219,5 +227,86 @@ where
                 f(k, &v.0, v.1);
             }
         }
+    }
+}
+
+pub struct LocalDenseDefIdCacheSelector;
+
+impl<V> CacheSelector<LocalDefId, V> for LocalDenseDefIdCacheSelector {
+    #[cfg(not(parallel_compiler))]
+    type Cache = LocalDenseDefIdCache<V>;
+    #[cfg(parallel_compiler)]
+    type Cache = DefaultCache<LocalDefId, V>;
+}
+
+pub struct LocalDenseDefIdCache<V> {
+    results: RefCell<IndexVec<LocalDefId, Option<(V, DepNodeIndex)>>>,
+}
+
+impl<V> Default for LocalDenseDefIdCache<V> {
+    fn default() -> Self {
+        LocalDenseDefIdCache { results: RefCell::new(IndexVec::new()) }
+    }
+}
+
+impl<V: Clone + Debug> QueryStorage for LocalDenseDefIdCache<V> {
+    type Value = V;
+    type Stored = V;
+
+    #[inline]
+    fn store_nocache(&self, value: Self::Value) -> Self::Stored {
+        // We have no dedicated storage
+        value
+    }
+}
+
+impl<V: Clone + Debug> QueryCache for LocalDenseDefIdCache<V> {
+    type Key = LocalDefId;
+    type Sharded = ();
+
+    #[inline(always)]
+    fn lookup<'s, R, OnHit>(
+        &self,
+        state: &'s QueryCacheStore<Self>,
+        key: &LocalDefId,
+        on_hit: OnHit,
+    ) -> Result<R, QueryLookup>
+    where
+        OnHit: FnOnce(&V, DepNodeIndex) -> R,
+    {
+        let results = self.results.borrow();
+        if let Some(result) = results.get(*key).and_then(|v| v.as_ref()) {
+            Ok(on_hit(&result.0, result.1))
+        } else {
+            Err(state.create_lookup(key))
+        }
+    }
+
+    #[inline]
+    fn complete<CTX: QueryContext>(
+        &self,
+        tcx: CTX,
+        _lock_sharded_storage: &mut Self::Sharded,
+        key: LocalDefId,
+        value: V,
+        index: DepNodeIndex,
+    ) -> Self::Stored {
+        let mut results = self.results.borrow_mut();
+        if unlikely(results.raw.capacity() == 0) {
+            *results = IndexVec::from_elem_n(None, tcx.local_def_index_count());
+        }
+        results[key] = Some((value.clone(), index));
+        value
+    }
+
+    fn iter(
+        &self,
+        _shards: &Sharded<Self::Sharded>,
+        f: &mut dyn FnMut(&LocalDefId, &V, DepNodeIndex),
+    ) {
+        let results = self.results.borrow();
+        let results =
+            results.iter_enumerated().filter_map(|(i, e)| e.as_ref().map(|e| (i, &e.0, e.1)));
+        results.for_each(|(k, v, i)| f(&k, v, i));
     }
 }

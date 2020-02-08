@@ -8,7 +8,8 @@ pub use self::job::{print_query_stack, QueryInfo, QueryJob, QueryJobId, QueryJob
 
 mod caches;
 pub use self::caches::{
-    ArenaCacheSelector, CacheSelector, DefaultCacheSelector, QueryCache, QueryStorage,
+    ArenaCacheSelector, CacheSelector, DefaultCacheSelector, LocalDenseDefIdCacheSelector,
+    QueryCache, QueryStorage,
 };
 
 mod config;
@@ -66,6 +67,9 @@ impl QueryStackFrame {
 pub trait QueryContext: HasDepContext {
     /// Get string representation from DefPath.
     fn def_path_str(&self, def_id: DefId) -> String;
+
+    /// Get the def index count for the current crate.
+    fn local_def_index_count(&self) -> usize;
 
     /// Get the query information from the TLS context.
     fn current_query_job(&self) -> Option<QueryJobId<Self::DepKind>>;
