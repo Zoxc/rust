@@ -48,6 +48,7 @@ rustc_queries! {
     /// This can be conveniently accessed by methods on `tcx.hir()`.
     /// Avoid calling this query directly.
     query hir_owner(key: LocalDefId) -> Option<&'tcx crate::hir::Owner<'tcx>> {
+        storage(LocalDenseDefIdCacheSelector)
         eval_always
         desc { |tcx| "HIR owner of `{}`", tcx.def_path_str(key.to_def_id()) }
     }
@@ -57,6 +58,7 @@ rustc_queries! {
     /// This can be conveniently accessed by methods on `tcx.hir()`.
     /// Avoid calling this query directly.
     query hir_owner_parent(key: LocalDefId) -> hir::HirId {
+        storage(LocalDenseDefIdCacheSelector)
         eval_always
         desc { |tcx| "HIR parent of `{}`", tcx.def_path_str(key.to_def_id()) }
     }
@@ -66,6 +68,7 @@ rustc_queries! {
     /// This can be conveniently accessed by methods on `tcx.hir()`.
     /// Avoid calling this query directly.
     query hir_owner_nodes(key: LocalDefId) -> Option<&'tcx crate::hir::OwnerNodes<'tcx>> {
+        storage(LocalDenseDefIdCacheSelector)
         eval_always
         desc { |tcx| "HIR owner items in `{}`", tcx.def_path_str(key.to_def_id()) }
     }
@@ -75,6 +78,7 @@ rustc_queries! {
     /// This can be conveniently accessed by methods on `tcx.hir()`.
     /// Avoid calling this query directly.
     query hir_attrs(key: LocalDefId) -> rustc_middle::hir::AttributeMap<'tcx> {
+        storage(LocalDenseDefIdCacheSelector)
         eval_always
         desc { |tcx| "HIR owner attributes in `{}`", tcx.def_path_str(key.to_def_id()) }
     }
