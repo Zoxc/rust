@@ -54,6 +54,7 @@ pub(crate) struct QueryState<'tcx, D: QueryAccessors<'tcx> + ?Sized> {
     pub(super) shards: Sharded<QueryStateShard<'tcx, D>>,
     #[cfg(debug_assertions)]
     pub(super) cache_hits: AtomicUsize,
+    // FIXME: store query information here
 }
 
 impl<'tcx, Q: QueryAccessors<'tcx>> QueryState<'tcx, Q> {

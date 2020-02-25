@@ -63,6 +63,8 @@ mod plumbing;
 use self::plumbing::*;
 pub use self::plumbing::{force_from_dep_node, CycleError};
 
+mod erase;
+
 mod stats;
 pub use self::stats::print_stats;
 
