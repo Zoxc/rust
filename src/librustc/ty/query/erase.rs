@@ -1,15 +1,11 @@
-//! Defines the set of legal keys that can be used in queries.
-
-use crate::infer::canonical::Canonical;
+//use crate::infer::canonical::Canonical;
 use crate::mir;
 use crate::traits;
 use crate::ty::fast_reject::SimplifiedType;
-use crate::ty::query::caches::DefaultCacheSelector;
 use crate::ty::subst::SubstsRef;
-use crate::ty::{self, Ty, TyCtxt};
-use rustc_hir::def_id::{CrateNum, DefId, DefIndex, LOCAL_CRATE};
+use crate::ty::{self};
+use rustc_hir::def_id::{CrateNum, DefId, DefIndex};
 use rustc_span::symbol::Symbol;
-use rustc_span::{Span, DUMMY_SP};
 use std::mem::transmute;
 
 pub(super) trait Erase {
@@ -18,7 +14,7 @@ pub(super) trait Erase {
     fn erase(self) -> Self::Erased;
     unsafe fn recover(erased: Self::Erased) -> Self;
 }
-
+/*
 macro_rules! identity_impls {
     ([$(lifetimes:tt)*] $($ty:ty),*) => {
         $(
@@ -38,7 +34,7 @@ macro_rules! identity_impls {
         )*
     };
 }
-
+*/
 macro_rules! copy_impls {
     (impl $([$($params:tt)*] $ty:ty, $ety:ty),*) => {
         $(

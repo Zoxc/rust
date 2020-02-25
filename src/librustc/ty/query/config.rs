@@ -3,7 +3,7 @@ use crate::dep_graph::{DepKind, DepNode};
 use crate::ty::query::caches::QueryCache;
 use crate::ty::query::plumbing::CycleError;
 use crate::ty::query::queries;
-use crate::ty::query::{Query, QueryState};
+use crate::ty::query::{Query, QueryStateAccessor};
 use crate::ty::TyCtxt;
 use rustc_data_structures::profiling::ProfileCategory;
 use rustc_hir::def_id::{CrateNum, DefId};
@@ -26,7 +26,7 @@ pub trait QueryConfig<'tcx> {
     type Value: Clone;
 }
 
-pub(crate) trait QueryAccessors<'tcx>: QueryConfig<'tcx> {
+pub(crate) trait QueryAccessors<'tcx>: QueryConfig<'tcx> + Sized {
     const ANON: bool;
     const EVAL_ALWAYS: bool;
 
@@ -35,7 +35,7 @@ pub(crate) trait QueryAccessors<'tcx>: QueryConfig<'tcx> {
     fn query(key: Self::Key) -> Query<'tcx>;
 
     // Don't use this method to access query results, instead use the methods on TyCtxt
-    fn query_state<'a>(tcx: TyCtxt<'tcx>) -> &'a QueryState<'tcx, Self>;
+    fn query_state<'a>(tcx: TyCtxt<'tcx>) -> &'a QueryStateAccessor<'tcx, Self>;
 
     fn to_dep_node(tcx: TyCtxt<'tcx>, key: &Self::Key) -> DepNode;
 

@@ -1,5 +1,4 @@
 use crate::dep_graph::DepNodeIndex;
-use crate::ty::query::config::QueryAccessors;
 use crate::ty::query::plumbing::{QueryLookup, QueryState, QueryStateShard};
 use crate::ty::TyCtxt;
 
@@ -19,9 +18,9 @@ pub(crate) trait QueryCache<K, V>: Default {
     /// It returns the shard index and a lock guard to the shard,
     /// which will be used if the query is not in the cache and we need
     /// to compute it.
-    fn lookup<'tcx, R, GetCache, OnHit, OnMiss, Q>(
+    fn lookup<'tcx, R, GetCache, OnHit, OnMiss>(
         &self,
-        state: &'tcx QueryState<'tcx, Q>,
+        state: &'tcx QueryState<'tcx, K, V, Self>,
         get_cache: GetCache,
         key: K,
         // `on_hit` can be called while holding a lock to the query state shard.
@@ -29,10 +28,10 @@ pub(crate) trait QueryCache<K, V>: Default {
         on_miss: OnMiss,
     ) -> R
     where
-        Q: QueryAccessors<'tcx>,
-        GetCache: for<'a> Fn(&'a mut QueryStateShard<'tcx, Q>) -> &'a mut Self::Sharded,
+        GetCache:
+            for<'a> Fn(&'a mut QueryStateShard<'tcx, K, Self::Sharded>) -> &'a mut Self::Sharded,
         OnHit: FnOnce(&V, DepNodeIndex) -> R,
-        OnMiss: FnOnce(K, QueryLookup<'tcx, Q>) -> R;
+        OnMiss: FnOnce(K, QueryLookup<'tcx, K, Self::Sharded>) -> R;
 
     fn complete(
         &self,
@@ -64,19 +63,19 @@ impl<K: Eq + Hash, V: Clone> QueryCache<K, V> for DefaultCache {
     type Sharded = FxHashMap<K, (V, DepNodeIndex)>;
 
     #[inline(always)]
-    fn lookup<'tcx, R, GetCache, OnHit, OnMiss, Q>(
+    fn lookup<'tcx, R, GetCache, OnHit, OnMiss>(
         &self,
-        state: &'tcx QueryState<'tcx, Q>,
+        state: &'tcx QueryState<'tcx, K, V, Self>,
         get_cache: GetCache,
         key: K,
         on_hit: OnHit,
         on_miss: OnMiss,
     ) -> R
     where
-        Q: QueryAccessors<'tcx>,
-        GetCache: for<'a> Fn(&'a mut QueryStateShard<'tcx, Q>) -> &'a mut Self::Sharded,
+        GetCache:
+            for<'a> Fn(&'a mut QueryStateShard<'tcx, K, Self::Sharded>) -> &'a mut Self::Sharded,
         OnHit: FnOnce(&V, DepNodeIndex) -> R,
-        OnMiss: FnOnce(K, QueryLookup<'tcx, Q>) -> R,
+        OnMiss: FnOnce(K, QueryLookup<'tcx, K, Self::Sharded>) -> R,
     {
         let mut lookup = state.get_lookup(&key);
         let lock = &mut *lookup.lock;

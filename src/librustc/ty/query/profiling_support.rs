@@ -1,7 +1,7 @@
 use crate::hir::map::definitions::DefPathData;
 use crate::ty::context::TyCtxt;
 use crate::ty::query::config::QueryAccessors;
-use crate::ty::query::plumbing::QueryState;
+use crate::ty::query::plumbing::QueryStateAccessor;
 use measureme::{StringComponent, StringId};
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::profiling::SelfProfiler;
@@ -160,7 +160,7 @@ where
 pub(super) fn alloc_self_profile_query_strings_for_query_cache<'tcx, Q>(
     tcx: TyCtxt<'tcx>,
     query_name: &'static str,
-    query_state: &QueryState<'tcx, Q>,
+    query_state: &QueryStateAccessor<'tcx, Q>,
     string_cache: &mut QueryKeyStringCache,
 ) where
     Q: QueryAccessors<'tcx>,

@@ -1,5 +1,5 @@
 use crate::ty::query::config::QueryAccessors;
-use crate::ty::query::plumbing::QueryState;
+use crate::ty::query::plumbing::QueryStateAccessor;
 use crate::ty::query::queries;
 use crate::ty::TyCtxt;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
@@ -39,7 +39,7 @@ struct QueryStats {
 
 fn stats<'tcx, Q: QueryAccessors<'tcx>>(
     name: &'static str,
-    map: &QueryState<'tcx, Q>,
+    map: &QueryStateAccessor<'tcx, Q>,
 ) -> QueryStats {
     let mut stats = QueryStats {
         name,
