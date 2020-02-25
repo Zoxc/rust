@@ -5,7 +5,7 @@
 use crate::dep_graph::{DepKind, DepNode, DepNodeIndex, SerializedDepNodeIndex};
 use crate::ich::StableHashingContext;
 use crate::ty::query::caches::QueryCache;
-use crate::ty::query::config::QueryAccessors;
+use crate::ty::query::config::{QueryAccessors, QueryDescription};
 use crate::ty::query::job::{QueryInfo, QueryJob, QueryJobId, QueryShardJobId};
 use crate::ty::query::Query;
 use crate::ty::tls;
@@ -118,7 +118,7 @@ impl<'tcx, Q: QueryAccessors<'tcx>> QueryStateAccessor<'tcx, Q> {
     }
 }
 
-impl<'tcx, Q: QueryAccessors<'tcx>> Default for QueryStateAccessor<'tcx, Q> {
+impl<'tcx, Q: QueryDescription<'tcx>> Default for QueryStateAccessor<'tcx, Q> {
     fn default() -> Self {
         QueryStateAccessor {
             state: QueryState {
@@ -126,7 +126,19 @@ impl<'tcx, Q: QueryAccessors<'tcx>> Default for QueryStateAccessor<'tcx, Q> {
                 shards: Default::default(),
                 #[cfg(debug_assertions)]
                 cache_hits: AtomicUsize::new(0),
-                fns: panic!(),
+                fns: QueryFns {
+                    anon: Q::ANON,
+                    eval_always: Q::EVAL_ALWAYS,
+                    name: Q::NAME,
+                    dep_kind: Q::dep_kind(),
+                    to_dep_node: Q::to_dep_node,
+                    compute: Q::compute,
+                    hash_result: Q::hash_result,
+                    handle_cycle_error: Q::handle_cycle_error,
+                    debug_key: |key| format!("{:?}", key),
+                    cache_on_disk: Q::cache_on_disk,
+                    try_load_from_disk: Q::try_load_from_disk,
+                },
             },
         }
     }
