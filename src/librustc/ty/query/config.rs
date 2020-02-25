@@ -1,6 +1,7 @@
 use crate::dep_graph::SerializedDepNodeIndex;
 use crate::dep_graph::{DepKind, DepNode};
 use crate::ty::query::caches::QueryCache;
+use crate::ty::query::erase::Erase;
 use crate::ty::query::plumbing::CycleError;
 use crate::ty::query::queries;
 use crate::ty::query::{Query, QueryStateAccessor};
@@ -23,14 +24,14 @@ pub trait QueryConfig<'tcx> {
     const CATEGORY: ProfileCategory;
 
     type Key: Eq + Hash + Clone + Debug;
-    type Value: Clone;
+    type Value: Clone + Erase;
 }
 
 pub(crate) trait QueryAccessors<'tcx>: QueryConfig<'tcx> + Sized {
     const ANON: bool;
     const EVAL_ALWAYS: bool;
 
-    type Cache: QueryCache<Self::Key, Self::Value>;
+    type Cache: QueryCache<Self::Key, <Self::Value as Erase>::Erased>;
 
     fn query(key: Self::Key) -> Query<'tcx>;
 
@@ -64,8 +65,9 @@ pub(crate) trait QueryDescription<'tcx>: QueryAccessors<'tcx> {
 }
 
 impl<'tcx, M: QueryAccessors<'tcx, Key = DefId>> QueryDescription<'tcx> for M
-where
-    <M as QueryAccessors<'tcx>>::Cache: QueryCache<DefId, <M as QueryConfig<'tcx>>::Value>,
+/*where
+<M as QueryAccessors<'tcx>>::Cache:
+    QueryCache<DefId, <<M as QueryConfig<'tcx>>::Value as Erase>::Erased>,*/
 {
     default fn describe(tcx: TyCtxt<'_>, def_id: DefId) -> Cow<'static, str> {
         if !tcx.sess.verbose() {

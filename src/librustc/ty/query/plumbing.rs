@@ -6,6 +6,7 @@ use crate::dep_graph::{DepKind, DepNode, DepNodeIndex, SerializedDepNodeIndex};
 use crate::ich::StableHashingContext;
 use crate::ty::query::caches::QueryCache;
 use crate::ty::query::config::{QueryAccessors, QueryDescription};
+use crate::ty::query::erase::Erase;
 use crate::ty::query::job::{QueryInfo, QueryJob, QueryJobId, QueryShardJobId};
 use crate::ty::query::Query;
 use crate::ty::tls;
@@ -64,7 +65,7 @@ impl<'tcx, K, CacheSharded: Default> Default for QueryStateShard<'tcx, K, CacheS
 }
 
 pub(crate) struct QueryStateAccessor<'tcx, Q: QueryAccessors<'tcx>> {
-    pub(super) state: QueryState<'tcx, Q::Key, Q::Value, Q::Cache>,
+    pub(super) state: QueryState<'tcx, Q::Key, <Q::Value as Erase>::Erased, Q::Cache>,
 }
 
 pub(crate) struct QueryState<'tcx, K, V, Cache: QueryCache<K, V>> {
