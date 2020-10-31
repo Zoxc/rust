@@ -232,8 +232,6 @@ cfg_if! {
 
         use std::cell::RefCell as InnerRwLock;
 
-        use std::cell::Cell;
-
         #[derive(Debug)]
         pub struct WorkerLocal<T>(OneThread<T>);
 
@@ -309,7 +307,6 @@ cfg_if! {
         pub use parking_lot::RwLockWriteGuard as WriteGuard;
         pub use parking_lot::MappedRwLockWriteGuard as MappedWriteGuard;
 
-        pub use parking_lot::MutexGuard as LockGuard;
         pub use parking_lot::MappedMutexGuard as MappedLockGuard;
 
         pub use std::lazy::SyncOnceCell as OnceCell;
@@ -353,7 +350,6 @@ cfg_if! {
             }
         }
 
-        use parking_lot::Mutex as InnerLock;
         use parking_lot::RwLock as InnerRwLock;
 
         use std::thread;
@@ -438,7 +434,7 @@ use  std::marker::PhantomData;
 use std::fmt;
 
 use lock_api::RawMutex;
-
+use std::cell::Cell;
 /// An RAII implementation of a "scoped lock" of a mutex. When this structure is
 /// dropped (falls out of scope), the lock will be unlocked.
 ///
@@ -613,6 +609,11 @@ impl<T: fmt::Debug> fmt::Debug for Lock<T> {
             }
         }
     }
+}
+
+#[no_mangle]
+pub fn test(a: Lock<bool>) {
+    *a.lock() = true;
 }
 
 impl<T> Lock<T> {
