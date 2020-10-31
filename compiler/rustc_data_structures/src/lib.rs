@@ -22,6 +22,7 @@
 #![feature(stmt_expr_attributes)]
 #![feature(core_intrinsics)]
 #![feature(test)]
+#![feature(thread_local)]
 #![feature(associated_type_bounds)]
 #![feature(thread_id_value)]
 #![feature(extend_one)]

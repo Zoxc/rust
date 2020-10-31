@@ -24,6 +24,7 @@ rayon-core = { version = "0.3.0", package = "rustc-rayon-core" }
 rustc-hash = "1.1.0"
 smallvec = { version = "1.0", features = ["union", "may_dangle"] }
 rustc_index = { path = "../rustc_index", package = "rustc_index" }
+lock_api = "0.4.1"
 bitflags = "1.2.1"
 measureme = "9.0.0"
 libc = "0.2"

@@ -226,13 +226,11 @@ cfg_if! {
         pub use std::cell::Ref as MappedReadGuard;
         pub use std::cell::RefMut as WriteGuard;
         pub use std::cell::RefMut as MappedWriteGuard;
-        pub use std::cell::RefMut as LockGuard;
         pub use std::cell::RefMut as MappedLockGuard;
 
         pub use std::lazy::OnceCell;
 
         use std::cell::RefCell as InnerRwLock;
-        use std::cell::RefCell as InnerLock;
 
         use std::cell::Cell;
 
@@ -434,51 +432,269 @@ impl<K: Eq + Hash, V: Eq, S: BuildHasher> HashMapExt<K, V> for HashMap<K, V, S> 
     }
 }
 
-#[derive(Debug)]
-pub struct Lock<T>(InnerLock<T>);
+use  std::cell::UnsafeCell;
+
+use  std::marker::PhantomData;
+use std::fmt;
+
+use lock_api::RawMutex;
+
+/// An RAII implementation of a "scoped lock" of a mutex. When this structure is
+/// dropped (falls out of scope), the lock will be unlocked.
+///
+/// The data protected by the mutex can be accessed through this guard via its
+/// `Deref` and `DerefMut` implementations.
+#[must_use = "if unused the Mutex will immediately unlock"]
+pub struct LockGuard<'a, T> {
+    lock: &'a Lock<T>,
+    marker: PhantomData<&'a mut T>,
+}
+
+unsafe impl<'a, T: std::marker::Sync + 'a> std::marker::Sync for LockGuard<'a, T> {}
+
+impl<'a, T: 'a> LockGuard<'a, T> {
+    /*/// Returns a reference to the original `Mutex` object.
+    pub fn mutex(s: &Self) -> &'a Mutex<R, T> {
+        s.mutex
+    }
+
+    /// Makes a new `MappedMutexGuard` for a component of the locked data.
+    ///
+    /// This operation cannot fail as the `LockGuard` passed
+    /// in already locked the mutex.
+    ///
+    /// This is an associated function that needs to be
+    /// used as `LockGuard::map(...)`. A method would interfere with methods of
+    /// the same name on the contents of the locked data.
+    #[inline]
+    pub fn map<U: ?Sized, F>(s: Self, f: F) -> MappedMutexGuard<'a, R, U>
+    where
+        F: FnOnce(&mut T) -> &mut U,
+    {
+        let raw = &s.mutex.raw;
+        let data = f(unsafe { &mut *s.mutex.data.get() });
+        mem::forget(s);
+        MappedMutexGuard {
+            raw,
+            data,
+            marker: PhantomData,
+        }
+    }
+
+    /// Attempts to make a new `MappedMutexGuard` for a component of the
+    /// locked data. The original guard is returned if the closure returns `None`.
+    ///
+    /// This operation cannot fail as the `LockGuard` passed
+    /// in already locked the mutex.
+    ///
+    /// This is an associated function that needs to be
+    /// used as `LockGuard::try_map(...)`. A method would interfere with methods of
+    /// the same name on the contents of the locked data.
+    #[inline]
+    pub fn try_map<U: ?Sized, F>(s: Self, f: F) -> Result<MappedMutexGuard<'a, R, U>, Self>
+    where
+        F: FnOnce(&mut T) -> Option<&mut U>,
+    {
+        let raw = &s.mutex.raw;
+        let data = match f(unsafe { &mut *s.mutex.data.get() }) {
+            Some(data) => data,
+            None => return Err(s),
+        };
+        mem::forget(s);
+        Ok(MappedMutexGuard {
+            raw,
+            data,
+            marker: PhantomData,
+        })
+    }
+
+    /// Temporarily unlocks the mutex to execute the given function.
+    ///
+    /// This is safe because `&mut` guarantees that there exist no other
+    /// references to the data protected by the mutex.
+    #[inline]
+    pub fn unlocked<F, U>(s: &mut Self, f: F) -> U
+    where
+        F: FnOnce() -> U,
+    {
+        // Safety: A LockGuard always holds the lock.
+        unsafe {
+            s.mutex.raw.unlock();
+        }
+        defer!(s.mutex.raw.lock());
+        f()
+    }*/
+}
+
+impl<'a, T: 'a> Deref for LockGuard<'a, T> {
+    type Target = T;
+    #[inline]
+    fn deref(&self) -> &T {
+        unsafe { &*self.lock.data.get() }
+    }
+}
+
+impl<'a, T: 'a> DerefMut for LockGuard<'a, T> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut T {
+        unsafe { &mut *self.lock.data.get() }
+    }
+}
+
+impl<'a, T: 'a> Drop for LockGuard<'a, T> {
+    #[inline]
+    fn drop(&mut self) {
+        if self.lock.mt {
+            unsafe { self.lock.mt_lock.unlock() };
+        } else {
+            self.lock.st_lock.set(false);
+        }
+    }
+}
+/*
+impl<'a, T: fmt::Debug + ?Sized + 'a> fmt::Debug for LockGuard<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&**self, f)
+    }
+}
+
+impl<'a, T: fmt::Display + ?Sized + 'a> fmt::Display for LockGuard<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (**self).fmt(f)
+    }
+}*/
+
+//#[derive(Debug)]
+pub struct Lock<T> {
+    mt: bool,
+    thread: usize,
+    st_lock: Cell<bool>,
+    mt_lock: parking_lot::RawMutex,
+    data: UnsafeCell<T>,
+}
+
+thread_local! {
+    static ACTIVE: Cell<bool> = Cell::new(false);
+}
+
+#[thread_local]
+static THREAD: Cell<usize> = Cell::new(0);
+
+#[inline(never)]
+fn current_thread() -> usize {
+    let thread = &THREAD;
+    let val = thread.get();
+    if unlikely!(val == 0) {
+        thread.set(3);
+        thread.get()
+    } else {
+        val
+    }
+}
+
+unsafe impl<T: std::marker::Send> std::marker::Send for Lock<T> {}
+unsafe impl<T: std::marker::Send> std::marker::Sync for Lock<T> {}
+
+impl<T: fmt::Debug> fmt::Debug for Lock<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.try_lock() {
+            Some(guard) => f.debug_struct("Lock").field("data", &&*guard).finish(),
+            None => {
+                struct LockedPlaceholder;
+                impl fmt::Debug for LockedPlaceholder {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        f.write_str("<locked>")
+                    }
+                }
+
+                f.debug_struct("Lock")
+                    .field("data", &LockedPlaceholder)
+                    .finish()
+            }
+        }
+    }
+}
 
 impl<T> Lock<T> {
     #[inline(always)]
     pub fn new(inner: T) -> Self {
-        Lock(InnerLock::new(inner))
+        ACTIVE.with(|active| {
+            if active.get() {
+                Lock {
+                    mt: true,
+                    st_lock: Cell::new(false),
+                    thread: 0,
+                    data: UnsafeCell::new(inner),
+                    mt_lock: parking_lot::RawMutex::INIT,
+                }
+            } else {
+                Lock {
+                    mt: false,
+                    st_lock: Cell::new(false),
+                    thread: current_thread(),
+                    data: UnsafeCell::new(inner),
+                    mt_lock: parking_lot::RawMutex::INIT,
+                }
+            }
+
+        })
     }
 
     #[inline(always)]
     pub fn into_inner(self) -> T {
-        self.0.into_inner()
+        self.data.into_inner()
     }
 
     #[inline(always)]
     pub fn get_mut(&mut self) -> &mut T {
-        self.0.get_mut()
+        unsafe { &mut *self.data.get() }
     }
 
-    #[cfg(parallel_compiler)]
     #[inline(always)]
     pub fn try_lock(&self) -> Option<LockGuard<'_, T>> {
-        self.0.try_lock()
-    }
-
-    #[cfg(not(parallel_compiler))]
-    #[inline(always)]
-    pub fn try_lock(&self) -> Option<LockGuard<'_, T>> {
-        self.0.try_borrow_mut().ok()
-    }
-
-    #[cfg(parallel_compiler)]
-    #[inline(always)]
-    pub fn lock(&self) -> LockGuard<'_, T> {
-        if ERROR_CHECKING {
-            self.0.try_lock().expect("lock was already held")
+        if self.mt {
+            if self.mt_lock.try_lock() {
+                Some(LockGuard {
+                    lock: self,
+                    marker: PhantomData,
+                })
+            } else {
+                None
+            }
         } else {
-            self.0.lock()
+            assert!(self.thread == current_thread());
+            if self.st_lock.get() {
+                None
+            } else {
+                self.st_lock.set(true);
+                Some(LockGuard {
+                    lock: self,
+                    marker: PhantomData,
+                })
+            }
         }
     }
 
-    #[cfg(not(parallel_compiler))]
     #[inline(always)]
     pub fn lock(&self) -> LockGuard<'_, T> {
-        self.0.borrow_mut()
+        if self.mt {
+            self.mt_lock.lock();
+            LockGuard {
+                lock: self,
+                marker: PhantomData,
+            }
+        } else {
+            assert!(self.thread == current_thread());
+            if self.st_lock.get() {
+                panic!("lock was already held")
+            } else {
+                self.st_lock.set(true);
+                LockGuard {
+                    lock: self,
+                    marker: PhantomData,
+                }
+            }
+        }
     }
 
     #[inline(always)]
