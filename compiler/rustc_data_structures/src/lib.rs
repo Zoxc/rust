@@ -21,6 +21,8 @@
 #![feature(new_uninit)]
 #![feature(once_cell)]
 #![feature(rustc_attrs)]
+#![feature(thread_local)]
+#![feature(untagged_unions)]
 #![feature(negative_impls)]
 #![feature(test)]
 #![feature(thread_id_value)]

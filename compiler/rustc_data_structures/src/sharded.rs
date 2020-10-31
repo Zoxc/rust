@@ -1,5 +1,5 @@
 use crate::fx::{FxHashMap, FxHasher};
-use crate::sync::{Lock, LockGuard};
+use crate::sync::{self, Lock, LockGuard};
 use std::borrow::Borrow;
 use std::collections::hash_map::RawEntryMut;
 use std::hash::{Hash, Hasher};
@@ -7,7 +7,7 @@ use std::mem;
 
 #[derive(Clone, Default)]
 #[cfg_attr(parallel_compiler, repr(align(64)))]
-struct CacheAligned<T>(T);
+pub struct CacheAligned<T>(T);
 
 #[cfg(parallel_compiler)]
 // 32 shards is sufficient to reduce contention on an 8-core Ryzen 7 1700,
@@ -22,8 +22,9 @@ pub const SHARDS: usize = 1 << SHARD_BITS;
 
 /// An array of cache-line aligned inner locked structures with convenience methods.
 #[derive(Clone)]
-pub struct Sharded<T> {
-    shards: [CacheAligned<Lock<T>>; SHARDS],
+pub enum Sharded<T> {
+    Disabled(Lock<T>),
+    Enabled([CacheAligned<Lock<T>>; SHARDS]),
 }
 
 impl<T: Default> Default for Sharded<T> {
@@ -36,31 +37,57 @@ impl<T: Default> Default for Sharded<T> {
 impl<T> Sharded<T> {
     #[inline]
     pub fn new(mut value: impl FnMut() -> T) -> Self {
-        Sharded { shards: [(); SHARDS].map(|()| CacheAligned(Lock::new(value()))) }
+        if sync::STATE.get().active {
+                Sharded::Enabled([(); SHARDS].map(|()| CacheAligned(Lock::new(value()))))
+        } else {
+            Sharded::Disabled(Lock::new(value()))
+        }
     }
 
     /// The shard is selected by hashing `val` with `FxHasher`.
     #[inline]
     pub fn get_shard_by_value<K: Hash + ?Sized>(&self, val: &K) -> &Lock<T> {
-        if SHARDS == 1 { &self.shards[0].0 } else { self.get_shard_by_hash(make_hash(val)) }
+        match self {
+            Sharded::Disabled(val) => val,
+            Sharded::Enabled(shards) => {
+                if SHARDS == 1 {
+                    &shards[0].0
+                } else {
+                    self.get_shard_by_hash(make_hash(val))
+    }
+            }
+        }
     }
 
     #[inline]
+    #[inline]
     pub fn get_shard_by_hash(&self, hash: u64) -> &Lock<T> {
-        &self.shards[get_shard_index_by_hash(hash)].0
+        match self {
+            Sharded::Disabled(val) => val,
+            Sharded::Enabled(shards) => &shards[get_shard_index_by_hash(hash)].0,
+        }
     }
 
     #[inline]
     pub fn get_shard_by_index(&self, i: usize) -> &Lock<T> {
-        &self.shards[i].0
+        match self {
+            Sharded::Disabled(val) => val,
+            Sharded::Enabled(shards) => &shards[i].0,
+    }
     }
 
     pub fn lock_shards(&self) -> Vec<LockGuard<'_, T>> {
-        (0..SHARDS).map(|i| self.shards[i].0.lock()).collect()
+        match self {
+            Sharded::Disabled(val) => vec![val.lock()],
+            Sharded::Enabled(shards) => (0..SHARDS).map(|i| shards[i].0.lock()).collect(),
+    }
     }
 
     pub fn try_lock_shards(&self) -> Option<Vec<LockGuard<'_, T>>> {
-        (0..SHARDS).map(|i| self.shards[i].0.try_lock()).collect()
+        match self {
+            Sharded::Disabled(val) => val.try_lock().map(|guard| vec![guard]),
+            Sharded::Enabled(shards) => (0..SHARDS).map(|i| shards[i].0.try_lock()).collect(),
+    }
     }
 }
 

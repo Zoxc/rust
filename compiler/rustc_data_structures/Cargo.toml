@@ -4,11 +4,13 @@ version = "0.0.0"
 edition = "2021"
 
 [lib]
+#crate-type = ["dylib"]
 
 [dependencies]
 arrayvec = { version = "0.7", default-features = false }
 bitflags = "1.2.1"
 cfg-if = "1.0"
+lock_api = "0.4.1"
 ena = "0.14"
 indexmap = { version = "1.9.1" }
 jobserver_crate = { version = "0.1.13", package = "jobserver" }
