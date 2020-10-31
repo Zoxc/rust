@@ -5,11 +5,12 @@ use rustc_ast::{self as ast, AttrVec, BlockCheckMode};
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
+
 #[cfg(parallel_compiler)]
-use rustc_data_structures::jobserver;
+use rustc_data_structures::{jobserver, sync};
+
 use rustc_data_structures::stable_hasher::StableHasher;
 use rustc_data_structures::sync::Lrc;
-use rustc_errors::registry::Registry;
 use rustc_metadata::dynamic_lib::DynamicLibrary;
 use rustc_resolve::{self, Resolver};
 use rustc_session as session;
@@ -68,7 +69,7 @@ pub fn create_session(
     make_codegen_backend: Option<
         Box<dyn FnOnce(&config::Options) -> Box<dyn CodegenBackend> + Send>,
     >,
-    descriptions: Registry,
+    descriptions: rustc_errors::registry::Registry,
 ) -> (Lrc<Session>, Lrc<Box<dyn CodegenBackend>>) {
     let codegen_backend = if let Some(make_codegen_backend) = make_codegen_backend {
         make_codegen_backend(&sopts)
@@ -183,6 +184,8 @@ pub fn setup_callbacks_and_run_in_thread_pool_with_globals<F: FnOnce() -> R + Se
     use rustc_middle::ty;
     crate::callbacks::setup_callbacks();
 
+    let registry = sync::Registry::new(threads);
+
     let mut config = rayon::ThreadPoolBuilder::new()
         .thread_name(|_| "rustc".to_string())
         .acquire_thread_handler(jobserver::acquire_thread)
@@ -202,6 +205,9 @@ pub fn setup_callbacks_and_run_in_thread_pool_with_globals<F: FnOnce() -> R + Se
             // the thread local rustc uses. `session_globals` is captured and set
             // on the new threads.
             let main_handler = move |thread: rayon::ThreadBuilder| {
+                // Register the thread for use with the `WorkerLocal` type.
+                registry.register();
+
                 rustc_span::SESSION_GLOBALS.set(session_globals, || {
                     if let Some(stderr) = stderr {
                         io::set_panic(Some(box Sink(stderr.clone())));

@@ -23,6 +23,7 @@
 #![feature(core_intrinsics)]
 #![feature(test)]
 #![feature(associated_type_bounds)]
+#![feature(thread_local)]
 #![feature(thread_id_value)]
 #![feature(extend_one)]
 #![feature(const_panic)]
