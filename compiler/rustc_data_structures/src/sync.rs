@@ -568,7 +568,7 @@ union LockRawOption {
 }
 #[derive(Copy, Clone)]
 pub struct State {
-    active: bool,
+    pub(crate) active: bool,
     thread: usize,
 }
 
@@ -636,6 +636,19 @@ impl<T: fmt::Debug> fmt::Debug for Lock<T> {
 
 #[no_mangle]
 #[inline(never)]
+pub fn lock_st(l: &LockRaw, state: &Cell<State>) {
+    unsafe {
+        assert!(l.opt.st.0 == state.get().thread);
+        if unlikely!(l.opt.st.1.get()) {
+            panic!("lock was already held")
+        } else {
+            l.opt.st.1.set(true);
+        }
+    }
+}
+
+#[no_mangle]
+#[inline(never)]
 pub fn lock(l: &LockRaw) {
     unsafe {
         if unlikely!(l.mt) {
@@ -694,6 +707,12 @@ impl<T> Lock<T> {
     #[inline(always)]
     pub fn lock(&self) -> LockGuard<'_, T> {
         lock(&self.raw);
+        LockGuard { lock: self, marker: PhantomData }
+    }
+
+    #[inline(always)]
+    pub(crate) fn lock_st(&self, state: &Cell<State>) -> LockGuard<'_, T> {
+        lock_st(&self.raw, state);
         LockGuard { lock: self, marker: PhantomData }
     }
 
