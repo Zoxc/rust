@@ -428,10 +428,10 @@ impl<K: Eq + Hash, V: Eq, S: BuildHasher> HashMapExt<K, V> for HashMap<K, V, S> 
     }
 }
 
-use  std::cell::UnsafeCell;
+use std::cell::UnsafeCell;
 
-use  std::marker::PhantomData;
 use std::fmt;
+use std::marker::PhantomData;
 
 use lock_api::RawMutex;
 use std::cell::Cell;
@@ -540,10 +540,12 @@ impl<'a, T: 'a> DerefMut for LockGuard<'a, T> {
 impl<'a, T: 'a> Drop for LockGuard<'a, T> {
     #[inline]
     fn drop(&mut self) {
-        if self.lock.mt {
-            unsafe { self.lock.mt_lock.unlock() };
+        if unlikely!(self.lock.raw.mt) {
+            unsafe { self.lock.raw.opt.mt.unlock() };
         } else {
-            self.lock.st_lock.set(false);
+            unsafe {
+                self.lock.raw.opt.st.1.set(false);
+            }
         }
     }
 }
@@ -560,29 +562,52 @@ impl<'a, T: fmt::Display + ?Sized + 'a> fmt::Display for LockGuard<'a, T> {
     }
 }*/
 
+union LockRawOption {
+    st: (usize, Cell<bool>),
+    mt: parking_lot::RawMutex,
+}
+#[derive(Copy, Clone)]
+pub struct State {
+    active: bool,
+    thread: usize,
+}
+
+//#[derive(Debug)]
+pub struct LockRaw {
+    mt: bool,
+    opt: LockRawOption,
+}
+
+impl LockRaw {
+    #[inline(never)]
+    fn new() -> Self {
+        let state = &STATE;
+        if unlikely!(state.get().active) {
+            LockRaw { mt: true, opt: LockRawOption { mt: parking_lot::RawMutex::INIT } }
+        } else {
+            LockRaw {
+                mt: false,
+                opt: LockRawOption { st: (current_thread(state), Cell::new(false)) },
+            }
+        }
+    }
+}
+
 //#[derive(Debug)]
 pub struct Lock<T> {
-    mt: bool,
-    thread: usize,
-    st_lock: Cell<bool>,
-    mt_lock: parking_lot::RawMutex,
+    raw: LockRaw,
     data: UnsafeCell<T>,
 }
 
-thread_local! {
-    static ACTIVE: Cell<bool> = Cell::new(false);
-}
-
 #[thread_local]
-static THREAD: Cell<usize> = Cell::new(0);
+pub static STATE: Cell<State> = Cell::new(State { active: false, thread: 0 });
 
-#[inline(never)]
-fn current_thread() -> usize {
-    let thread = &THREAD;
-    let val = thread.get();
+#[inline(always)]
+fn current_thread(state: &Cell<State>) -> usize {
+    let val = state.get().thread;
     if unlikely!(val == 0) {
-        thread.set(3);
-        thread.get()
+        state.set(State { thread: 3, ..state.get() });
+        state.get().thread
     } else {
         val
     }
@@ -603,9 +628,24 @@ impl<T: fmt::Debug> fmt::Debug for Lock<T> {
                     }
                 }
 
-                f.debug_struct("Lock")
-                    .field("data", &LockedPlaceholder)
-                    .finish()
+                f.debug_struct("Lock").field("data", &LockedPlaceholder).finish()
+            }
+        }
+    }
+}
+
+#[no_mangle]
+#[inline(never)]
+pub fn lock(l: &LockRaw) {
+    unsafe {
+        if unlikely!(l.mt) {
+            l.opt.mt.lock();
+        } else {
+            assert!(l.opt.st.0 == STATE.get().thread);
+            if unlikely!(l.opt.st.1.get()) {
+                panic!("lock was already held")
+            } else {
+                l.opt.st.1.set(true);
             }
         }
     }
@@ -619,26 +659,7 @@ pub fn test(a: Lock<bool>) {
 impl<T> Lock<T> {
     #[inline(always)]
     pub fn new(inner: T) -> Self {
-        ACTIVE.with(|active| {
-            if active.get() {
-                Lock {
-                    mt: true,
-                    st_lock: Cell::new(false),
-                    thread: 0,
-                    data: UnsafeCell::new(inner),
-                    mt_lock: parking_lot::RawMutex::INIT,
-                }
-            } else {
-                Lock {
-                    mt: false,
-                    st_lock: Cell::new(false),
-                    thread: current_thread(),
-                    data: UnsafeCell::new(inner),
-                    mt_lock: parking_lot::RawMutex::INIT,
-                }
-            }
-
-        })
+        Lock { raw: LockRaw::new(), data: UnsafeCell::new(inner) }
     }
 
     #[inline(always)]
@@ -653,49 +674,27 @@ impl<T> Lock<T> {
 
     #[inline(always)]
     pub fn try_lock(&self) -> Option<LockGuard<'_, T>> {
-        if self.mt {
-            if self.mt_lock.try_lock() {
-                Some(LockGuard {
-                    lock: self,
-                    marker: PhantomData,
-                })
+        if self.raw.mt {
+            if unsafe { self.raw.opt.mt.try_lock() } {
+                Some(LockGuard { lock: self, marker: PhantomData })
             } else {
                 None
             }
         } else {
-            assert!(self.thread == current_thread());
-            if self.st_lock.get() {
+            unsafe { assert!(self.raw.opt.st.0 == current_thread(&STATE)) };
+            if unsafe { self.raw.opt.st.1.get() } {
                 None
             } else {
-                self.st_lock.set(true);
-                Some(LockGuard {
-                    lock: self,
-                    marker: PhantomData,
-                })
+                unsafe { self.raw.opt.st.1.set(true) };
+                Some(LockGuard { lock: self, marker: PhantomData })
             }
         }
     }
 
     #[inline(always)]
     pub fn lock(&self) -> LockGuard<'_, T> {
-        if self.mt {
-            self.mt_lock.lock();
-            LockGuard {
-                lock: self,
-                marker: PhantomData,
-            }
-        } else {
-            assert!(self.thread == current_thread());
-            if self.st_lock.get() {
-                panic!("lock was already held")
-            } else {
-                self.st_lock.set(true);
-                LockGuard {
-                    lock: self,
-                    marker: PhantomData,
-                }
-            }
-        }
+        lock(&self.raw);
+        LockGuard { lock: self, marker: PhantomData }
     }
 
     #[inline(always)]

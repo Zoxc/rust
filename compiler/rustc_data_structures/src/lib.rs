@@ -30,6 +30,7 @@
 #![feature(min_const_generics)]
 #![feature(once_cell)]
 #![feature(maybe_uninit_uninit_array)]
+#![feature(untagged_unions)]
 #![allow(rustc::default_hash_types)]
 
 #[macro_use]
