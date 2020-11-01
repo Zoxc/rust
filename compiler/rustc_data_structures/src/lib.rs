@@ -8,6 +8,7 @@
 
 #![doc(html_root_url = "https://doc.rust-lang.org/nightly/nightly-rustc/")]
 #![feature(array_windows)]
+#![feature(cfg_target_thread_local)]
 #![feature(control_flow_enum)]
 #![feature(in_band_lifetimes)]
 #![feature(unboxed_closures)]

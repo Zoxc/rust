@@ -1,3 +1,4 @@
+use crate::fast_thread_local;
 use crate::sync::Lock;
 use std::cell::Cell;
 use std::lazy::OnceCell;
@@ -26,8 +27,7 @@ impl RegistryId {
     /// so this can succeed from a different registry.
     #[cfg(parallel_compiler)]
     fn verify(self) -> usize {
-        let id = THREAD_DATA.registry_id.get();
-        let index = THREAD_DATA.index.get();
+        let (id, index) = THREAD_DATA.with(|data| (data.registry_id.get(), data.index.get()));
 
         // This fence prevents the `index` memory access from being moved below into the
         // basic block below. That would cause LLVM to create a second TLS lookup since
@@ -58,11 +58,14 @@ struct ThreadData {
     index: Cell<usize>,
 }
 
-/// A thread local which contains the identifer of `REGISTRY` but allows for faster access.
-/// It also holds the index of the current thread.
-#[thread_local]
-static THREAD_DATA: ThreadData =
-    ThreadData { registry_id: Cell::new(RegistryId(0)), index: Cell::new(0) };
+fast_thread_local! {
+    /// A thread local which contains the identifer of `REGISTRY` but allows for faster access.
+    /// It also holds the index of the current thread.
+    static THREAD_DATA: ThreadData = ThreadData {
+        registry_id: Cell::new(RegistryId(0)),
+        index: Cell::new(0),
+    };
+}
 
 impl Registry {
     /// Creates a registry which can hold up to `thread_limit` threads.
@@ -89,8 +92,10 @@ impl Registry {
                     panic!("Thread already has a registry");
                 }
                 registry.set(self.clone()).ok();
-                THREAD_DATA.registry_id.set(self.id());
-                THREAD_DATA.index.set(*threads);
+                THREAD_DATA.with(|data| {
+                    data.registry_id.set(self.id());
+                    data.index.set(*threads);
+                });
                 *threads += 1;
             });
         } else {

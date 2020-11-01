@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
 use std::ops::{Deref, DerefMut};
 
+pub mod fast_thread_local;
 mod worker_local;
 
 pub use worker_local::{Registry, WorkerLocal};
