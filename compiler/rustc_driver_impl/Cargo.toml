@@ -4,9 +4,6 @@ name = "rustc_driver_impl"
 version = "0.0.0"
 edition = "2018"
 
-[lib]
-crate-type = ["dylib"]
-
 [dependencies]
 libc = "0.2"
 tracing = { version = "0.1.18" }
