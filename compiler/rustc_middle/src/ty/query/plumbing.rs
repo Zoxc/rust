@@ -3,13 +3,11 @@
 //! manage the caches, and so forth.
 
 use crate::dep_graph::DepGraph;
-use crate::ty::query::Query;
 use crate::ty::tls::{self, ImplicitCtxt};
 use crate::ty::{self, TyCtxt};
 use rustc_query_system::query::QueryContext;
-use rustc_query_system::query::{CycleError, QueryJobId, QueryJobInfo};
+use rustc_query_system::query::{CycleError, QueryInfo, QueryJob, QueryJobId};
 
-use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::sync::Lock;
 use rustc_data_structures::thin_vec::ThinVec;
 use rustc_errors::{struct_span_err, Diagnostic, DiagnosticBuilder, Handler, Level};
@@ -17,13 +15,20 @@ use rustc_span::def_id::DefId;
 use rustc_span::Span;
 
 impl QueryContext for TyCtxt<'tcx> {
-    type Query = Query<'tcx>;
-
     fn incremental_verify_ich(&self) -> bool {
         self.sess.opts.debugging_opts.incremental_verify_ich
     }
+
     fn verbose(&self) -> bool {
         self.sess.verbose()
+    }
+
+    fn singlethreaded(&self) -> bool {
+        self.sess.threads() == 1
+    }
+
+    fn waiter_lock(&self) -> &Lock<()> {
+        &self.waiter_lock
     }
 
     fn def_path_str(&self, def_id: DefId) -> String {
@@ -38,11 +43,16 @@ impl QueryContext for TyCtxt<'tcx> {
         tls::with_related_context(*self, |icx| icx.query)
     }
 
-    fn try_collect_active_jobs(
+    fn try_get_query_job(
         &self,
-    ) -> Option<FxHashMap<QueryJobId<Self::DepKind>, QueryJobInfo<Self::DepKind, Self::Query>>>
-    {
-        self.queries.try_collect_active_jobs()
+        id: QueryJobId<Self::DepKind>,
+        block: bool,
+    ) -> Option<QueryJob<Self::DepKind>> {
+        self.queries.try_get_query_job(id, block)
+    }
+
+    fn try_get_query_info(&self, id: QueryJobId<Self::DepKind>, block: bool) -> Option<QueryInfo> {
+        self.queries.try_get_query_info(id, block, *self)
     }
 
     /// Executes a job by changing the `ImplicitCtxt` to point to the
@@ -81,12 +91,13 @@ impl<'tcx> TyCtxt<'tcx> {
     #[cold]
     pub(super) fn report_cycle(
         self,
-        CycleError { usage, cycle: stack }: CycleError<Query<'tcx>>,
+        CycleError { usage, cycle: stack }: CycleError,
     ) -> DiagnosticBuilder<'tcx> {
         assert!(!stack.is_empty());
 
-        let fix_span = |span: Span, query: &Query<'tcx>| {
-            self.sess.source_map().guess_head_span(query.default_span(self, span))
+        let fix_span = |span: Span, default: Span| {
+            let span = if span.is_dummy() { default } else { span };
+            self.sess.source_map().guess_head_span(span)
         };
 
         // Disable naming impls with types in this path, since that
@@ -94,30 +105,32 @@ impl<'tcx> TyCtxt<'tcx> {
         // (And cycle errors around impls tend to occur during the
         // collect/coherence phases anyhow.)
         ty::print::with_forced_impl_filename_line(|| {
-            let span = fix_span(stack[1 % stack.len()].span, &stack[0].query);
+            let span = fix_span(stack[1 % stack.len()].span, stack[0].query.default_span);
             let mut err = struct_span_err!(
                 self.sess,
                 span,
                 E0391,
                 "cycle detected when {}",
-                stack[0].query.describe(self)
+                stack[0].query.description
             );
 
             for i in 1..stack.len() {
-                let query = &stack[i].query;
-                let span = fix_span(stack[(i + 1) % stack.len()].span, query);
-                err.span_note(span, &format!("...which requires {}...", query.describe(self)));
+                let span = fix_span(stack[(i + 1) % stack.len()].span, stack[i].query.default_span);
+                err.span_note(
+                    span,
+                    &format!("...which requires {}...", stack[i].query.description),
+                );
             }
 
             err.note(&format!(
                 "...which again requires {}, completing the cycle",
-                stack[0].query.describe(self)
+                stack[0].query.description
             ));
 
-            if let Some((span, query)) = usage {
+            if let Some(usage) = usage {
                 err.span_note(
-                    fix_span(span, &query),
-                    &format!("cycle used when {}", query.describe(self)),
+                    fix_span(usage.span, usage.query.default_span),
+                    &format!("cycle used when {}", usage.query.description),
                 );
             }
 
@@ -134,34 +147,27 @@ impl<'tcx> TyCtxt<'tcx> {
         let mut i = 0;
         ty::tls::with_context_opt(|icx| {
             if let Some(icx) = icx {
-                let query_map = icx.tcx.queries.try_collect_active_jobs();
-
                 let mut current_query = icx.query;
 
                 while let Some(query) = current_query {
                     if Some(i) == num_frames {
                         break;
                     }
-                    let query_info =
-                        if let Some(info) = query_map.as_ref().and_then(|map| map.get(&query)) {
-                            info
-                        } else {
-                            break;
-                        };
+                    let info = icx.tcx.queries.try_get_query_info(query, false, icx.tcx);
+                    let job = icx.tcx.queries.try_get_query_job(query, false);
+                    let (info, job) = if let (Some(info), Some(job)) = (info, job) {
+                        (info, job)
+                    } else {
+                        break;
+                    };
                     let mut diag = Diagnostic::new(
                         Level::FailureNote,
-                        &format!(
-                            "#{} [{}] {}",
-                            i,
-                            query_info.info.query.name(),
-                            query_info.info.query.describe(icx.tcx)
-                        ),
+                        &format!("#{} [{}] {}", i, info.name, info.description,),
                     );
-                    diag.span =
-                        icx.tcx.sess.source_map().guess_head_span(query_info.info.span).into();
+                    diag.span = icx.tcx.sess.source_map().guess_head_span(job.span).into();
                     handler.force_print_diagnostic(diag);
 
-                    current_query = query_info.job.parent;
+                    current_query = job.parent;
                     i += 1;
                 }
             }
@@ -252,67 +258,11 @@ macro_rules! define_queries {
      $($(#[$attr:meta])*
         [$($modifiers:tt)*] fn $name:ident($($K:tt)*) -> $V:ty,)*) => {
 
-        use std::mem;
-        use crate::{
-            rustc_data_structures::stable_hasher::HashStable,
-            rustc_data_structures::stable_hasher::StableHasher,
-            ich::StableHashingContext
-        };
+        use crate::ich::StableHashingContext;
 
         define_queries_struct! {
             tcx: $tcx,
             input: ($(([$($modifiers)*] [$($attr)*] [$name]))*)
-        }
-
-        #[allow(nonstandard_style)]
-        #[derive(Clone, Debug)]
-        pub enum Query<$tcx> {
-            $($(#[$attr])* $name($($K)*)),*
-        }
-
-        impl<$tcx> Query<$tcx> {
-            pub fn name(&self) -> &'static str {
-                match *self {
-                    $(Query::$name(_) => stringify!($name),)*
-                }
-            }
-
-            pub fn describe(&self, tcx: TyCtxt<$tcx>) -> Cow<'static, str> {
-                let (r, name) = match *self {
-                    $(Query::$name(key) => {
-                        (queries::$name::describe(tcx, key), stringify!($name))
-                    })*
-                };
-                if tcx.sess.verbose() {
-                    format!("{} [{}]", r, name).into()
-                } else {
-                    r
-                }
-            }
-
-            // FIXME(eddyb) Get more valid `Span`s on queries.
-            pub fn default_span(&self, tcx: TyCtxt<$tcx>, span: Span) -> Span {
-                if !span.is_dummy() {
-                    return span;
-                }
-                // The `def_span` query is used to calculate `default_span`,
-                // so exit to avoid infinite recursion.
-                if let Query::def_span(..) = *self {
-                    return span
-                }
-                match *self {
-                    $(Query::$name(key) => key.default_span(tcx),)*
-                }
-            }
-        }
-
-        impl<'a, $tcx> HashStable<StableHashingContext<'a>> for Query<$tcx> {
-            fn hash_stable(&self, hcx: &mut StableHashingContext<'a>, hasher: &mut StableHasher) {
-                mem::discriminant(self).hash_stable(hcx, hasher);
-                match *self {
-                    $(Query::$name(key) => key.hash_stable(hcx, hasher),)*
-                }
-            }
         }
 
         #[allow(nonstandard_style)]
@@ -361,7 +311,7 @@ macro_rules! define_queries {
             type Cache = query_storage!([$($modifiers)*][$($K)*, $V]);
 
             #[inline(always)]
-            fn query_state<'a>(tcx: TyCtxt<$tcx>) -> &'a QueryState<crate::dep_graph::DepKind, <TyCtxt<$tcx> as QueryContext>::Query, Self::Cache> {
+            fn query_state<'a>(tcx: &'a TyCtxt<$tcx>) -> &'a QueryState<crate::dep_graph::DepKind, Self::Cache> {
                 &tcx.queries.$name
             }
 
@@ -386,7 +336,7 @@ macro_rules! define_queries {
 
             fn handle_cycle_error(
                 tcx: TyCtxt<'tcx>,
-                error: CycleError<Query<'tcx>>
+                error: CycleError,
             ) -> Self::Value {
                 handle_cycle_error!([$($modifiers)*][tcx, error])
             }
@@ -517,7 +467,6 @@ macro_rules! define_queries_struct {
 
             $($(#[$attr])*  $name: QueryState<
                 crate::dep_graph::DepKind,
-                <TyCtxt<$tcx> as QueryContext>::Query,
                 <queries::$name<$tcx> as QueryAccessors<TyCtxt<'tcx>>>::Cache,
             >,)*
         }
@@ -536,20 +485,40 @@ macro_rules! define_queries_struct {
                 }
             }
 
-            pub(crate) fn try_collect_active_jobs(
-                &self
-            ) -> Option<FxHashMap<QueryJobId<crate::dep_graph::DepKind>, QueryJobInfo<crate::dep_graph::DepKind, <TyCtxt<$tcx> as QueryContext>::Query>>> {
-                let mut jobs = FxHashMap::default();
+            pub(crate) fn try_get_query_job(
+                &self,
+                id: QueryJobId<crate::dep_graph::DepKind>,
+                block: bool,
+            ) -> Option<QueryJob<crate::dep_graph::DepKind>> {
+                match id.kind {
+                    $(crate::dep_graph::DepKind::$name => self.$name.try_get_query_job(id, block),)*
+                    _ => panic!()
+                }
+            }
 
-                $(
-                    self.$name.try_collect_active_jobs(
-                        <queries::$name<'tcx> as QueryAccessors<TyCtxt<'tcx>>>::DEP_KIND,
-                        Query::$name,
-                        &mut jobs,
-                    )?;
-                )*
+            pub(crate) fn try_get_query_info(
+                &self,
+                id: QueryJobId<crate::dep_graph::DepKind>,
+                block: bool,
+                tcx: TyCtxt<$tcx>,
+            ) -> Option<QueryInfo> {
+                match id.kind {
+                    $(crate::dep_graph::DepKind::$name => self.$name.try_get_query_info(id, block, |key| {
+                        let name = stringify!($name);
+                        let mut description = queries::$name::describe(tcx, key.clone());
 
-                Some(jobs)
+                        if tcx.verbose() {
+                            description = format!("{} [{}]", description, name).into();
+                        }
+
+                        QueryInfo {
+                            name,
+                            description,
+                            default_span: key.default_span(tcx)
+                        }
+                    }),)*
+                    _ => panic!()
+                }
             }
         }
     };

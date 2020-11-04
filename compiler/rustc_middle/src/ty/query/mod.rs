@@ -53,7 +53,6 @@ use rustc_ast as ast;
 use rustc_attr as attr;
 use rustc_span::symbol::Symbol;
 use rustc_span::{Span, DUMMY_SP};
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -67,10 +66,6 @@ use rustc_query_system::query::*;
 mod stats;
 pub use self::stats::print_stats;
 
-#[cfg(parallel_compiler)]
-mod job;
-#[cfg(parallel_compiler)]
-pub use self::job::handle_deadlock;
 pub use rustc_query_system::query::{QueryInfo, QueryJob, QueryJobId};
 
 mod keys;

@@ -931,6 +931,9 @@ pub struct GlobalCtxt<'tcx> {
     /// as well as all upstream crates. Only populated in incremental mode.
     pub def_path_hash_to_def_id: Option<UnhashMap<DefPathHash, DefId>>,
 
+    /// A lock held when looking for query cycles,
+    pub(super) waiter_lock: Lock<()>,
+
     pub queries: query::Queries<'tcx>,
 
     maybe_unused_trait_imports: FxHashSet<LocalDefId>,
@@ -1138,6 +1141,7 @@ impl<'tcx> TyCtxt<'tcx> {
             untracked_crate: krate,
             definitions,
             def_path_hash_to_def_id,
+            waiter_lock: Lock::new(()),
             queries: query::Queries::new(providers, extern_providers, on_disk_query_result_cache),
             ty_rcache: Default::default(),
             pred_rcache: Default::default(),

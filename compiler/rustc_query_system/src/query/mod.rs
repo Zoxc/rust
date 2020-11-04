@@ -2,9 +2,7 @@ mod plumbing;
 pub use self::plumbing::*;
 
 mod job;
-#[cfg(parallel_compiler)]
-pub use self::job::deadlock;
-pub use self::job::{QueryInfo, QueryJob, QueryJobId, QueryJobInfo};
+pub use self::job::{QueryInfo, QueryJob, QueryJobId};
 
 mod caches;
 pub use self::caches::{
@@ -15,19 +13,19 @@ mod config;
 pub use self::config::{QueryAccessors, QueryConfig, QueryDescription};
 
 use crate::dep_graph::{DepContext, DepGraph};
-use crate::query::job::QueryMap;
 
-use rustc_data_structures::stable_hasher::HashStable;
 use rustc_data_structures::sync::Lock;
 use rustc_data_structures::thin_vec::ThinVec;
 use rustc_errors::Diagnostic;
 use rustc_span::def_id::DefId;
 
 pub trait QueryContext: DepContext {
-    type Query: Clone + HashStable<Self::StableHashingContext>;
-
     fn incremental_verify_ich(&self) -> bool;
     fn verbose(&self) -> bool;
+
+    fn waiter_lock(&self) -> &Lock<()>;
+
+    fn singlethreaded(&self) -> bool;
 
     /// Get string representation from DefPath.
     fn def_path_str(&self, def_id: DefId) -> String;
@@ -38,7 +36,12 @@ pub trait QueryContext: DepContext {
     /// Get the query information from the TLS context.
     fn current_query_job(&self) -> Option<QueryJobId<Self::DepKind>>;
 
-    fn try_collect_active_jobs(&self) -> Option<QueryMap<Self::DepKind, Self::Query>>;
+    fn try_get_query_job(
+        &self,
+        id: QueryJobId<Self::DepKind>,
+        block: bool,
+    ) -> Option<QueryJob<Self::DepKind>>;
+    fn try_get_query_info(&self, id: QueryJobId<Self::DepKind>, block: bool) -> Option<QueryInfo>;
 
     /// Executes a job by changing the `ImplicitCtxt` to point to the
     /// new query job while it executes. It returns the diagnostics

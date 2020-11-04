@@ -31,9 +31,9 @@ pub trait QueryCache: QueryStorage {
     /// It returns the shard index and a lock guard to the shard,
     /// which will be used if the query is not in the cache and we need
     /// to compute it.
-    fn lookup<D, Q, R, OnHit, OnMiss>(
+    fn lookup<D, R, OnHit, OnMiss>(
         &self,
-        state: &QueryState<D, Q, Self>,
+        state: &QueryState<D, Self>,
         key: Self::Key,
         // `on_hit` can be called while holding a lock to the query state shard.
         on_hit: OnHit,
@@ -41,7 +41,7 @@ pub trait QueryCache: QueryStorage {
     ) -> R
     where
         OnHit: FnOnce(&Self::Stored, DepNodeIndex) -> R,
-        OnMiss: FnOnce(Self::Key, QueryLookup<'_, D, Q, Self::Key, Self::Sharded>) -> R;
+        OnMiss: FnOnce(Self::Key, QueryLookup<'_, D, Self::Key, Self::Sharded>) -> R;
 
     fn complete(
         &self,
@@ -95,16 +95,16 @@ where
     type Sharded = FxHashMap<K, (V, DepNodeIndex)>;
 
     #[inline(always)]
-    fn lookup<D, Q, R, OnHit, OnMiss>(
+    fn lookup<D, R, OnHit, OnMiss>(
         &self,
-        state: &QueryState<D, Q, Self>,
+        state: &QueryState<D, Self>,
         key: K,
         on_hit: OnHit,
         on_miss: OnMiss,
     ) -> R
     where
         OnHit: FnOnce(&V, DepNodeIndex) -> R,
-        OnMiss: FnOnce(K, QueryLookup<'_, D, Q, K, Self::Sharded>) -> R,
+        OnMiss: FnOnce(K, QueryLookup<'_, D, K, Self::Sharded>) -> R,
     {
         let mut lookup = state.get_lookup(&key);
         let lock = &mut *lookup.lock;
@@ -176,16 +176,16 @@ where
     type Sharded = FxHashMap<K, &'tcx (V, DepNodeIndex)>;
 
     #[inline(always)]
-    fn lookup<D, Q, R, OnHit, OnMiss>(
+    fn lookup<D, R, OnHit, OnMiss>(
         &self,
-        state: &QueryState<D, Q, Self>,
+        state: &QueryState<D, Self>,
         key: K,
         on_hit: OnHit,
         on_miss: OnMiss,
     ) -> R
     where
         OnHit: FnOnce(&&'tcx V, DepNodeIndex) -> R,
-        OnMiss: FnOnce(K, QueryLookup<'_, D, Q, K, Self::Sharded>) -> R,
+        OnMiss: FnOnce(K, QueryLookup<'_, D, K, Self::Sharded>) -> R,
     {
         let mut lookup = state.get_lookup(&key);
         let lock = &mut *lookup.lock;

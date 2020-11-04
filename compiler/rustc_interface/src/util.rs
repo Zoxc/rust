@@ -180,15 +180,13 @@ pub fn setup_callbacks_and_run_in_thread_pool_with_globals<F: FnOnce() -> R + Se
     stderr: &Option<Arc<Mutex<Vec<u8>>>>,
     f: F,
 ) -> R {
-    use rustc_middle::ty;
     crate::callbacks::setup_callbacks();
 
     let mut config = rayon::ThreadPoolBuilder::new()
         .thread_name(|_| "rustc".to_string())
         .acquire_thread_handler(jobserver::acquire_thread)
         .release_thread_handler(jobserver::release_thread)
-        .num_threads(threads)
-        .deadlock_handler(|| unsafe { ty::query::handle_deadlock() });
+        .num_threads(threads);
 
     if let Some(size) = get_stack_size() {
         config = config.stack_size(size);
