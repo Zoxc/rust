@@ -730,6 +730,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "concurrent"
+version = "0.1.0"
+source = "git+https://github.com/Zoxc/concurrent.git#b58076f59968fca709fa250cc4aacd8edf614a9c"
+dependencies = [
+ "crossbeam-epoch",
+ "crossbeam-utils 0.8.0",
+ "parking_lot",
+]
+
+[[package]]
 name = "const_fn"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4363,6 +4373,7 @@ dependencies = [
 name = "rustc_query_system"
 version = "0.0.0"
 dependencies = [
+ "concurrent",
  "parking_lot",
  "rustc-rayon-core",
  "rustc_arena",

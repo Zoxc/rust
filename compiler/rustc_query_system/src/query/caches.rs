@@ -1,12 +1,17 @@
 use crate::dep_graph::DepNodeIndex;
 use crate::query::plumbing::{QueryCacheStore, QueryLookup};
 
+use concurrent::qsbr::{self, pin};
+use concurrent::sync_insert_table::SyncInsertTable;
 use rustc_arena::TypedArena;
 use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::fx::FxHasher;
 use rustc_data_structures::sharded::Sharded;
 use rustc_data_structures::sync::WorkerLocal;
+use std::borrow::Borrow;
 use std::default::Default;
 use std::fmt::Debug;
+use std::hash::BuildHasherDefault;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
@@ -41,6 +46,20 @@ pub trait QueryCache: QueryStorage {
     where
         OnHit: FnOnce(&Self::Stored, DepNodeIndex) -> R;
 
+    fn verify<'s, R, OnHit>(
+        &self,
+        _state: &'s QueryCacheStore<Self>,
+        _key: &Self::Key,
+        _lookup: QueryLookup,
+        // `on_hit` can be called while holding a lock to the query state shard.
+        _on_hit: OnHit,
+    ) -> Result<R, ()>
+    where
+        OnHit: FnOnce(&Self::Stored, DepNodeIndex) -> R,
+    {
+        Err(())
+    }
+
     fn complete(
         &self,
         lock_sharded_storage: &mut Self::Sharded,
@@ -64,11 +83,13 @@ impl<K: Eq + Hash, V: Clone> CacheSelector<K, V> for DefaultCacheSelector {
     type Cache = DefaultCache<K, V>;
 }
 
-pub struct DefaultCache<K, V>(PhantomData<(K, V)>);
+pub struct DefaultCache<K, V>(
+    SyncInsertTable<(K, (V, DepNodeIndex)), BuildHasherDefault<FxHasher>>,
+);
 
 impl<K, V> Default for DefaultCache<K, V> {
     fn default() -> Self {
-        DefaultCache(PhantomData)
+        DefaultCache(SyncInsertTable::new_with(BuildHasherDefault::default(), 0))
     }
 }
 
@@ -83,13 +104,22 @@ impl<K: Eq + Hash, V: Clone + Debug> QueryStorage for DefaultCache<K, V> {
     }
 }
 
+#[inline]
+fn equivalent_key<Q, K, V>(k: &Q) -> impl Fn(&(K, V)) -> bool + '_
+where
+    K: Borrow<Q>,
+    Q: ?Sized + Eq,
+{
+    move |x| k.eq(x.0.borrow())
+}
+
 impl<K, V> QueryCache for DefaultCache<K, V>
 where
     K: Eq + Hash + Clone + Debug,
     V: Clone + Debug,
 {
     type Key = K;
-    type Sharded = FxHashMap<K, (V, DepNodeIndex)>;
+    type Sharded = ();
 
     #[inline(always)]
     fn lookup<'s, R, OnHit>(
@@ -101,37 +131,69 @@ where
     where
         OnHit: FnOnce(&V, DepNodeIndex) -> R,
     {
-        let (lookup, lock) = state.get_lookup(key);
-        let result = lock.raw_entry().from_key_hashed_nocheck(lookup.key_hash, key);
+        let key_hash = super::plumbing::hash_for_shard(key);
+        pin(|pin| {
+            let result = self.0.read(pin).get(key_hash, equivalent_key(key));
 
-        if let Some((_, value)) = result {
-            let hit_result = on_hit(&value.0, value.1);
-            Ok(hit_result)
-        } else {
-            Err(lookup)
-        }
+            if let Some((_, value)) = result {
+                let hit_result = on_hit(&value.0, value.1);
+                Ok(hit_result)
+            } else {
+                Err(state.get_lookup_from_hash(key_hash))
+            }
+        })
+    }
+
+    #[inline(always)]
+    fn verify<'s, R, OnHit>(
+        &self,
+        _state: &'s QueryCacheStore<Self>,
+        key: &K,
+        lookup: QueryLookup,
+        on_hit: OnHit,
+    ) -> Result<R, ()>
+    where
+        OnHit: FnOnce(&V, DepNodeIndex) -> R,
+    {
+        pin(|pin| {
+            let result = self.0.read(pin).get(lookup.key_hash, equivalent_key(key));
+
+            if let Some((_, value)) = result {
+                let hit_result = on_hit(&value.0, value.1);
+                Ok(hit_result)
+            } else {
+                Err(())
+            }
+        })
     }
 
     #[inline]
     fn complete(
         &self,
-        lock_sharded_storage: &mut Self::Sharded,
+        _lock_sharded_storage: &mut Self::Sharded,
         key: K,
         value: V,
         index: DepNodeIndex,
     ) -> Self::Stored {
-        lock_sharded_storage.insert(key, (value.clone(), index));
+        let key_hash = super::plumbing::hash_for_shard(&key);
+        self.0.lock().insert_new(
+            key_hash,
+            (key, (value.clone(), index)),
+            SyncInsertTable::map_hasher,
+        );
+        qsbr::collect();
         value
     }
 
     fn iter<R>(
         &self,
-        shards: &Sharded<Self::Sharded>,
+        _shards: &Sharded<Self::Sharded>,
         f: impl for<'a> FnOnce(&'a mut dyn Iterator<Item = (&'a K, &'a V, DepNodeIndex)>) -> R,
     ) -> R {
-        let shards = shards.lock_shards();
-        let mut results = shards.iter().flat_map(|shard| shard.iter()).map(|(k, v)| (k, &v.0, v.1));
-        f(&mut results)
+        pin(|pin| {
+            let mut results = self.0.read(pin).iter().map(|(k, (v, i))| (k, v, *i));
+            f(&mut results)
+        })
     }
 }
 

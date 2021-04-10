@@ -56,7 +56,7 @@ pub struct QueryLookup {
 // We compute the key's hash once and then use it for both the
 // shard lookup and the hashmap lookup. This relies on the fact
 // that both of them use `FxHasher`.
-fn hash_for_shard<K: Hash>(key: &K) -> u64 {
+pub(super) fn hash_for_shard<K: Hash>(key: &K) -> u64 {
     let mut hasher = FxHasher::default();
     key.hash(&mut hasher);
     hasher.finish()
@@ -71,6 +71,11 @@ impl<C: QueryCache> QueryCacheStore<C> {
         let shard = get_shard_index_by_hash(key_hash);
         let lock = self.shards.get_shard_by_index(shard).lock();
         (QueryLookup { key_hash, shard }, lock)
+    }
+
+    pub(super) fn get_lookup_from_hash<'tcx>(&'tcx self, key_hash: u64) -> QueryLookup {
+        let shard = get_shard_index_by_hash(key_hash);
+        QueryLookup { key_hash, shard }
     }
 
     pub fn iter_results<R>(
@@ -195,6 +200,12 @@ where
         let shard = lookup.shard;
         let mut state_lock = state.shards.get_shard_by_index(shard).lock();
         let lock = &mut *state_lock;
+
+        let found = cache.cache.verify(cache, &key, lookup, |value, index| (value.clone(), index));
+
+        if let Ok(found) = found {
+            return TryGetJob::JobCompleted(found);
+        }
 
         let (latch, mut _query_blocked_prof_timer) = match lock.active.entry((*key).clone()) {
             Entry::Occupied(mut entry) => {
