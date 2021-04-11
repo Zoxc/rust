@@ -732,7 +732,7 @@ dependencies = [
 [[package]]
 name = "concurrent"
 version = "0.1.0"
-source = "git+https://github.com/Zoxc/concurrent.git#b58076f59968fca709fa250cc4aacd8edf614a9c"
+source = "git+https://github.com/Zoxc/concurrent.git#7c7d78a3fa39f0b7760bdb359088b489541fbabb"
 dependencies = [
  "crossbeam-epoch",
  "crossbeam-utils 0.8.0",
@@ -4465,6 +4465,7 @@ name = "rustc_span"
 version = "0.0.0"
 dependencies = [
  "cfg-if 0.1.10",
+ "concurrent",
  "md-5",
  "rustc_arena",
  "rustc_data_structures",

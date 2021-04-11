@@ -76,49 +76,58 @@ impl Compiler {
 
 /// Converts strings provided as `--cfg [cfgspec]` into a `crate_cfg`.
 pub fn parse_cfgspecs(cfgspecs: Vec<String>) -> FxHashSet<(String, Option<String>)> {
-    rustc_span::with_default_session_globals(move || {
-        let cfg = cfgspecs
-            .into_iter()
-            .map(|s| {
-                let sess = ParseSess::with_silent_emitter();
-                let filename = FileName::cfg_spec_source_code(&s);
-                let mut parser = new_parser_from_source_str(&sess, filename, s.to_string());
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    pool.install(|| {
+        rustc_span::with_default_session_globals(move || {
+            unsafe {
+                rustc_span::setup_session_globals();
+            }
+            let cfg = cfgspecs
+                .into_iter()
+                .map(|s| {
+                    let sess = ParseSess::with_silent_emitter();
+                    let filename = FileName::cfg_spec_source_code(&s);
+                    let mut parser = new_parser_from_source_str(&sess, filename, s.to_string());
 
-                macro_rules! error {
-                    ($reason: expr) => {
-                        early_error(
-                            ErrorOutputType::default(),
-                            &format!(concat!("invalid `--cfg` argument: `{}` (", $reason, ")"), s),
-                        );
-                    };
-                }
-
-                match &mut parser.parse_meta_item() {
-                    Ok(meta_item) if parser.token == token::Eof => {
-                        if meta_item.path.segments.len() != 1 {
-                            error!("argument key must be an identifier");
-                        }
-                        match &meta_item.kind {
-                            MetaItemKind::List(..) => {
-                                error!(r#"expected `key` or `key="value"`"#);
-                            }
-                            MetaItemKind::NameValue(lit) if !lit.kind.is_str() => {
-                                error!("argument value must be a string");
-                            }
-                            MetaItemKind::NameValue(..) | MetaItemKind::Word => {
-                                let ident = meta_item.ident().expect("multi-segment cfg key");
-                                return (ident.name, meta_item.value_str());
-                            }
-                        }
+                    macro_rules! error {
+                        ($reason: expr) => {
+                            early_error(
+                                ErrorOutputType::default(),
+                                &format!(
+                                    concat!("invalid `--cfg` argument: `{}` (", $reason, ")"),
+                                    s
+                                ),
+                            );
+                        };
                     }
-                    Ok(..) => {}
-                    Err(err) => err.cancel(),
-                }
 
-                error!(r#"expected `key` or `key="value"`"#);
-            })
-            .collect::<CrateConfig>();
-        cfg.into_iter().map(|(a, b)| (a.to_string(), b.map(|b| b.to_string()))).collect()
+                    match &mut parser.parse_meta_item() {
+                        Ok(meta_item) if parser.token == token::Eof => {
+                            if meta_item.path.segments.len() != 1 {
+                                error!("argument key must be an identifier");
+                            }
+                            match &meta_item.kind {
+                                MetaItemKind::List(..) => {
+                                    error!(r#"expected `key` or `key="value"`"#);
+                                }
+                                MetaItemKind::NameValue(lit) if !lit.kind.is_str() => {
+                                    error!("argument value must be a string");
+                                }
+                                MetaItemKind::NameValue(..) | MetaItemKind::Word => {
+                                    let ident = meta_item.ident().expect("multi-segment cfg key");
+                                    return (ident.name, meta_item.value_str());
+                                }
+                            }
+                        }
+                        Ok(..) => {}
+                        Err(err) => err.cancel(),
+                    }
+
+                    error!(r#"expected `key` or `key="value"`"#);
+                })
+                .collect::<CrateConfig>();
+            cfg.into_iter().map(|(a, b)| (a.to_string(), b.map(|b| b.to_string()))).collect()
+        })
     })
 }
 

@@ -16,6 +16,7 @@ rustc_arena = { path = "../rustc_arena" }
 scoped-tls = "1.0"
 unicode-width = "0.1.4"
 cfg-if = "0.1.2"
+concurrent = { git = "https://github.com/Zoxc/concurrent.git" }
 tracing = "0.1"
 sha-1 = "0.9"
 sha2 = "0.9"

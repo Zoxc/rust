@@ -35,7 +35,7 @@ use rustc_middle::ty::Instance;
 use rustc_middle::ty::{self, AdtKind, GeneratorSubsts, ParamEnv, Ty, TyCtxt};
 use rustc_middle::{bug, span_bug};
 use rustc_session::config::{self, DebugInfo};
-use rustc_span::symbol::{Interner, Symbol};
+use rustc_span::symbol::{InternerOld, Symbol};
 use rustc_span::{self, SourceFile, SourceFileHash, Span};
 use rustc_target::abi::{Abi, Align, HasDataLayout, Integer, LayoutOf, TagEncoding};
 use rustc_target::abi::{Int, Pointer, F32, F64};
@@ -99,7 +99,7 @@ pub struct UniqueTypeId(Symbol);
 #[derive(Default)]
 pub struct TypeMap<'ll, 'tcx> {
     /// The `UniqueTypeId`s created so far.
-    unique_id_interner: Interner,
+    unique_id_interner: InternerOld,
     /// A map from `UniqueTypeId` to debuginfo metadata for that type. This is a 1:1 mapping.
     unique_id_to_metadata: FxHashMap<UniqueTypeId, &'ll DIType>,
     /// A map from types to debuginfo metadata. This is an N:1 mapping.

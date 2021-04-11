@@ -2,15 +2,24 @@
 //! allows bidirectional lookup; i.e., given a value, one can easily find the
 //! type, and vice versa.
 
+use concurrent::qsbr::pin;
+use concurrent::sync_insert_table::SyncInsertTable;
+use concurrent::sync_push_vec::SyncPushVec;
 use rustc_arena::DroplessArena;
-use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::fx::FxHasher;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, ToStableHashKey};
+use rustc_data_structures::stable_map::FxHashMap;
+use rustc_data_structures::sync::WorkerLocal;
 use rustc_macros::HashStable_Generic;
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
 
+use std::borrow::Borrow;
+use std::cell::UnsafeCell;
 use std::cmp::{Ord, PartialEq, PartialOrd};
 use std::fmt;
+use std::hash::BuildHasherDefault;
 use std::hash::{Hash, Hasher};
+use std::mem::MaybeUninit;
 use std::str;
 
 use crate::{Edition, Span, DUMMY_SP, SESSION_GLOBALS};
@@ -1587,21 +1596,13 @@ impl<CTX> ToStableHashKey<CTX> for Symbol {
 // found that to regress performance up to 2% in some cases. This might be
 // revisited after further improvements to `indexmap`.
 #[derive(Default)]
-pub struct Interner {
+pub struct InternerOld {
     arena: DroplessArena,
     names: FxHashMap<&'static str, Symbol>,
     strings: Vec<&'static str>,
 }
 
-impl Interner {
-    fn prefill(init: &[&'static str]) -> Self {
-        Interner {
-            strings: init.into(),
-            names: init.iter().copied().zip((0..).map(Symbol::new)).collect(),
-            ..Default::default()
-        }
-    }
-
+impl InternerOld {
     #[inline]
     pub fn intern(&mut self, string: &str) -> Symbol {
         if let Some(&name) = self.names.get(string) {
@@ -1626,6 +1627,99 @@ impl Interner {
     // preference to this function.
     pub fn get(&self, symbol: Symbol) -> &str {
         self.strings[symbol.0.as_usize()]
+    }
+}
+
+// The `&'static str`s in this type actually point into the arena.
+//
+// The `FxHashMap`+`Vec` pair could be replaced by `FxIndexSet`, but #75278
+// found that to regress performance up to 2% in some cases. This might be
+// revisited after further improvements to `indexmap`.
+pub struct Interner {
+    arena: UnsafeCell<MaybeUninit<WorkerLocal<DroplessArena>>>,
+    names: SyncInsertTable<(&'static str, Symbol), BuildHasherDefault<FxHasher>>,
+    strings: SyncPushVec<&'static str>,
+}
+
+impl Drop for Interner {
+    fn drop(&mut self) {
+        unsafe { self.arena.get_mut().assume_init_drop() };
+    }
+}
+
+unsafe impl Send for Interner {}
+unsafe impl Sync for Interner {}
+
+fn hash<K: Hash>(value: &K) -> u64 {
+    let mut hasher = FxHasher::default();
+    value.hash(&mut hasher);
+    hasher.finish()
+}
+
+#[inline]
+fn equivalent_key<Q, K, V>(k: &Q) -> impl Fn(&(K, V)) -> bool + '_
+where
+    K: Borrow<Q>,
+    Q: ?Sized + Eq,
+{
+    move |x| k.eq(x.0.borrow())
+}
+
+impl Interner {
+    pub unsafe fn setup(&self) {
+        self.arena.get().write(MaybeUninit::new(WorkerLocal::new(|_| DroplessArena::default())));
+    }
+
+    fn prefill(init: &[&'static str]) -> Self {
+        let mut strings = SyncPushVec::with_capacity(init.len());
+
+        let write = strings.write();
+        for &str in init {
+            write.push(str);
+        }
+
+        Interner {
+            strings,
+            names: SyncInsertTable::map_from_iter(init.iter().copied().zip((0..).map(Symbol::new))),
+            arena: UnsafeCell::new(MaybeUninit::uninit()),
+        }
+    }
+
+    #[inline]
+    pub fn intern(&self, string: &str) -> Symbol {
+        pin(|pin| {
+            let str_hash = hash(&string);
+            if let Some(entry) = self.names.read(pin).get(str_hash, equivalent_key(string)) {
+                return entry.1;
+            }
+
+            let lock = self.names.lock();
+
+            if let Some(entry) = self.names.read(pin).get(str_hash, equivalent_key(string)) {
+                return entry.1;
+            }
+
+            let arena = unsafe { (*self.arena.get()).assume_init_ref() };
+
+            // `from_utf8_unchecked` is safe since we just allocated a `&str` which is known to be
+            // UTF-8.
+            let string: &str =
+                unsafe { str::from_utf8_unchecked(arena.alloc_slice(string.as_bytes())) };
+            // It is safe to extend the arena allocation to `'static` because we only access
+            // these while the arena is still alive.
+            let string: &'static str = unsafe { &*(string as *const str) };
+
+            let name = Symbol::new(unsafe { self.strings.unsafe_write().push(string).1 as u32 });
+            lock.insert_new(str_hash, (string, name), |(k, _)| hash(k));
+
+            name
+        })
+    }
+
+    // Get the symbol as a string. `Symbol::as_str()` should be used in
+    // preference to this function.
+    pub fn get(&self, symbol: Symbol) -> &str {
+        pin(|pin| *self.strings.read(pin).get(symbol.0.as_usize()).expect("invalid symbol"))
     }
 }
 
@@ -1757,8 +1851,8 @@ impl Ident {
 }
 
 #[inline]
-fn with_interner<T, F: FnOnce(&mut Interner) -> T>(f: F) -> T {
-    SESSION_GLOBALS.with(|session_globals| f(&mut *session_globals.symbol_interner.lock()))
+pub(crate) fn with_interner<T, F: FnOnce(&Interner) -> T>(f: F) -> T {
+    SESSION_GLOBALS.with(|session_globals| f(&session_globals.symbol_interner))
 }
 
 /// An alternative to [`Symbol`], useful when the chars within the symbol need to
