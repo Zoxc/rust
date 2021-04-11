@@ -24,6 +24,7 @@ use crate::ty::{
     PredicateInner, PredicateKind, ProjectionTy, Region, RegionKind, ReprOptions,
     TraitObjectVisitor, Ty, TyKind, TyS, TyVar, TyVid, TypeAndMut, UintTy, Visibility,
 };
+use concurrent::qsbr::pin;
 use rustc_ast as ast;
 use rustc_ast::expand::allocator::AllocatorKind;
 use rustc_attr as attr;
@@ -56,6 +57,7 @@ use rustc_span::{Span, DUMMY_SP};
 use rustc_target::abi::{Layout, TargetDataLayout, VariantIdx};
 use rustc_target::spec::abi;
 
+use concurrent::sync_insert_table::SyncInsertTable;
 use smallvec::SmallVec;
 use std::any::Any;
 use std::borrow::Borrow;
@@ -74,7 +76,103 @@ use std::sync::Arc;
 #[derive(TyEncodable, TyDecodable, HashStable)]
 pub struct DelaySpanBugEmitted(());
 
-type InternedSet<'tcx, T> = ShardedHashMap<Interned<'tcx, T>, ()>;
+trait SyncInsertTableExt<K> {
+    fn contains_pointer_to<T: Hash + IntoPointer>(&self, value: &T) -> bool
+    where
+        K: IntoPointer;
+
+    fn intern_ref<Q: ?Sized>(&self, value: &Q, make: impl FnOnce() -> K) -> K
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq;
+
+    fn intern<Q>(&self, value: Q, make: impl FnOnce(Q) -> K) -> K
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq;
+}
+
+#[inline]
+fn equivalent_key<Q, K>(k: &Q) -> impl Fn(&K) -> bool + '_
+where
+    K: Borrow<Q>,
+    Q: ?Sized + Eq,
+{
+    move |x| k.eq(x.borrow())
+}
+
+impl<K: Eq + Hash + Copy> SyncInsertTableExt<K> for SyncInsertTable<K> {
+    fn contains_pointer_to<T: Hash + IntoPointer>(&self, value: &T) -> bool
+    where
+        K: IntoPointer,
+    {
+        pin(|pin| {
+            let hash = self.make_hash(value);
+            let value = value.into_pointer();
+            self.read(pin).get(hash, |entry| entry.into_pointer() == value).is_some()
+        })
+    }
+
+    #[inline]
+    fn intern_ref<Q: ?Sized>(&self, value: &Q, make: impl FnOnce() -> K) -> K
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
+    {
+        pin(|pin| {
+            let hash = self.make_hash(value);
+
+            let entry = self.read(pin).get(hash, equivalent_key(value));
+            if let Some(entry) = entry {
+                return *entry;
+            }
+
+            let write = self.lock();
+
+            let entry = self.read(pin).get(hash, equivalent_key(value));
+            if let Some(entry) = entry {
+                return *entry;
+            }
+
+            let result = make();
+
+            write.insert_new(hash, result, |v| self.make_hash(v));
+
+            result
+        })
+    }
+
+    #[inline]
+    fn intern<Q>(&self, value: Q, make: impl FnOnce(Q) -> K) -> K
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
+    {
+        pin(|pin| {
+            let hash = self.make_hash(&value);
+
+            let entry = self.read(pin).get(hash, equivalent_key(&value));
+            if let Some(entry) = entry {
+                return *entry;
+            }
+
+            let write = self.lock();
+
+            let entry = self.read(pin).get(hash, equivalent_key(&value));
+            if let Some(entry) = entry {
+                return *entry;
+            }
+
+            let result = make(value);
+
+            write.insert_new(hash, result, |v| self.make_hash(v));
+
+            result
+        })
+    }
+}
+
+type InternedSet<'tcx, T> = SyncInsertTable<Interned<'tcx, T>>;
 
 pub struct CtxtInterners<'tcx> {
     /// The arena that types, regions, etc. are allocated from.
@@ -1252,7 +1350,11 @@ impl<'tcx> TyCtxt<'tcx> {
     }
 
     pub fn def_key(self, id: DefId) -> rustc_hir::definitions::DefKey {
-        if let Some(id) = id.as_local() { self.hir().def_key(id) } else { self.cstore.def_key(id) }
+        if let Some(id) = id.as_local() {
+            self.hir().def_key(id)
+        } else {
+            self.cstore.def_key(id)
+        }
     }
 
     /// Converts a `DefId` into its fully expanded `DefPath` (every
@@ -1271,7 +1373,11 @@ impl<'tcx> TyCtxt<'tcx> {
     /// Returns whether or not the crate with CrateNum 'cnum'
     /// is marked as a private dependency
     pub fn is_private_dep(self, cnum: CrateNum) -> bool {
-        if cnum == LOCAL_CRATE { false } else { self.cstore.crate_is_private_dep_untracked(cnum) }
+        if cnum == LOCAL_CRATE {
+            false
+        } else {
+            self.cstore.crate_is_private_dep_untracked(cnum)
+        }
     }
 
     #[inline]
@@ -1827,8 +1933,8 @@ macro_rules! sty_debug_print {
                 };
                 $(let mut $variant = total;)*
 
-                let shards = tcx.interners.type_.lock_shards();
-                let types = shards.iter().flat_map(|shard| shard.keys());
+                let types = tcx.interners.type_.lock();
+                let types = types.read().iter();
                 for &Interned(t) in types {
                     let variant = match t.kind() {
                         ty::Bool | ty::Char | ty::Int(..) | ty::Uint(..) |
@@ -2156,7 +2262,11 @@ impl<'tcx> TyCtxt<'tcx> {
     /// `*r == kind`.
     #[inline]
     pub fn reuse_or_mk_region(self, r: Region<'tcx>, kind: RegionKind) -> Region<'tcx> {
-        if *r == kind { r } else { self.mk_region(kind) }
+        if *r == kind {
+            r
+        } else {
+            self.mk_region(kind)
+        }
     }
 
     #[allow(rustc::usage_of_ty_tykind)]
@@ -2177,7 +2287,11 @@ impl<'tcx> TyCtxt<'tcx> {
         pred: Predicate<'tcx>,
         binder: Binder<'tcx, PredicateKind<'tcx>>,
     ) -> Predicate<'tcx> {
-        if pred.kind() != binder { self.mk_predicate(binder) } else { pred }
+        if pred.kind() != binder {
+            self.mk_predicate(binder)
+        } else {
+            pred
+        }
     }
 
     pub fn mk_mach_int(self, tm: IntTy) -> Ty<'tcx> {
@@ -2326,7 +2440,11 @@ impl<'tcx> TyCtxt<'tcx> {
 
     #[inline]
     pub fn mk_diverging_default(self) -> Ty<'tcx> {
-        if self.features().never_type_fallback { self.types.never } else { self.types.unit }
+        if self.features().never_type_fallback {
+            self.types.never
+        } else {
+            self.types.unit
+        }
     }
 
     #[inline]
@@ -2477,11 +2595,9 @@ impl<'tcx> TyCtxt<'tcx> {
         eps: &[ty::Binder<'tcx, ExistentialPredicate<'tcx>>],
     ) -> &'tcx List<ty::Binder<'tcx, ExistentialPredicate<'tcx>>> {
         assert!(!eps.is_empty());
-        assert!(
-            eps.array_windows()
-                .all(|[a, b]| a.skip_binder().stable_cmp(self, &b.skip_binder())
-                    != Ordering::Greater)
-        );
+        assert!(eps
+            .array_windows()
+            .all(|[a, b]| a.skip_binder().stable_cmp(self, &b.skip_binder()) != Ordering::Greater));
         self._intern_poly_existential_predicates(eps)
     }
 
@@ -2498,33 +2614,57 @@ impl<'tcx> TyCtxt<'tcx> {
     }
 
     pub fn intern_type_list(self, ts: &[Ty<'tcx>]) -> &'tcx List<Ty<'tcx>> {
-        if ts.is_empty() { List::empty() } else { self._intern_type_list(ts) }
+        if ts.is_empty() {
+            List::empty()
+        } else {
+            self._intern_type_list(ts)
+        }
     }
 
     pub fn intern_substs(self, ts: &[GenericArg<'tcx>]) -> &'tcx List<GenericArg<'tcx>> {
-        if ts.is_empty() { List::empty() } else { self._intern_substs(ts) }
+        if ts.is_empty() {
+            List::empty()
+        } else {
+            self._intern_substs(ts)
+        }
     }
 
     pub fn intern_projs(self, ps: &[ProjectionKind]) -> &'tcx List<ProjectionKind> {
-        if ps.is_empty() { List::empty() } else { self._intern_projs(ps) }
+        if ps.is_empty() {
+            List::empty()
+        } else {
+            self._intern_projs(ps)
+        }
     }
 
     pub fn intern_place_elems(self, ts: &[PlaceElem<'tcx>]) -> &'tcx List<PlaceElem<'tcx>> {
-        if ts.is_empty() { List::empty() } else { self._intern_place_elems(ts) }
+        if ts.is_empty() {
+            List::empty()
+        } else {
+            self._intern_place_elems(ts)
+        }
     }
 
     pub fn intern_canonical_var_infos(
         self,
         ts: &[CanonicalVarInfo<'tcx>],
     ) -> CanonicalVarInfos<'tcx> {
-        if ts.is_empty() { List::empty() } else { self._intern_canonical_var_infos(ts) }
+        if ts.is_empty() {
+            List::empty()
+        } else {
+            self._intern_canonical_var_infos(ts)
+        }
     }
 
     pub fn intern_bound_variable_kinds(
         self,
         ts: &[ty::BoundVariableKind],
     ) -> &'tcx List<ty::BoundVariableKind> {
-        if ts.is_empty() { List::empty() } else { self._intern_bound_variable_kinds(ts) }
+        if ts.is_empty() {
+            List::empty()
+        } else {
+            self._intern_bound_variable_kinds(ts)
+        }
     }
 
     pub fn mk_fn_sig<I>(
