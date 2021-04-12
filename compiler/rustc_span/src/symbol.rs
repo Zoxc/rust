@@ -1650,12 +1650,6 @@ impl Drop for Interner {
 unsafe impl Send for Interner {}
 unsafe impl Sync for Interner {}
 
-fn hash<K: Hash>(value: &K) -> u64 {
-    let mut hasher = FxHasher::default();
-    value.hash(&mut hasher);
-    hasher.finish()
-}
-
 #[inline]
 fn equivalent_key<Q, K, V>(k: &Q) -> impl Fn(&(K, V)) -> bool + '_
 where
@@ -1673,7 +1667,7 @@ impl Interner {
     fn prefill(init: &[&'static str]) -> Self {
         let mut strings = SyncPushVec::with_capacity(init.len());
 
-        let write = strings.write();
+        let mut write = strings.write();
         for &str in init {
             write.push(str);
         }
@@ -1688,14 +1682,17 @@ impl Interner {
     #[inline]
     pub fn intern(&self, string: &str) -> Symbol {
         pin(|pin| {
-            let str_hash = hash(&string);
-            if let Some(entry) = self.names.read(pin).get(str_hash, equivalent_key(string)) {
-                return entry.1;
-            }
+            let str_hash = self.names.hash_any(&string);
 
-            let lock = self.names.lock();
+            let potential =
+                match self.names.read(pin).get_potential(str_hash, equivalent_key(string)) {
+                    Ok(entry) => return entry.1,
+                    Err(potential) => potential,
+                };
 
-            if let Some(entry) = self.names.read(pin).get(str_hash, equivalent_key(string)) {
+            let mut lock = self.names.lock();
+
+            if let Some(entry) = potential.get(lock.read(), str_hash, equivalent_key(string)) {
                 return entry.1;
             }
 
@@ -1710,7 +1707,8 @@ impl Interner {
             let string: &'static str = unsafe { &*(string as *const str) };
 
             let name = Symbol::new(unsafe { self.strings.unsafe_write().push(string).1 as u32 });
-            lock.insert_new(str_hash, (string, name), |(k, _)| hash(k));
+
+            potential.insert_new(&mut lock, str_hash, (string, name), SyncInsertTable::map_hasher);
 
             name
         })
