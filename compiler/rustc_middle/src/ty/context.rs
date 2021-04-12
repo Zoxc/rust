@@ -122,21 +122,21 @@ impl<K: Eq + Hash + Copy> SyncInsertTableExt<K> for SyncInsertTable<K> {
         pin(|pin| {
             let hash = self.hash_any(value);
 
-            let potential = match self.read(pin).get_potential(hash, equivalent_key(value)) {
-                Ok(entry) => return *entry,
-                Err(potential) => potential,
-            };
+            let entry = self.read(pin).get(hash, equivalent_key(value));
+            if let Some(entry) = entry {
+                return *entry;
+            }
 
             let mut write = self.lock();
 
-            let entry = potential.get(write.read(), hash, equivalent_key(value));
+            let entry = self.read(pin).get(hash, equivalent_key(value));
             if let Some(entry) = entry {
                 return *entry;
             }
 
             let result = make();
 
-            potential.insert_new(&mut write, hash, result, SyncInsertTable::hasher);
+            write.insert_new(hash, result, SyncInsertTable::hasher);
 
             result
         })
@@ -151,21 +151,21 @@ impl<K: Eq + Hash + Copy> SyncInsertTableExt<K> for SyncInsertTable<K> {
         pin(|pin| {
             let hash = self.hash_any(&value);
 
-            let potential = match self.read(pin).get_potential(hash, equivalent_key(&value)) {
-                Ok(entry) => return *entry,
-                Err(potential) => potential,
-            };
+            let entry = self.read(pin).get(hash, equivalent_key(&value));
+            if let Some(entry) = entry {
+                return *entry;
+            }
 
             let mut write = self.lock();
 
-            let entry = potential.get(write.read(), hash, equivalent_key(&value));
+            let entry = self.read(pin).get(hash, equivalent_key(&value));
             if let Some(entry) = entry {
                 return *entry;
             }
 
             let result = make(value);
 
-            potential.insert_new(&mut write, hash, result, SyncInsertTable::hasher);
+            write.insert_new(hash, result, SyncInsertTable::hasher);
 
             result
         })
