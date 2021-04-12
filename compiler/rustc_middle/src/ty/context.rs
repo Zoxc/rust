@@ -107,7 +107,7 @@ impl<K: Eq + Hash + Copy> SyncInsertTableExt<K> for SyncInsertTable<K> {
         K: IntoPointer,
     {
         pin(|pin| {
-            let hash = self.make_hash(value);
+            let hash = self.hash_any(value);
             let value = value.into_pointer();
             self.read(pin).get(hash, |entry| entry.into_pointer() == value).is_some()
         })
@@ -120,23 +120,23 @@ impl<K: Eq + Hash + Copy> SyncInsertTableExt<K> for SyncInsertTable<K> {
         Q: Hash + Eq,
     {
         pin(|pin| {
-            let hash = self.make_hash(value);
+            let hash = self.hash_any(value);
 
-            let entry = self.read(pin).get(hash, equivalent_key(value));
-            if let Some(entry) = entry {
-                return *entry;
-            }
+            let potential = match self.read(pin).get_potential(hash, equivalent_key(value)) {
+                Ok(entry) => return *entry,
+                Err(potential) => potential,
+            };
 
-            let write = self.lock();
+            let mut write = self.lock();
 
-            let entry = self.read(pin).get(hash, equivalent_key(value));
+            let entry = potential.get(write.read(), hash, equivalent_key(value));
             if let Some(entry) = entry {
                 return *entry;
             }
 
             let result = make();
 
-            write.insert_new(hash, result, |v| self.make_hash(v));
+            potential.insert_new(&mut write, hash, result, SyncInsertTable::hasher);
 
             result
         })
@@ -149,23 +149,23 @@ impl<K: Eq + Hash + Copy> SyncInsertTableExt<K> for SyncInsertTable<K> {
         Q: Hash + Eq,
     {
         pin(|pin| {
-            let hash = self.make_hash(&value);
+            let hash = self.hash_any(&value);
 
-            let entry = self.read(pin).get(hash, equivalent_key(&value));
-            if let Some(entry) = entry {
-                return *entry;
-            }
+            let potential = match self.read(pin).get_potential(hash, equivalent_key(&value)) {
+                Ok(entry) => return *entry,
+                Err(potential) => potential,
+            };
 
-            let write = self.lock();
+            let mut write = self.lock();
 
-            let entry = self.read(pin).get(hash, equivalent_key(&value));
+            let entry = potential.get(write.read(), hash, equivalent_key(&value));
             if let Some(entry) = entry {
                 return *entry;
             }
 
             let result = make(value);
 
-            write.insert_new(hash, result, |v| self.make_hash(v));
+            potential.insert_new(&mut write, hash, result, SyncInsertTable::hasher);
 
             result
         })
