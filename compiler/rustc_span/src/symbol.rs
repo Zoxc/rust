@@ -1684,13 +1684,15 @@ impl Interner {
         pin(|pin| {
             let str_hash = self.names.hash_any(&string);
 
-            if let Some(entry) = self.names.read(pin).get(str_hash, equivalent_key(string)) {
-                return entry.1;
-            }
+            let potential =
+                match self.names.read(pin).get_potential(str_hash, equivalent_key(string)) {
+                    Ok(entry) => return entry.1,
+                    Err(potential) => potential,
+                };
 
             let mut lock = self.names.lock();
 
-            if let Some(entry) = self.names.read(pin).get(str_hash, equivalent_key(string)) {
+            if let Some(entry) = potential.get(lock.read(), str_hash, equivalent_key(string)) {
                 return entry.1;
             }
 
@@ -1705,7 +1707,8 @@ impl Interner {
             let string: &'static str = unsafe { &*(string as *const str) };
 
             let name = Symbol::new(unsafe { self.strings.unsafe_write().push(string).1 as u32 });
-            lock.insert_new(str_hash, (string, name), SyncInsertTable::map_hasher);
+
+            potential.insert_new(&mut lock, str_hash, (string, name), SyncInsertTable::map_hasher);
 
             name
         })
