@@ -912,7 +912,7 @@ impl Step for PlainSourceTarball {
         }
 
         // If we're building from git sources, we need to vendor a complete distribution.
-        if builder.rust_info.is_git() {
+        /*if builder.rust_info.is_git() {
             // Vendor all Cargo dependencies
             let mut cmd = Command::new(&builder.initial_cargo);
             cmd.arg("vendor")
@@ -921,7 +921,7 @@ impl Step for PlainSourceTarball {
                 .arg(builder.src.join("./compiler/rustc_codegen_cranelift/Cargo.toml"))
                 .current_dir(&plain_dst_src);
             builder.run(&mut cmd);
-        }
+        }*/
 
         tarball.bare()
     }
