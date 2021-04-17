@@ -1,4 +1,4 @@
-use rustc_hir::def_id::{DefId, LOCAL_CRATE};
+use rustc_hir::def_id::{DefId, LocalDefId, LOCAL_CRATE};
 use rustc_middle::ty::query::query_storage;
 use rustc_middle::ty::TyCtxt;
 use rustc_query_system::query::{QueryCache, QueryCacheStore};
@@ -16,10 +16,16 @@ impl<T> KeyStats for T {
     default fn key_stats(&self, _: &mut QueryStats) {}
 }
 
+impl KeyStats for LocalDefId {
+    fn key_stats(&self, stats: &mut QueryStats) {
+        stats.local_def_id_keys = Some(stats.local_def_id_keys.unwrap_or(0) + 1);
+    }
+}
+
 impl KeyStats for DefId {
     fn key_stats(&self, stats: &mut QueryStats) {
         if self.krate == LOCAL_CRATE {
-            stats.local_def_id_keys = Some(stats.local_def_id_keys.unwrap_or(0) + 1);
+            stats.def_id_local_keys = Some(stats.def_id_local_keys.unwrap_or(0) + 1);
         }
     }
 }
@@ -34,6 +40,7 @@ struct QueryStats {
     value_type: &'static str,
     entry_count: usize,
     local_def_id_keys: Option<usize>,
+    def_id_local_keys: Option<usize>,
 }
 
 fn stats<C>(name: &'static str, map: &QueryCacheStore<C>) -> QueryStats
@@ -52,6 +59,7 @@ where
         value_type: type_name::<C::Value>(),
         entry_count: 0,
         local_def_id_keys: None,
+        def_id_local_keys: None,
     };
     map.iter_results(&mut |key, _, _| {
         stats.entry_count += 1;
@@ -105,9 +113,19 @@ pub fn print_stats(tcx: TyCtxt<'_>) {
     }
 
     let mut def_id_density: Vec<_> =
+        queries.iter().filter(|q| q.def_id_local_keys.is_some()).collect();
+    def_id_density.sort_by_key(|q| q.def_id_local_keys.unwrap());
+    eprintln!("\nLocal DefId density:");
+    let total = tcx.hir().definitions().def_index_count() as f64;
+    for q in def_id_density.iter().rev() {
+        let local = q.def_id_local_keys.unwrap();
+        eprintln!("   {} - {} = ({}%)", q.name, local, (local as f64 * 100.0) / total);
+    }
+
+    let mut def_id_density: Vec<_> =
         queries.iter().filter(|q| q.local_def_id_keys.is_some()).collect();
     def_id_density.sort_by_key(|q| q.local_def_id_keys.unwrap());
-    eprintln!("\nLocal DefId density:");
+    eprintln!("\nLocalDefId density:");
     let total = tcx.hir().definitions().def_index_count() as f64;
     for q in def_id_density.iter().rev() {
         let local = q.local_def_id_keys.unwrap();
