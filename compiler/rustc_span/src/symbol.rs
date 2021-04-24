@@ -2,7 +2,7 @@
 //! allows bidirectional lookup; i.e., given a value, one can easily find the
 //! type, and vice versa.
 
-use concurrent::qsbr::pin;
+use concurrent::collect::pin;
 use concurrent::sync_insert_table::SyncInsertTable;
 use concurrent::sync_push_vec::SyncPushVec;
 use rustc_arena::DroplessArena;
@@ -1717,7 +1717,9 @@ impl Interner {
     // Get the symbol as a string. `Symbol::as_str()` should be used in
     // preference to this function.
     pub fn get(&self, symbol: Symbol) -> &str {
-        pin(|pin| *self.strings.read(pin).get(symbol.0.as_usize()).expect("invalid symbol"))
+        pin(|pin| {
+            *self.strings.read(pin).as_slice().get(symbol.0.as_usize()).expect("invalid symbol")
+        })
     }
 }
 
