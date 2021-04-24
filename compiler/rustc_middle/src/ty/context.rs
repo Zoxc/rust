@@ -24,7 +24,7 @@ use crate::ty::{
     PredicateInner, PredicateKind, ProjectionTy, Region, RegionKind, ReprOptions,
     TraitObjectVisitor, Ty, TyKind, TyS, TyVar, TyVid, TypeAndMut, UintTy, Visibility,
 };
-use concurrent::qsbr::pin;
+use concurrent::collect::pin;
 use rustc_ast as ast;
 use rustc_ast::expand::allocator::AllocatorKind;
 use rustc_attr as attr;
@@ -101,7 +101,7 @@ where
     move |x| k.eq(x.borrow())
 }
 
-impl<K: Eq + Hash + Copy> SyncInsertTableExt<K> for SyncInsertTable<K> {
+impl<K: Eq + Hash + Copy + Send> SyncInsertTableExt<K> for SyncInsertTable<K> {
     fn contains_pointer_to<T: Hash + IntoPointer>(&self, value: &T) -> bool
     where
         K: IntoPointer,
@@ -2008,15 +2008,23 @@ impl<'tcx> TyCtxt<'tcx> {
                     Foreign
                 )?;
 
-                writeln!(fmt, "InternalSubsts interner: #{}", self.0.interners.substs.len())?;
-                writeln!(fmt, "Region interner: #{}", self.0.interners.region.len())?;
+                writeln!(
+                    fmt,
+                    "InternalSubsts interner: #{}",
+                    self.0.interners.substs.lock().read().len()
+                )?;
+                writeln!(fmt, "Region interner: #{}", self.0.interners.region.lock().read().len())?;
                 writeln!(fmt, "Stability interner: #{}", self.0.stability_interner.len())?;
                 writeln!(
                     fmt,
                     "Const Stability interner: #{}",
                     self.0.const_stability_interner.len()
                 )?;
-                writeln!(fmt, "Allocation interner: #{}", self.0.interners.allocation.len())?;
+                writeln!(
+                    fmt,
+                    "Allocation interner: #{}",
+                    self.0.interners.allocation.lock().read().len()
+                )?;
                 writeln!(fmt, "Layout interner: #{}", self.0.layout_interner.len())?;
 
                 Ok(())
