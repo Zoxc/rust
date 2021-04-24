@@ -732,12 +732,8 @@ dependencies = [
 [[package]]
 name = "concurrent"
 version = "0.1.0"
-source = "git+https://github.com/Zoxc/concurrent.git#4a4dffc8ab156894d2605a3625e19d4a89ee974a"
 dependencies = [
- "crossbeam-epoch",
- "crossbeam-utils 0.8.0",
  "parking_lot",
- "rustc-hash",
 ]
 
 [[package]]
