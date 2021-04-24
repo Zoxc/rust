@@ -1,7 +1,7 @@
 use crate::dep_graph::DepNodeIndex;
 use crate::query::plumbing::{QueryCacheStore, QueryLookup};
 
-use concurrent::qsbr::{self, pin};
+use concurrent::collect::{self, pin};
 use concurrent::sync_insert_table::SyncInsertTable;
 use rustc_arena::TypedArena;
 use rustc_data_structures::fx::FxHashMap;
@@ -115,8 +115,8 @@ where
 
 impl<K, V> QueryCache for DefaultCache<K, V>
 where
-    K: Eq + Hash + Clone + Debug,
-    V: Clone + Debug,
+    K: Eq + Hash + Clone + Debug + Send,
+    V: Clone + Debug + Send,
 {
     type Key = K;
     type Sharded = ();
@@ -181,7 +181,7 @@ where
             (key, (value.clone(), index)),
             SyncInsertTable::map_hasher,
         );
-        qsbr::collect();
+        collect::collect();
         value
     }
 
