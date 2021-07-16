@@ -21,6 +21,7 @@ stable_deref_trait = "1.0.0"
 rayon = { version = "0.3.1", package = "rustc-rayon" }
 rayon-core = { version = "0.3.1", package = "rustc-rayon-core" }
 rustc-hash = "1.1.0"
+ahash = { git = "https://github.com/tkaitchuck/aHash.git" }
 smallvec = { version = "1.6.1", features = ["union", "may_dangle"] }
 rustc_index = { path = "../rustc_index", package = "rustc_index" }
 bitflags = "1.2.1"

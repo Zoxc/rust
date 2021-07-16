@@ -25,6 +25,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.7.4"
+source = "git+https://github.com/tkaitchuck/aHash.git#8781819bd80b22c1b330f769e9239c4be1ce5028"
+dependencies = [
+ "getrandom 0.2.3",
+ "once_cell",
+ "version_check",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1406,18 +1416,18 @@ checksum = "7abc8dd8451921606d809ba32e95b6111925cd2906060d2dcc29c070220503eb"
 dependencies = [
  "cfg-if 0.1.10",
  "libc",
- "wasi",
+ "wasi 0.9.0+wasi-snapshot-preview1",
 ]
 
 [[package]]
 name = "getrandom"
-version = "0.2.0"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee8025cf36f917e6a52cce185b7c7177689b838b7ec138364e50cc2277a56cf4"
+checksum = "7fcd999463524c52659517fe2cea98493cfe485d10565e7b0fb07dbba7ad2753"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "libc",
- "wasi",
+ "wasi 0.10.2+wasi-snapshot-preview1",
 ]
 
 [[package]]
@@ -2308,7 +2318,7 @@ dependencies = [
  "colored",
  "compiletest_rs",
  "env_logger 0.8.1",
- "getrandom 0.2.0",
+ "getrandom 0.2.3",
  "hex 0.4.2",
  "libc",
  "log",
@@ -2390,9 +2400,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.7.2"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
+checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
 
 [[package]]
 name = "opaque-debug"
@@ -2963,7 +2973,7 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34cf66eb183df1c5876e2dcf6b13d57340741e8dc255b48e40a26de954d06ae7"
 dependencies = [
- "getrandom 0.2.0",
+ "getrandom 0.2.3",
 ]
 
 [[package]]
@@ -3051,7 +3061,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "528532f3d801c87aec9def2add9ca802fe569e44a544afe633765267840abe64"
 dependencies = [
- "getrandom 0.2.0",
+ "getrandom 0.2.3",
  "redox_syscall",
 ]
 
@@ -3755,6 +3765,7 @@ dependencies = [
 name = "rustc_data_structures"
 version = "0.0.0"
 dependencies = [
+ "ahash",
  "arrayvec",
  "bitflags",
  "cfg-if 0.1.10",
@@ -4920,7 +4931,7 @@ dependencies = [
  "rustc-demangle",
  "std_detect",
  "unwind",
- "wasi",
+ "wasi 0.9.0+wasi-snapshot-preview1",
 ]
 
 [[package]]
@@ -5637,6 +5648,12 @@ dependencies = [
  "rustc-std-workspace-alloc",
  "rustc-std-workspace-core",
 ]
+
+[[package]]
+name = "wasi"
+version = "0.10.2+wasi-snapshot-preview1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd6fbd9a79829dd1ad0cc20627bf1ed606756a7f77edff7b66b7064f9cb327c6"
 
 [[package]]
 name = "winapi"

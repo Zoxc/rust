@@ -1,6 +1,11 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::hash::BuildHasherDefault;
 
-pub use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
+pub use ahash::AHasher as FxHasher;
+
+pub type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
+pub type FxHashSet<V> = HashSet<V, BuildHasherDefault<FxHasher>>;
 
 pub type FxIndexMap<K, V> = indexmap::IndexMap<K, V, BuildHasherDefault<FxHasher>>;
 pub type FxIndexSet<V> = indexmap::IndexSet<V, BuildHasherDefault<FxHasher>>;
