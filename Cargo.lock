@@ -3775,6 +3775,7 @@ dependencies = [
  "libc",
  "measureme",
  "memmap2",
+ "once_cell",
  "parking_lot",
  "rustc-hash",
  "rustc-rayon",

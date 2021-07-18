@@ -563,7 +563,11 @@ fn handle_explain(registry: Registry, code: &str, output: ErrorOutputType) {
 
 fn show_content_with_pager(content: &str) {
     let pager_name = env::var_os("PAGER").unwrap_or_else(|| {
-        if cfg!(windows) { OsString::from("more.com") } else { OsString::from("less") }
+        if cfg!(windows) {
+            OsString::from("more.com")
+        } else {
+            OsString::from("less")
+        }
     });
 
     let mut fallback_to_println = false;
@@ -1138,7 +1142,11 @@ fn extra_compiler_flags() -> Option<(Vec<String>, bool)> {
         }
     }
 
-    if !result.is_empty() { Some((result, excluded_cargo_defaults)) } else { None }
+    if !result.is_empty() {
+        Some((result, excluded_cargo_defaults))
+    } else {
+        None
+    }
 }
 
 /// Runs a closure and catches unwinds triggered by fatal errors.
@@ -1380,6 +1388,8 @@ pub fn main() -> ! {
         let end_rss = get_resident_set_size();
         print_time_passes_entry("total", start_time.elapsed(), start_rss, end_rss);
     }
+
+    rustc_data_structures::fx::PersistingHasher::flush();
 
     process::exit(exit_code)
 }
