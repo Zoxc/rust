@@ -1,9 +1,10 @@
 use crate::fx::{FxHashMap, FxHasher};
-use crate::sync::{self, Lock, LockGuard};
+#[cfg(parallel_compiler)]
+use crate::sync;
+use crate::sync::{Lock, LockGuard};
 use std::borrow::Borrow;
 use std::collections::hash_map::RawEntryMut;
 use std::hash::{Hash, Hasher};
-use std::intrinsics::likely;
 use std::mem::{self, ManuallyDrop, MaybeUninit};
 
 #[derive(Clone, Default)]
@@ -24,7 +25,8 @@ pub const SHARDS: usize = 1 << SHARD_BITS;
 /// An array of cache-line aligned inner locked structures with convenience methods.
 //#[derive(Clone)]
 pub struct Sharded<T> {
-    mt: bool, // FIXME: Store a length here instead?
+    #[cfg(parallel_compiler)]
+    mask: usize,
     shards: [MaybeUninit<CacheAligned<Lock<T>>>; SHARDS],
 }
 
@@ -39,7 +41,8 @@ impl<T> Sharded<T> {
     #[inline]
     pub fn new(mut value: impl FnMut() -> T) -> Self {
         let mut result = ManuallyDrop::new(Sharded {
-            mt: sync::STATE.get().active,
+            #[cfg(parallel_compiler)]
+            mask: if sync::STATE.get().active { SHARDS - 1 } else { 0 },
             shards: unsafe { MaybeUninit::uninit().assume_init() },
         });
 
@@ -52,47 +55,33 @@ impl<T> Sharded<T> {
         ManuallyDrop::into_inner(result)
     }
 
-    fn count(&self) -> usize {
-        if likely(!self.mt) {
-            1
-        } else {
-            SHARDS
+    fn mask(&self) -> usize {
+        #[cfg(parallel_compiler)]
+        {
+            return self.mask;
         }
+        0
     }
 
-    #[inline]
-    unsafe fn get_shard_by_index_unchecked(&self, i: usize) -> &Lock<T> {
-        debug_assert!(i < self.count());
-        let i = if SHARDS == 1 { 0 } else { i };
-        &self.shards.get_unchecked(i).assume_init_ref().0
+    fn count(&self) -> usize {
+        self.mask() + 1
     }
 
     /// The shard is selected by hashing `val` with `FxHasher`.
     #[inline]
     pub fn get_shard_by_value<K: Hash + ?Sized>(&self, val: &K) -> &Lock<T> {
-        if SHARDS == 1 {
-            unsafe { self.get_shard_by_index_unchecked(0) }
-        } else {
-            self.get_shard_by_hash(make_hash(val))
-        }
+        self.get_shard_by_hash(if SHARDS == 1 { 0 } else { make_hash(val) })
     }
 
     #[inline]
     pub fn get_shard_by_hash(&self, hash: u64) -> &Lock<T> {
-        unsafe {
-            if likely(!self.mt) {
-                self.get_shard_by_index_unchecked(0)
-            } else {
-                self.get_shard_by_index_unchecked(get_shard_index_by_hash(hash))
-            }
-        }
+        self.get_shard_by_index(get_shard_index_by_hash(hash))
     }
 
     #[inline]
     pub fn get_shard_by_index(&self, i: usize) -> &Lock<T> {
-        debug_assert!(i < self.count());
-        let i = if self.mt { i % SHARDS } else { 0 };
-        unsafe { self.get_shard_by_index_unchecked(i) }
+        //debug_assert!(i < self.count());
+        unsafe { &self.shards.get_unchecked(i & self.mask()).assume_init_ref().0 }
     }
 
     pub fn lock_shards(&self) -> Vec<LockGuard<'_, T>> {
@@ -211,5 +200,6 @@ pub fn get_shard_index_by_hash(hash: u64) -> usize {
     // Ignore the top 7 bits as hashbrown uses these and get the next SHARD_BITS highest bits.
     // hashbrown also uses the lowest bits, so we can't use those
     let bits = (hash >> (hash_len * 8 - 7 - SHARD_BITS)) as usize;
-    bits % SHARDS
+    //bits % SHARDS
+    bits
 }
