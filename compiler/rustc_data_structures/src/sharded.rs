@@ -3,7 +3,8 @@ use crate::sync::{self, Lock, LockGuard};
 use std::borrow::Borrow;
 use std::collections::hash_map::RawEntryMut;
 use std::hash::{Hash, Hasher};
-use std::mem;
+use std::intrinsics::likely;
+use std::mem::{self, ManuallyDrop, MaybeUninit};
 
 #[derive(Clone, Default)]
 #[cfg_attr(parallel_compiler, repr(align(64)))]
@@ -21,10 +22,10 @@ const SHARD_BITS: usize = 0;
 pub const SHARDS: usize = 1 << SHARD_BITS;
 
 /// An array of cache-line aligned inner locked structures with convenience methods.
-#[derive(Clone)]
-pub enum Sharded<T> {
-    Disabled(Lock<T>),
-    Enabled([CacheAligned<Lock<T>>; SHARDS]),
+//#[derive(Clone)]
+pub struct Sharded<T> {
+    mt: bool, // FIXME: Store a length here instead?
+    shards: [MaybeUninit<CacheAligned<Lock<T>>>; SHARDS],
 }
 
 impl<T: Default> Default for Sharded<T> {
@@ -37,55 +38,93 @@ impl<T: Default> Default for Sharded<T> {
 impl<T> Sharded<T> {
     #[inline]
     pub fn new(mut value: impl FnMut() -> T) -> Self {
-        if sync::STATE.get().active {
-            Sharded::Enabled([(); SHARDS].map(|()| CacheAligned(Lock::new(value()))))
-        } else {
-            Sharded::Disabled(Lock::new(value()))
+        let mut result = ManuallyDrop::new(Sharded {
+            mt: sync::STATE.get().active,
+            shards: unsafe { MaybeUninit::uninit().assume_init() },
+        });
+
+        // FIXME: Drop created values if `value` panics.
+
+        for i in 0..result.count() {
+            result.shards[i] = MaybeUninit::new(CacheAligned(Lock::new(value())));
         }
+
+        ManuallyDrop::into_inner(result)
+    }
+
+    fn count(&self) -> usize {
+        if likely(!self.mt) {
+            1
+        } else {
+            SHARDS
+        }
+    }
+
+    #[inline]
+    unsafe fn get_shard_by_index_unchecked(&self, i: usize) -> &Lock<T> {
+        debug_assert!(i < self.count());
+        let i = if SHARDS == 1 { 0 } else { i };
+        &self.shards.get_unchecked(i).assume_init_ref().0
     }
 
     /// The shard is selected by hashing `val` with `FxHasher`.
     #[inline]
     pub fn get_shard_by_value<K: Hash + ?Sized>(&self, val: &K) -> &Lock<T> {
-        match self {
-            Sharded::Disabled(val) => val,
-            Sharded::Enabled(shards) => {
-                if SHARDS == 1 {
-                    &shards[0].0
-                } else {
-                    self.get_shard_by_hash(make_hash(val))
-                }
-            }
+        if SHARDS == 1 {
+            unsafe { self.get_shard_by_index_unchecked(0) }
+        } else {
+            self.get_shard_by_hash(make_hash(val))
         }
     }
 
     #[inline]
     pub fn get_shard_by_hash(&self, hash: u64) -> &Lock<T> {
-        match self {
-            Sharded::Disabled(val) => val,
-            Sharded::Enabled(shards) => &shards[get_shard_index_by_hash(hash)].0,
+        unsafe {
+            if likely(!self.mt) {
+                self.get_shard_by_index_unchecked(0)
+            } else {
+                self.get_shard_by_index_unchecked(get_shard_index_by_hash(hash))
+            }
         }
     }
 
     #[inline]
     pub fn get_shard_by_index(&self, i: usize) -> &Lock<T> {
-        match self {
-            Sharded::Disabled(val) => val,
-            Sharded::Enabled(shards) => &shards[i].0,
-        }
+        debug_assert!(i < self.count());
+        let i = if self.mt { i % SHARDS } else { 0 };
+        unsafe { self.get_shard_by_index_unchecked(i) }
     }
 
     pub fn lock_shards(&self) -> Vec<LockGuard<'_, T>> {
-        match self {
-            Sharded::Disabled(val) => vec![val.lock()],
-            Sharded::Enabled(shards) => (0..SHARDS).map(|i| shards[i].0.lock()).collect(),
-        }
+        (0..self.count()).map(|i| self.get_shard_by_index(i).lock()).collect()
     }
 
     pub fn try_lock_shards(&self) -> Option<Vec<LockGuard<'_, T>>> {
-        match self {
-            Sharded::Disabled(val) => val.try_lock().map(|guard| vec![guard]),
-            Sharded::Enabled(shards) => (0..SHARDS).map(|i| shards[i].0.try_lock()).collect(),
+        (0..self.count()).map(|i| self.get_shard_by_index(i).try_lock()).collect()
+    }
+}
+/*
+impl<T: Clone> Clone for Sharded<T> {
+    #[inline(always)]
+    fn clone(&self) -> Self {
+        let mut result = ManuallyDrop::new(Sharded {
+            mt: self.mt,
+            shards: unsafe { MaybeUninit::uninit().assume_init() },
+        });
+
+        for i in 0..result.count() {
+            result.shards[i] = self.get_shard_by_index();
+        }
+
+        result.into_inner()
+    }
+}
+ */
+
+unsafe impl<#[may_dangle] T> Drop for Sharded<T> {
+    fn drop(&mut self) {
+        for i in 0..self.count() {
+            unsafe { self.shards[i].assume_init_drop() }
         }
     }
 }

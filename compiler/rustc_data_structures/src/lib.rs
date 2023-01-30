@@ -12,6 +12,7 @@
 #![feature(auto_traits)]
 #![feature(cell_leak)]
 #![feature(core_intrinsics)]
+#![feature(dropck_eyepatch)]
 #![feature(extend_one)]
 #![feature(hash_raw_entry)]
 #![feature(hasher_prefixfree_extras)]

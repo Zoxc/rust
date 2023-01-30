@@ -21,7 +21,7 @@ use crate::cold_path;
 use crate::owning_ref::{Erased, OwningRef};
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
-use std::intrinsics::unlikely;
+use std::intrinsics::{likely, unlikely};
 use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
