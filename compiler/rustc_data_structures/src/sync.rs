@@ -608,14 +608,14 @@ pub fn lock_st(l: &LockRaw, state: &Cell<State>) {
 }
  */
 
-#[inline(never)]
+#[inline]
 pub fn lock_only_mt(l: &LockRaw) {
     unsafe {
         l.opt.mt.lock();
     }
 }
 
-#[inline]
+#[inline(never)]
 pub fn lock(l: &LockRaw) {
     unsafe {
         if likely(!l.mt) {

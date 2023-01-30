@@ -55,6 +55,7 @@ impl<T> Sharded<T> {
         ManuallyDrop::into_inner(result)
     }
 
+    #[inline(always)]
     fn mask(&self) -> usize {
         #[cfg(parallel_compiler)]
         {
@@ -63,6 +64,7 @@ impl<T> Sharded<T> {
         0
     }
 
+    #[inline(always)]
     fn count(&self) -> usize {
         self.mask() + 1
     }
