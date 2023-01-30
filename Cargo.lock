@@ -3924,6 +3924,7 @@ dependencies = [
  "indexmap",
  "jobserver",
  "libc",
+ "lock_api",
  "measureme",
  "memmap2",
  "parking_lot 0.11.2",

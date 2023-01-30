@@ -38,7 +38,7 @@ impl<T> Sharded<T> {
     #[inline]
     pub fn new(mut value: impl FnMut() -> T) -> Self {
         if sync::STATE.get().active {
-                Sharded::Enabled([(); SHARDS].map(|()| CacheAligned(Lock::new(value()))))
+            Sharded::Enabled([(); SHARDS].map(|()| CacheAligned(Lock::new(value()))))
         } else {
             Sharded::Disabled(Lock::new(value()))
         }
@@ -54,12 +54,11 @@ impl<T> Sharded<T> {
                     &shards[0].0
                 } else {
                     self.get_shard_by_hash(make_hash(val))
-    }
+                }
             }
         }
     }
 
-    #[inline]
     #[inline]
     pub fn get_shard_by_hash(&self, hash: u64) -> &Lock<T> {
         match self {
@@ -73,21 +72,21 @@ impl<T> Sharded<T> {
         match self {
             Sharded::Disabled(val) => val,
             Sharded::Enabled(shards) => &shards[i].0,
-    }
+        }
     }
 
     pub fn lock_shards(&self) -> Vec<LockGuard<'_, T>> {
         match self {
             Sharded::Disabled(val) => vec![val.lock()],
             Sharded::Enabled(shards) => (0..SHARDS).map(|i| shards[i].0.lock()).collect(),
-    }
+        }
     }
 
     pub fn try_lock_shards(&self) -> Option<Vec<LockGuard<'_, T>>> {
         match self {
             Sharded::Disabled(val) => val.try_lock().map(|guard| vec![guard]),
             Sharded::Enabled(shards) => (0..SHARDS).map(|i| shards[i].0.try_lock()).collect(),
-    }
+        }
     }
 }
 

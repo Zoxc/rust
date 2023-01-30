@@ -17,9 +17,12 @@
 //! `rustc_erase_owner!` erases an OwningRef owner into Erased or Erased + Send + Sync
 //! depending on the value of cfg!(parallel_compiler).
 
+use crate::cold_path;
 use crate::owning_ref::{Erased, OwningRef};
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
+use std::intrinsics::unlikely;
+use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 
@@ -483,7 +486,7 @@ impl<'a, T: 'a> DerefMut for LockGuard<'a, T> {
 impl<'a, T: 'a> Drop for LockGuard<'a, T> {
     #[inline]
     fn drop(&mut self) {
-        if unlikely!(self.lock.raw.mt) {
+        if unlikely(self.lock.raw.mt) {
             unsafe { self.lock.raw.opt.mt.unlock() };
         } else {
             unsafe {
@@ -506,9 +509,10 @@ impl<'a, T: fmt::Display + ?Sized + 'a> fmt::Display for LockGuard<'a, T> {
 }*/
 
 union LockRawOption {
-    st: (usize, Cell<bool>),
-    mt: parking_lot::RawMutex,
+    st: (u16, ManuallyDrop<Cell<bool>>),
+    mt: ManuallyDrop<parking_lot::RawMutex>,
 }
+
 #[derive(Copy, Clone)]
 pub struct State {
     pub(crate) active: bool,
@@ -517,7 +521,10 @@ pub struct State {
 
 //#[derive(Debug)]
 pub struct LockRaw {
+    // Could change this to a u8 thread id to lower size and lower sizes.
+    // Probably not worthwhile due to alignment.
     mt: bool,
+
     opt: LockRawOption,
 }
 
@@ -525,12 +532,20 @@ impl LockRaw {
     #[inline(never)]
     fn new() -> Self {
         let state = &STATE;
-        if unlikely!(state.get().active) {
-            LockRaw { mt: true, opt: LockRawOption { mt: parking_lot::RawMutex::INIT } }
+        if unlikely(state.get().active) {
+            LockRaw {
+                mt: true,
+                opt: LockRawOption { mt: ManuallyDrop::new(parking_lot::RawMutex::INIT) },
+            }
         } else {
             LockRaw {
                 mt: false,
-                opt: LockRawOption { st: (current_thread(state), Cell::new(false)) },
+                opt: LockRawOption {
+                    st: (
+                        current_thread(state).try_into().unwrap(),
+                        ManuallyDrop::new(Cell::new(false)),
+                    ),
+                },
             }
         }
     }
@@ -548,9 +563,11 @@ pub static STATE: Cell<State> = Cell::new(State { active: false, thread: 0 });
 #[inline(always)]
 fn current_thread(state: &Cell<State>) -> usize {
     let val = state.get().thread;
-    if unlikely!(val == 0) {
-        state.set(State { thread: 3, ..state.get() });
-        state.get().thread
+    if unlikely(val == 0) {
+        cold_path(|| {
+            state.set(State { thread: 3, ..state.get() });
+            state.get().thread
+        })
     } else {
         val
     }
@@ -576,35 +593,53 @@ impl<T: fmt::Debug> fmt::Debug for Lock<T> {
         }
     }
 }
-
+/*
 #[no_mangle]
 #[inline(never)]
 pub fn lock_st(l: &LockRaw, state: &Cell<State>) {
     unsafe {
         assert!(l.opt.st.0 == state.get().thread);
-        if unlikely!(l.opt.st.1.get()) {
+        if unlikely(l.opt.st.1.get()) {
             panic!("lock was already held")
         } else {
             l.opt.st.1.set(true);
         }
     }
 }
+ */
 
-#[no_mangle]
 #[inline(never)]
+pub fn lock_only_mt(l: &LockRaw) {
+    unsafe {
+        l.opt.mt.lock();
+    }
+}
+
+#[inline]
 pub fn lock(l: &LockRaw) {
     unsafe {
-        if unlikely!(l.mt) {
-            l.opt.mt.lock();
-        } else {
-            assert!(l.opt.st.0 == STATE.get().thread);
-            if unlikely!(l.opt.st.1.get()) {
-                panic!("lock was already held")
+        if likely(!l.mt) {
+            if unlikely(l.opt.st.0 as usize != STATE.get().thread || l.opt.st.1.get()) {
+                cold_path(|| {
+                    if l.opt.st.0 as usize != STATE.get().thread {
+                        panic!("wrong thread")
+                    } else {
+                        panic!("lock was already held")
+                    }
+                })
             } else {
                 l.opt.st.1.set(true);
             }
+        } else {
+            lock_only_mt(l)
         }
     }
+}
+
+#[no_mangle]
+#[inline(never)]
+pub fn lock_mt(l: &LockRaw) {
+    lock(l);
 }
 
 #[no_mangle]
@@ -635,15 +670,15 @@ impl<T> Lock<T> {
                 Some(LockGuard { lock: self, marker: PhantomData })
             } else {
                 None
-    }
+            }
         } else {
-            unsafe { assert!(self.raw.opt.st.0 == current_thread(&STATE)) };
+            unsafe { assert!(self.raw.opt.st.0 as usize == current_thread(&STATE)) };
             if unsafe { self.raw.opt.st.1.get() } {
                 None
             } else {
                 unsafe { self.raw.opt.st.1.set(true) };
                 Some(LockGuard { lock: self, marker: PhantomData })
-    }
+            }
         }
     }
 
@@ -652,15 +687,16 @@ impl<T> Lock<T> {
     pub fn lock(&self) -> LockGuard<'_, T> {
         lock(&self.raw);
         LockGuard { lock: self, marker: PhantomData }
-        }
-
+    }
+    /*
     #[inline(always)]
     #[track_caller]
-    pub(crate) fn lock_st(&self, state: &Cell<State>) -> LockGuard<'_, T> {
-        lock_st(&self.raw, state);
-        LockGuard { lock: self, marker: PhantomData }
-    }
 
+       pub(crate) fn lock_st(&self, state: &Cell<State>) -> LockGuard<'_, T> {
+           lock_st(&self.raw, state);
+           LockGuard { lock: self, marker: PhantomData }
+       }
+    */
     #[inline(always)]
     #[track_caller]
     pub fn with_lock<F: FnOnce(&mut T) -> R, R>(&self, f: F) -> R {
