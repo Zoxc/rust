@@ -757,12 +757,26 @@ fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<()> {
                 CStore::from_tcx(tcx).report_unused_deps(tcx);
             },
             {
+                // Prefetch this as it is used later by the loop below
+                // to prevent multiple threads from blocking on it.
+                tcx.ensure_with_value().get_lang_items(());
+
+                let _timer = tcx.sess.timer("misc_module_passes");
                 tcx.hir().par_for_each_module(|module| {
                     tcx.ensure().check_mod_loops(module);
                     tcx.ensure().check_mod_attrs(module);
                     tcx.ensure().check_mod_naked_functions(module);
-                    tcx.ensure().check_mod_unstable_api_usage(module);
                     tcx.ensure().check_mod_const_bodies(module);
+                });
+            },
+            {
+                // Prefetch this as it is used later by the loop below
+                // to prevent multiple threads from blocking on it.
+                tcx.ensure_with_value().stability_index(());
+
+                let _timer = tcx.sess.timer("check_unstable_api_usage");
+                tcx.hir().par_for_each_module(|module| {
+                    tcx.ensure().check_mod_unstable_api_usage(module);
                 });
             },
             {
