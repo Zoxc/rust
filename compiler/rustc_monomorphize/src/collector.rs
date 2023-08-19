@@ -165,7 +165,7 @@
 //! regardless of whether it is actually needed or not.
 
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
-use rustc_data_structures::sync::{par_for_each_in, MTLock, MTLockRef};
+use rustc_data_structures::sync::{join, par_for_each_in, MTLock, MTLockRef};
 use rustc_hir as hir;
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, DefIdMap, LocalDefId};
@@ -257,8 +257,19 @@ pub fn collect_crate_mono_items(
 ) -> (FxHashSet<MonoItem<'_>>, UsageMap<'_>) {
     let _prof_timer = tcx.prof.generic_activity("monomorphization_collector");
 
-    let roots =
-        tcx.sess.time("monomorphization_collector_root_collections", || collect_roots(tcx, mode));
+    let (roots, _) = join(
+        || {
+            tcx.sess
+                .time("monomorphization_collector_root_collections", || collect_roots(tcx, mode))
+        },
+        || {
+            if tcx.sess.opts.share_generics() {
+                // Prefetch upstream_monomorphizations as it's very likely to be used in
+                // code generation later and this is decent spot to compute it.
+                tcx.ensure().upstream_monomorphizations(());
+            }
+        },
+    );
 
     debug!("building mono item graph, beginning at roots");
 
