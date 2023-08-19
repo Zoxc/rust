@@ -95,7 +95,7 @@ mod outlives;
 pub mod structured_errors;
 mod variance;
 
-use rustc_data_structures::sync::join;
+use rustc_data_structures::sync::{join, par_for_each_in};
 use rustc_errors::ErrorGuaranteed;
 use rustc_errors::{DiagnosticMessage, SubdiagnosticMessage};
 use rustc_fluent_macro::fluent_messages;
@@ -215,9 +215,9 @@ pub fn check_crate(tcx: TyCtxt<'_>) -> Result<(), ErrorGuaranteed> {
 
     tcx.sess.track_errors(|| {
         tcx.sess.time("coherence_checking", || {
-            for &trait_def_id in tcx.all_local_trait_impls(()).keys() {
-                tcx.ensure().coherent_trait(trait_def_id);
-            }
+            par_for_each_in(tcx.all_local_trait_impls(()), |(trait_def_id, _)| {
+                tcx.ensure().coherent_trait(*trait_def_id);
+            });
 
             // these queries are executed for side-effects (error reporting):
             tcx.ensure().crate_inherent_impls(());
