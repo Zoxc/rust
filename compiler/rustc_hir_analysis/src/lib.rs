@@ -95,6 +95,7 @@ mod outlives;
 pub mod structured_errors;
 mod variance;
 
+use rustc_data_structures::sync::join;
 use rustc_errors::ErrorGuaranteed;
 use rustc_errors::{DiagnosticMessage, SubdiagnosticMessage};
 use rustc_fluent_macro::fluent_messages;
@@ -236,20 +237,28 @@ pub fn check_crate(tcx: TyCtxt<'_>) -> Result<(), ErrorGuaranteed> {
         });
     })?;
 
-    // NOTE: This is copy/pasted in librustdoc/core.rs and should be kept in sync.
-    tcx.sess.time("item_types_checking", || {
-        tcx.hir().for_each_module(|module| tcx.ensure().check_mod_item_types(module))
-    });
-
-    // FIXME: Remove this when we implement creating `DefId`s
-    // for anon constants during their parents' typeck.
-    // Typeck all body owners in parallel will produce queries
-    // cycle errors because it may typeck on anon constants directly.
-    tcx.hir().par_body_owners(|item_def_id| {
-        let def_kind = tcx.def_kind(item_def_id);
-        if !matches!(def_kind, DefKind::AnonConst) {
-            tcx.ensure().typeck(item_def_id);
-        }
+    tcx.sess.time("item_types_and_item_bodies_checking", || {
+        join(
+            || {
+                // NOTE: This is copy/pasted in librustdoc/core.rs and should be kept in sync.
+                tcx.sess.time("item_types_checking", || {
+                    tcx.hir()
+                        .par_for_each_module(|module| tcx.ensure().check_mod_item_types(module))
+                });
+            },
+            || {
+                // FIXME: Remove this when we implement creating `DefId`s
+                // for anon constants during their parents' typeck.
+                // Typeck all body owners in parallel will produce queries
+                // cycle errors because it may typeck on anon constants directly.
+                tcx.hir().par_body_owners(|item_def_id| {
+                    let def_kind = tcx.def_kind(item_def_id);
+                    if !matches!(def_kind, DefKind::AnonConst) {
+                        tcx.ensure().typeck(item_def_id);
+                    }
+                });
+            },
+        )
     });
 
     tcx.ensure().check_unused_traits(());
