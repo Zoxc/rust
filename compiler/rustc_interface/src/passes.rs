@@ -801,7 +801,8 @@ fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<()> {
     sess.time("misc_checking_2", || {
         parallel!(
             {
-                tcx.ensure().effective_visibilities(());
+                // Prefetch this as it is used later by lint checking and privacy checking.
+                tcx.ensure_with_value().effective_visibilities(());
             },
             {
                 sess.time("MIR_borrow_checking", || {
