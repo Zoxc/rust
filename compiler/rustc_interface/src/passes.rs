@@ -798,41 +798,43 @@ fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<()> {
     // passes are timed inside typeck
     rustc_hir_analysis::check_crate(tcx)?;
 
-    parallel!(
-        {
-            tcx.ensure().effective_visibilities(());
-        },
-        {
-            sess.time("MIR_borrow_checking", || {
-                tcx.hir().par_body_owners(|def_id| tcx.ensure().mir_borrowck(def_id));
-            });
-        },
-        {
-            sess.time("MIR_effect_checking", || {
-                for def_id in tcx.hir().body_owners() {
-                    tcx.ensure().thir_check_unsafety(def_id);
-                    if !tcx.sess.opts.unstable_opts.thir_unsafeck {
-                        rustc_mir_transform::check_unsafety::check_unsafety(tcx, def_id);
-                    }
-                    tcx.ensure().has_ffi_unwind_calls(def_id);
+    sess.time("misc_checking_2", || {
+        parallel!(
+            {
+                tcx.ensure().effective_visibilities(());
+            },
+            {
+                sess.time("MIR_borrow_checking", || {
+                    tcx.hir().par_body_owners(|def_id| tcx.ensure().mir_borrowck(def_id));
+                });
+            },
+            {
+                sess.time("MIR_effect_checking", || {
+                    for def_id in tcx.hir().body_owners() {
+                        tcx.ensure().thir_check_unsafety(def_id);
+                        if !tcx.sess.opts.unstable_opts.thir_unsafeck {
+                            rustc_mir_transform::check_unsafety::check_unsafety(tcx, def_id);
+                        }
+                        tcx.ensure().has_ffi_unwind_calls(def_id);
 
-                    // If we need to codegen, ensure that we emit all errors from
-                    // `mir_drops_elaborated_and_const_checked` now, to avoid discovering
-                    // them later during codegen.
-                    if tcx.sess.opts.output_types.should_codegen()
-                        || tcx.hir().body_const_context(def_id).is_some()
-                    {
-                        tcx.ensure().mir_drops_elaborated_and_const_checked(def_id);
-                        tcx.ensure()
-                            .unused_generic_params(ty::InstanceDef::Item(def_id.to_def_id()));
+                        // If we need to codegen, ensure that we emit all errors from
+                        // `mir_drops_elaborated_and_const_checked` now, to avoid discovering
+                        // them later during codegen.
+                        if tcx.sess.opts.output_types.should_codegen()
+                            || tcx.hir().body_const_context(def_id).is_some()
+                        {
+                            tcx.ensure().mir_drops_elaborated_and_const_checked(def_id);
+                            tcx.ensure()
+                                .unused_generic_params(ty::InstanceDef::Item(def_id.to_def_id()));
+                        }
                     }
-                }
-            });
-        },
-        {
-            sess.time("layout_testing", || layout_test::test_layout(tcx));
-        }
-    );
+                });
+            },
+            {
+                sess.time("layout_testing", || layout_test::test_layout(tcx));
+            }
+        )
+    });
 
     if tcx.sess.opts.unstable_opts.drop_tracking_mir {
         tcx.hir().par_body_owners(|def_id| {
