@@ -798,9 +798,16 @@ fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<()> {
     // passes are timed inside typeck
     rustc_hir_analysis::check_crate(tcx)?;
 
-    sess.time("MIR_borrow_checking", || {
-        tcx.hir().par_body_owners(|def_id| tcx.ensure().mir_borrowck(def_id));
-    });
+    parallel!(
+        {
+            tcx.ensure().effective_visibilities(());
+        },
+        {
+            sess.time("MIR_borrow_checking", || {
+                tcx.hir().par_body_owners(|def_id| tcx.ensure().mir_borrowck(def_id));
+            });
+        }
+    );
 
     sess.time("MIR_effect_checking", || {
         for def_id in tcx.hir().body_owners() {
@@ -845,25 +852,18 @@ fn analysis(tcx: TyCtxt<'_>, (): ()) -> Result<()> {
     sess.time("misc_checking_3", || {
         parallel!(
             {
-                tcx.ensure().effective_visibilities(());
-
-                parallel!(
-                    {
-                        tcx.ensure().check_private_in_public(());
-                    },
-                    {
-                        tcx.hir()
-                            .par_for_each_module(|module| tcx.ensure().check_mod_deathness(module));
-                    },
-                    {
-                        sess.time("lint_checking", || {
-                            rustc_lint::check_crate(tcx);
-                        });
-                    },
-                    {
-                        tcx.ensure().clashing_extern_declarations(());
-                    }
-                );
+                tcx.ensure().check_private_in_public(());
+            },
+            {
+                tcx.hir().par_for_each_module(|module| tcx.ensure().check_mod_deathness(module));
+            },
+            {
+                sess.time("lint_checking", || {
+                    rustc_lint::check_crate(tcx);
+                });
+            },
+            {
+                tcx.ensure().clashing_extern_declarations(());
             },
             {
                 sess.time("privacy_checking_modules", || {
