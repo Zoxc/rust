@@ -2,6 +2,7 @@ use super::{GlobalCtxt, TyCtxt};
 
 use crate::dep_graph::TaskDepsRef;
 use crate::query::plumbing::QueryJobId;
+use rustc_data_structures::defer;
 use rustc_data_structures::sync::{self, Lock};
 use rustc_errors::Diagnostic;
 #[cfg(not(parallel_compiler))]
@@ -152,4 +153,52 @@ where
     F: for<'tcx> FnOnce(Option<TyCtxt<'tcx>>) -> R,
 {
     with_context_opt(|opt_context| f(opt_context.map(|context| context.tcx)))
+}
+
+/// Enters `GlobalCtxt` by setting up the `GCX_PTR` pointer.
+pub fn enter_global_context<'tcx, F, R>(context: &ImplicitCtxt<'_, 'tcx>, f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    if cfg!(parallel_compiler) {
+        // Update `GCX_PTR` to indicate there's a `GlobalCtxt` available.
+        GCX_PTR.with(|gcx_ptr| {
+            let mut lock = gcx_ptr.value.lock();
+            assert!(lock.is_none());
+            *lock = Some(context.tcx.gcx as *const _ as *const ());
+        });
+        // Set `GCX_PTR` back to 0 when we exit.
+        let _on_drop = defer(move || {
+            GCX_PTR.with(|gcx_ptr| *gcx_ptr.value.lock() = None);
+        });
+        enter_context(context, f)
+    } else {
+        enter_context(context, f)
+    }
+}
+
+pub struct GcxPtr {
+    /// Stores a pointer to the `GlobalCtxt` if one is available.
+    /// This is used to access the `GlobalCtxt` in the deadlock handler given to Rayon.
+    value: Lock<Option<*const ()>>,
+}
+
+impl GcxPtr {
+    pub fn new() -> Self {
+        GcxPtr { value: Lock::new(None) }
+    }
+
+    /// This accesses the GlobalCtxt.
+    ///
+    /// Safety: The caller must ensure that the GlobalCtxt is live during `f`.
+    pub unsafe fn access<R>(&self, f: impl for<'tcx> FnOnce(&'tcx GlobalCtxt<'tcx>) -> R) -> R {
+        let gcx_ptr: *const GlobalCtxt<'_> = self.value.lock().unwrap() as *const _;
+        f(unsafe { &*gcx_ptr })
+    }
+}
+
+unsafe impl Sync for GcxPtr {}
+
+scoped_tls::scoped_thread_local! {
+    pub static GCX_PTR: GcxPtr
 }

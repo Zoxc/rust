@@ -178,7 +178,7 @@ pub(crate) fn run_in_thread_pool_with_globals<F: FnOnce() -> R + Send, R: Send>(
     f: F,
 ) -> R {
     use rustc_data_structures::jobserver;
-    use rustc_middle::ty::tls;
+    use rustc_middle::ty::tls::{self, GcxPtr};
     use rustc_query_impl::QueryCtxt;
     use rustc_query_system::query::{deadlock, QueryContext};
 
@@ -191,17 +191,33 @@ pub(crate) fn run_in_thread_pool_with_globals<F: FnOnce() -> R + Send, R: Send>(
         .deadlock_handler(|| {
             // On deadlock, creates a new thread and forwards information in thread
             // locals to it. The new thread runs the deadlock handler.
-            let query_map = tls::with(|tcx| {
-                QueryCtxt::new(tcx)
-                    .try_collect_active_jobs()
-                    .expect("active jobs shouldn't be locked in deadlock handler")
-            });
+            let query_map = {
+                // Get a GlobalCtxt reference from GCX_PTR as we cannot rely on having a TyCtxt TLS
+                // reference here.
+                // SAFETY: No thread will end the lifetime of  `GlobalCtxt` as they're deadlocked
+                // and won't resume until the `deadlock` call.
+                unsafe {
+                    tls::GCX_PTR.with(|gcx_ptr| {
+                        gcx_ptr.access(|gcx| {
+                            tls::enter_context(&tls::ImplicitCtxt::new(gcx), || {
+                                tls::with(|tcx| {
+                                    QueryCtxt::new(tcx).try_collect_active_jobs().expect(
+                                        "active jobs shouldn't be locked in deadlock handler",
+                                    )
+                                })
+                            })
+                        })
+                    })
+                }
+            };
             let registry = rayon_core::Registry::current();
             thread::spawn(move || deadlock(query_map, &registry));
         });
     if let Some(size) = get_stack_size() {
         builder = builder.stack_size(size);
     }
+
+    let gcx_ptr = GcxPtr::new();
 
     // We create the session globals on the main thread, then create the thread
     // pool. Upon creation, each worker thread created gets a copy of the
@@ -216,7 +232,9 @@ pub(crate) fn run_in_thread_pool_with_globals<F: FnOnce() -> R + Send, R: Send>(
                         // Register the thread for use with the `WorkerLocal` type.
                         registry.register();
 
-                        rustc_span::set_session_globals_then(session_globals, || thread.run())
+                        rustc_span::set_session_globals_then(session_globals, || {
+                            tls::GCX_PTR.set(&gcx_ptr, || thread.run())
+                        })
                     },
                     // Run `f` on the first thread in the thread pool.
                     move |pool: &rayon::ThreadPool| pool.install(f),

@@ -3949,6 +3949,7 @@ dependencies = [
  "rustc_span",
  "rustc_target",
  "rustc_type_ir",
+ "scoped-tls",
  "smallvec",
  "thin-vec",
  "tracing",

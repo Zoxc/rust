@@ -590,7 +590,7 @@ impl<'tcx> GlobalCtxt<'tcx> {
         F: FnOnce(TyCtxt<'tcx>) -> R,
     {
         let icx = tls::ImplicitCtxt::new(self);
-        tls::enter_context(&icx, || f(icx.tcx))
+        tls::enter_global_context(&icx, || f(icx.tcx))
     }
 }
 
