@@ -9,8 +9,17 @@ use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use parking_lot::Mutex;
 use rayon::iter::{FromParallelIterator, IntoParallelIterator, ParallelIterator};
 
-use crate::FatalErrorMarker;
 use crate::sync::{DynSend, DynSync, FromDyn, IntoDynSyncSend, mode};
+use crate::{AtomicRef, FatalErrorMarker};
+
+pub static PARALLEL_USE: AtomicRef<fn()> = AtomicRef::new(&((|| panic!()) as fn()));
+
+#[inline]
+pub fn can_be_parallel() {
+    if cfg!(debug_assertions) {
+        PARALLEL_USE();
+    }
+}
 
 /// A guard used to hold panics that occur during a parallel section to later by unwound.
 /// This is used for the parallel compiler to prevent fatal errors from non-deterministically
@@ -38,6 +47,7 @@ impl ParallelGuard {
 /// caught in it after the closure returns.
 #[inline]
 pub fn parallel_guard<R>(f: impl FnOnce(&ParallelGuard) -> R) -> R {
+    can_be_parallel();
     let guard = ParallelGuard { panic: Mutex::new(None) };
     let ret = f(&guard);
     if let Some(IntoDynSyncSend(panic)) = guard.panic.into_inner() {
@@ -80,6 +90,7 @@ macro_rules! parallel {
             });
         };
         ($fblock:block, $($blocks:block),*) => {
+            $crate::sync::can_be_parallel();
             if $crate::sync::is_dyn_thread_safe() {
                 // Reverse the order of the later blocks since Rayon executes them in reverse order
                 // when using a single thread. This ensures the execution order matches that
@@ -100,6 +111,7 @@ where
     OP: FnOnce(&rayon::Scope<'scope>) -> R + DynSend,
     R: DynSend,
 {
+    can_be_parallel();
     let op = FromDyn::from(op);
     rayon::scope(|s| FromDyn::from(op.into_inner()(s))).into_inner()
 }

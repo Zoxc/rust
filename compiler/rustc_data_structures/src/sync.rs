@@ -41,9 +41,11 @@ pub use self::atomic::AtomicU64;
 pub use self::freeze::{FreezeLock, FreezeReadGuard, FreezeWriteGuard};
 #[doc(no_inline)]
 pub use self::lock::{Lock, LockGuard, Mode};
+pub use self::maybe_lock::{MaybeLock, MaybeLockGuard};
 pub use self::mode::{is_dyn_thread_safe, set_dyn_thread_safe_mode};
 pub use self::parallel::{
-    join, par_for_each_in, par_map, parallel_guard, scope, try_par_for_each_in,
+    PARALLEL_USE, can_be_parallel, join, par_for_each_in, par_map, parallel_guard, scope,
+    try_par_for_each_in,
 };
 pub use self::vec::{AppendOnlyIndexVec, AppendOnlyVec};
 pub use self::worker_local::{Registry, WorkerLocal};
@@ -51,6 +53,7 @@ pub use crate::marker::*;
 
 mod freeze;
 mod lock;
+mod maybe_lock;
 mod parallel;
 mod vec;
 mod worker_local;

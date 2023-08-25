@@ -32,6 +32,10 @@ pub struct ImplicitCtxt<'a, 'tcx> {
     /// The current dep graph task. This is used to add dependencies to queries
     /// when executing them.
     pub task_deps: TaskDepsRef<'a>,
+
+    /// If parallel blocks are allowed.
+    #[cfg(debug_assertions)]
+    pub parallel_allowed: bool,
 }
 
 impl<'a, 'tcx> ImplicitCtxt<'a, 'tcx> {
@@ -43,6 +47,8 @@ impl<'a, 'tcx> ImplicitCtxt<'a, 'tcx> {
             diagnostics: None,
             query_depth: 0,
             task_deps: TaskDepsRef::Ignore,
+            #[cfg(debug_assertions)]
+            parallel_allowed: true,
         }
     }
 }

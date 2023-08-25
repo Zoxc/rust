@@ -308,6 +308,7 @@ rustc_queries! {
     /// The root query triggering all analysis passes like typeck or borrowck.
     query analysis(key: ()) {
         eval_always
+        parallel
         desc { "running analysis passes on this crate" }
     }
 
@@ -1100,6 +1101,7 @@ rustc_queries! {
     }
 
     query check_mod_type_wf(key: LocalModDefId) -> Result<(), ErrorGuaranteed> {
+        parallel
         desc { |tcx| "checking that types are well-formed in {}", describe_as_module(key, tcx) }
         return_result_from_ensure_ok
     }
@@ -2187,6 +2189,7 @@ rustc_queries! {
 
     query collect_and_partition_mono_items(_: ()) -> MonoItemPartitions<'tcx> {
         eval_always
+        parallel
         desc { "collect_and_partition_mono_items" }
     }
 

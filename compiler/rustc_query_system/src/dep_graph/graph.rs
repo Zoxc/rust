@@ -10,7 +10,7 @@ use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::profiling::{QueryInvocationId, SelfProfilerRef};
 use rustc_data_structures::sharded::{self, ShardedHashMap};
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
-use rustc_data_structures::sync::{AtomicU64, Lock};
+use rustc_data_structures::sync::{AtomicU64, Lock, MaybeLock};
 use rustc_data_structures::unord::UnordMap;
 use rustc_index::IndexVec;
 use rustc_macros::{Decodable, Encodable};
@@ -364,13 +364,16 @@ impl<D: Deps> DepGraphData<D> {
         let (result, edges) = if cx.dep_context().is_eval_always(key.kind) {
             (with_deps(TaskDepsRef::EvalAlways), EdgesVec::new())
         } else {
-            let task_deps = Lock::new(TaskDeps {
-                #[cfg(debug_assertions)]
-                node: Some(key),
-                reads: EdgesVec::new(),
-                read_set: Default::default(),
-                phantom_data: PhantomData,
-            });
+            let task_deps = MaybeLock::new(
+                TaskDeps {
+                    #[cfg(debug_assertions)]
+                    node: Some(key),
+                    reads: EdgesVec::new(),
+                    read_set: Default::default(),
+                    phantom_data: PhantomData,
+                },
+                cx.dep_context().dep_kind_info(key.kind).parallel_allowed,
+            );
             (with_deps(TaskDepsRef::Allow(&task_deps)), task_deps.into_inner().reads)
         };
 
@@ -403,7 +406,7 @@ impl<D: Deps> DepGraphData<D> {
     {
         debug_assert!(!cx.is_eval_always(dep_kind));
 
-        let task_deps = Lock::new(TaskDeps::default());
+        let task_deps = MaybeLock::new(TaskDeps::default(), false);
         let result = D::with_deps(TaskDepsRef::Allow(&task_deps), op);
         let task_deps = task_deps.into_inner();
         let task_deps = task_deps.reads;
@@ -1259,7 +1262,7 @@ pub enum TaskDepsRef<'a> {
     /// New dependencies can be added to the
     /// `TaskDeps`. This is used when executing a 'normal' query
     /// (no `eval_always` modifier)
-    Allow(&'a Lock<TaskDeps>),
+    Allow(&'a MaybeLock<TaskDeps>),
     /// This is used when executing an `eval_always` query. We don't
     /// need to track dependencies for a query that's always
     /// re-executed -- but we need to know that this is an `eval_always`

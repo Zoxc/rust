@@ -51,6 +51,14 @@ pub trait DepContext: Copy {
         self.dep_kind_info(kind).is_eval_always
     }
 
+    #[inline(always)]
+    fn is_parallel_dbg_check(self, _kind: DepKind) -> bool {
+        #[cfg(debug_assertions)]
+        return self.dep_kind_info(_kind).parallel_allowed;
+
+        false // We don't do any checking without `debug_assertions`
+    }
+
     /// Try to force a dep node to execute and see if it's green.
     ///
     /// Returns true if the query has actually been forced. It is valid that a query

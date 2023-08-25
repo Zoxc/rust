@@ -14,6 +14,7 @@ use std::fmt;
 use rustc_errors::{DiagInner, TRACK_DIAGNOSTIC};
 use rustc_middle::dep_graph::{DepNodeExt, TaskDepsRef};
 use rustc_middle::ty::tls;
+use rustc_query_impl::parallel_use;
 use rustc_query_system::dep_graph::dep_node::default_dep_kind_debug;
 use rustc_query_system::dep_graph::{DepContext, DepKind, DepNode};
 
@@ -106,6 +107,7 @@ pub fn dep_node_debug(node: DepNode, f: &mut std::fmt::Formatter<'_>) -> std::fm
 /// Sets up the callbacks in prior crates which we want to refer to the
 /// TyCtxt in.
 pub fn setup_callbacks() {
+    rustc_data_structures::sync::PARALLEL_USE.swap(&(parallel_use as fn()));
     rustc_span::SPAN_TRACK.swap(&(track_span_parent as fn(_)));
     rustc_hir::def_id::DEF_ID_DEBUG.swap(&(def_id_debug as fn(_, &mut fmt::Formatter<'_>) -> _));
     rustc_query_system::dep_graph::dep_node::DEP_KIND_DEBUG

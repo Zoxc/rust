@@ -470,7 +470,13 @@ where
     }
 
     let prof_timer = qcx.dep_context().profiler().query_provider();
-    let result = qcx.start_query(job_id, query.depth_limit(), None, || query.compute(qcx, key));
+    let result = qcx.start_query(
+        job_id,
+        query.depth_limit(),
+        None,
+        qcx.dep_context().is_parallel_dbg_check(query.dep_kind()),
+        || query.compute(qcx, key),
+    );
     let dep_node_index = qcx.dep_context().dep_graph().next_virtual_depnode_index();
     prof_timer.finish_with_query_invocation_id(dep_node_index.into());
 
@@ -507,9 +513,13 @@ where
 
         // The diagnostics for this query will be promoted to the current session during
         // `try_mark_green()`, so we can ignore them here.
-        if let Some(ret) = qcx.start_query(job_id, false, None, || {
-            try_load_from_disk_and_cache_in_memory(query, dep_graph_data, qcx, &key, dep_node)
-        }) {
+        if let Some(ret) = qcx.start_query(
+            job_id,
+            false,
+            None,
+            qcx.dep_context().is_parallel_dbg_check(query.dep_kind()),
+            || try_load_from_disk_and_cache_in_memory(query, dep_graph_data, qcx, &key, dep_node),
+        ) {
             return ret;
         }
     }
@@ -517,8 +527,12 @@ where
     let prof_timer = qcx.dep_context().profiler().query_provider();
     let diagnostics = Lock::new(ThinVec::new());
 
-    let (result, dep_node_index) =
-        qcx.start_query(job_id, query.depth_limit(), Some(&diagnostics), || {
+    let (result, dep_node_index) = qcx.start_query(
+        job_id,
+        query.depth_limit(),
+        Some(&diagnostics),
+        qcx.dep_context().is_parallel_dbg_check(query.dep_kind()),
+        || {
             if query.anon() {
                 return dep_graph_data.with_anon_task_inner(
                     *qcx.dep_context(),
@@ -538,7 +552,8 @@ where
                 |(qcx, query), key| query.compute(qcx, key),
                 query.hash_result(),
             )
-        });
+        },
+    );
 
     prof_timer.finish_with_query_invocation_id(dep_node_index.into());
 

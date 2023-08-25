@@ -37,7 +37,7 @@ use crate::profiling_support::QueryKeyStringCache;
 
 #[macro_use]
 mod plumbing;
-pub use crate::plumbing::{QueryCtxt, query_key_hash_verify_all};
+pub use crate::plumbing::{QueryCtxt, parallel_use, query_key_hash_verify_all};
 
 mod profiling_support;
 pub use self::profiling_support::alloc_self_profile_query_strings;

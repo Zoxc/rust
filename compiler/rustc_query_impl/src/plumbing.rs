@@ -130,6 +130,7 @@ impl QueryContext for QueryCtxt<'_> {
         token: QueryJobId,
         depth_limit: bool,
         diagnostics: Option<&Lock<ThinVec<DiagInner>>>,
+        _parallel_allowed: bool,
         compute: impl FnOnce() -> R,
     ) -> R {
         // The `TyCtxt` stored in TLS has the same global interner lifetime
@@ -147,6 +148,8 @@ impl QueryContext for QueryCtxt<'_> {
                 diagnostics,
                 query_depth: current_icx.query_depth + depth_limit as usize,
                 task_deps: current_icx.task_deps,
+                #[cfg(debug_assertions)]
+                parallel_allowed: _parallel_allowed,
             };
 
             // Use the `ImplicitCtxt` while we execute the query.
@@ -168,6 +171,21 @@ impl QueryContext for QueryCtxt<'_> {
             suggested_limit,
             crate_name: self.crate_name(LOCAL_CRATE),
         });
+    }
+}
+
+pub fn parallel_use() {
+    #[cfg(debug_assertions)]
+    {
+        tls::with_context_opt(|icx| {
+            if let Some(icx) = icx {
+                if !icx.parallel_allowed {
+                    let query_map = QueryCtxt::new(icx.tcx).collect_active_jobs();
+                    let desc = &query_map.get(&icx.query.unwrap()).unwrap().query.description;
+                    panic!("parallelism not allowed in query `{}`", desc);
+                }
+            }
+        })
     }
 }
 
@@ -222,6 +240,18 @@ macro_rules! is_anon {
     }};
     ([$other:tt $($modifiers:tt)*]) => {
         is_anon!([$($modifiers)*])
+    };
+}
+
+macro_rules! is_parallel_allowed {
+    ([]) => {{
+        false
+    }};
+    ([(parallel) $($rest:tt)*]) => {{
+        true
+    }};
+    ([$other:tt $($modifiers:tt)*]) => {
+        is_parallel_allowed!([$($modifiers)*])
     };
 }
 
@@ -480,7 +510,11 @@ where
     }
 }
 
-pub(crate) fn query_callback<'tcx, Q>(is_anon: bool, is_eval_always: bool) -> DepKindStruct<'tcx>
+pub(crate) fn query_callback<'tcx, Q>(
+    is_anon: bool,
+    is_eval_always: bool,
+    parallel_allowed: bool,
+) -> DepKindStruct<'tcx>
 where
     Q: QueryConfigRestored<'tcx>,
 {
@@ -491,6 +525,7 @@ where
             is_anon,
             is_eval_always,
             fingerprint_style,
+            parallel_allowed: false,
             force_from_dep_node: None,
             try_load_from_on_disk_cache: None,
             name: Q::NAME,
@@ -500,6 +535,7 @@ where
     DepKindStruct {
         is_anon,
         is_eval_always,
+        parallel_allowed,
         fingerprint_style,
         force_from_dep_node: Some(|tcx, dep_node| {
             force_from_dep_node(Q::config(tcx), tcx, dep_node)
@@ -802,6 +838,7 @@ macro_rules! define_queries {
                 DepKindStruct {
                     is_anon: false,
                     is_eval_always: false,
+                    parallel_allowed: false,
                     fingerprint_style: FingerprintStyle::Unit,
                     force_from_dep_node: Some(|_, dep_node| bug!("force_from_dep_node: encountered {:?}", dep_node)),
                     try_load_from_on_disk_cache: None,
@@ -814,6 +851,7 @@ macro_rules! define_queries {
                 DepKindStruct {
                     is_anon: false,
                     is_eval_always: false,
+                    parallel_allowed: false,
                     fingerprint_style: FingerprintStyle::Unit,
                     force_from_dep_node: Some(|_, dep_node| bug!("force_from_dep_node: encountered {:?}", dep_node)),
                     try_load_from_on_disk_cache: None,
@@ -825,6 +863,7 @@ macro_rules! define_queries {
                 DepKindStruct {
                     is_anon: true,
                     is_eval_always: false,
+                    parallel_allowed: false,
                     fingerprint_style: FingerprintStyle::Unit,
                     force_from_dep_node: None,
                     try_load_from_on_disk_cache: None,
@@ -836,6 +875,7 @@ macro_rules! define_queries {
                 DepKindStruct {
                     is_anon: false,
                     is_eval_always: false,
+                    parallel_allowed: false,
                     fingerprint_style: FingerprintStyle::Opaque,
                     force_from_dep_node: None,
                     try_load_from_on_disk_cache: None,
@@ -847,6 +887,7 @@ macro_rules! define_queries {
                 DepKindStruct {
                     is_anon: false,
                     is_eval_always: false,
+                    parallel_allowed: false,
                     fingerprint_style: FingerprintStyle::Opaque,
                     force_from_dep_node: None,
                     try_load_from_on_disk_cache: None,
@@ -858,6 +899,7 @@ macro_rules! define_queries {
                 $crate::plumbing::query_callback::<query_impl::$name::QueryType<'tcx>>(
                     is_anon!([$($modifiers)*]),
                     is_eval_always!([$($modifiers)*]),
+                    is_parallel_allowed!([$($modifiers)*]),
                 )
             })*
         }

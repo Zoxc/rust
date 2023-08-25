@@ -122,6 +122,8 @@ pub trait QueryContext: HasDepContext {
         token: QueryJobId,
         depth_limit: bool,
         diagnostics: Option<&Lock<ThinVec<DiagInner>>>,
+
+        parallel_allowed: bool,
         compute: impl FnOnce() -> R,
     ) -> R;
 

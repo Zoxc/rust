@@ -103,6 +103,9 @@ struct QueryModifiers {
     /// Don't hash the result, instead just mark a query red if it runs
     no_hash: Option<Ident>,
 
+    /// Allow internal parallelism in the query
+    parallel: Option<Ident>,
+
     /// Generate a dep node based on the dependencies of the query
     anon: Option<Ident>,
 
@@ -138,6 +141,7 @@ fn parse_query_modifiers(input: ParseStream<'_>) -> Result<QueryModifiers> {
     let mut fatal_cycle = None;
     let mut cycle_delay_bug = None;
     let mut cycle_stash = None;
+    let mut parallel = None;
     let mut no_hash = None;
     let mut anon = None;
     let mut eval_always = None;
@@ -196,6 +200,8 @@ fn parse_query_modifiers(input: ParseStream<'_>) -> Result<QueryModifiers> {
             try_insert!(cycle_stash = modifier);
         } else if modifier == "no_hash" {
             try_insert!(no_hash = modifier);
+        } else if modifier == "parallel" {
+            try_insert!(parallel = modifier);
         } else if modifier == "anon" {
             try_insert!(anon = modifier);
         } else if modifier == "eval_always" {
@@ -223,6 +229,7 @@ fn parse_query_modifiers(input: ParseStream<'_>) -> Result<QueryModifiers> {
         cycle_delay_bug,
         cycle_stash,
         no_hash,
+        parallel,
         anon,
         eval_always,
         depth_limit,
@@ -356,6 +363,7 @@ pub(super) fn rustc_queries(input: TokenStream) -> TokenStream {
             cycle_delay_bug,
             cycle_stash,
             no_hash,
+            parallel,
             anon,
             eval_always,
             depth_limit,

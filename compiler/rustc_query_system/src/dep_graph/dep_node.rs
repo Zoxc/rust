@@ -236,6 +236,9 @@ pub struct DepKindStruct<Tcx: DepContext> {
     /// cached within one compiler invocation.
     pub is_eval_always: bool,
 
+    /// If parallel blocks are allowed in this task.
+    pub parallel_allowed: bool,
+
     /// Whether the query key can be recovered from the hashed fingerprint.
     /// See [DepNodeParams] trait for the behaviour of each key type.
     pub fingerprint_style: FingerprintStyle,
