@@ -14,7 +14,7 @@ pub use crate::*;
 
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::stable_hasher::{Hash128, Hash64, StableHasher};
-use rustc_data_structures::sync::{IntoDynSyncSend, Lrc, MappedReadGuard, ReadGuard, RwLock};
+use rustc_data_structures::sync::{IntoDynSyncSend, Lrc, ReadGuard, RwLock};
 use std::cmp;
 use std::hash::Hash;
 use std::path::{self, Path, PathBuf};
@@ -249,7 +249,7 @@ impl SourceMap {
 
     // By returning a `MonotonicVec`, we ensure that consumers cannot invalidate
     // any existing indices pointing into `files`.
-    pub fn files(&self) -> MappedReadGuard<'_, monotonic::MonotonicVec<Lrc<SourceFile>>> {
+    pub fn files(&self) -> ReadGuard<'_, monotonic::MonotonicVec<Lrc<SourceFile>>> {
         ReadGuard::map(self.files.borrow(), |files| &files.source_files)
     }
 

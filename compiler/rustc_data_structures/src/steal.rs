@@ -1,5 +1,5 @@
 use crate::stable_hasher::{HashStable, StableHasher};
-use crate::sync::{MappedReadGuard, ReadGuard, RwLock};
+use crate::sync::{ReadGuard, RwLock};
 
 /// The `Steal` struct is intended to used as the value for a query.
 /// Specifically, we sometimes have queries (*cough* MIR *cough*)
@@ -32,8 +32,8 @@ impl<T> Steal<T> {
     }
 
     #[track_caller]
-    pub fn borrow(&self) -> MappedReadGuard<'_, T> {
-        let borrow = self.value.borrow();
+    pub fn borrow(&self) -> ReadGuard<'_, T> {
+        let borrow = self.value.read();
         if borrow.is_none() {
             panic!("attempted to read from stolen value: {}", std::any::type_name::<T>());
         }

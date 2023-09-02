@@ -43,6 +43,10 @@ mod maybe_sync {
         mode: Mode,
     }
 
+    #[cfg(parallel_compiler)]
+    impl<T> !DynSend for LockGuard<'_, T> {}
+    impl<T> !Send for LockGuard<'_, T> {}
+
     impl<'a, T: 'a> Deref for LockGuard<'a, T> {
         type Target = T;
         #[inline]

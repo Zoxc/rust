@@ -28,7 +28,10 @@
 //! |                         |                     |                                 |
 //! | `Lock<T>`               | `RefCell<T>`        | `RefCell<T>` or                 |
 //! |                         |                     | `parking_lot::Mutex<T>`         |
-//! | `RwLock<T>`             | `RefCell<T>`        | `parking_lot::RwLock<T>`        |
+//! |                         |                     |                                 |
+//! | `RwLock<T>`             | `RefCell<T>`        | `RefCell<T>` or                 |
+//! |                         |                     | `parking_lot::RwLock<T>`        |
+//! |                         |                     |                                 |
 //! | `MTLock<T>`        [^1] | `T`                 | `Lock<T>`                       |
 //! | `MTLockRef<'a, T>` [^2] | `&'a mut MTLock<T>` | `&'a MTLock<T>`                 |
 //! |                         |                     |                                 |
@@ -50,6 +53,9 @@ use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 
 mod lock;
 pub use lock::{Lock, LockGuard, Mode};
+
+mod rwlock;
+pub use rwlock::{ReadGuard, RwLock, WriteGuard};
 
 mod worker_local;
 pub use worker_local::{Registry, WorkerLocal};
@@ -269,15 +275,8 @@ cfg_if! {
 
         pub use std::rc::Rc as Lrc;
         pub use std::rc::Weak as Weak;
-        pub use std::cell::Ref as ReadGuard;
-        pub use std::cell::Ref as MappedReadGuard;
-        pub use std::cell::RefMut as WriteGuard;
-        pub use std::cell::RefMut as MappedWriteGuard;
-        pub use std::cell::RefMut as MappedLockGuard;
 
         pub use std::cell::OnceCell as OnceLock;
-
-        use std::cell::RefCell as InnerRwLock;
 
         pub type MTLockRef<'a, T> = &'a mut MTLock<T>;
 
@@ -322,13 +321,6 @@ cfg_if! {
         pub use std::marker::Send as Send;
         pub use std::marker::Sync as Sync;
 
-        pub use parking_lot::RwLockReadGuard as ReadGuard;
-        pub use parking_lot::MappedRwLockReadGuard as MappedReadGuard;
-        pub use parking_lot::RwLockWriteGuard as WriteGuard;
-        pub use parking_lot::MappedRwLockWriteGuard as MappedWriteGuard;
-
-        pub use parking_lot::MappedMutexGuard as MappedLockGuard;
-
         pub use std::sync::OnceLock;
 
         pub use std::sync::atomic::{AtomicBool, AtomicUsize, AtomicU32, AtomicU64};
@@ -367,8 +359,6 @@ cfg_if! {
                 self.lock()
             }
         }
-
-        use parking_lot::RwLock as InnerRwLock;
 
         use std::thread;
 
@@ -470,10 +460,6 @@ cfg_if! {
                 }
             })
         }
-
-        /// This makes locks panic if they are already held.
-        /// It is only useful when you are running in a single thread
-        const ERROR_CHECKING: bool = false;
     }
 }
 
@@ -490,119 +476,6 @@ pub trait HashMapExt<K, V> {
 impl<K: Eq + Hash, V: Eq, S: BuildHasher> HashMapExt<K, V> for HashMap<K, V, S> {
     fn insert_same(&mut self, key: K, value: V) {
         self.entry(key).and_modify(|old| assert!(*old == value)).or_insert(value);
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct RwLock<T>(InnerRwLock<T>);
-
-impl<T> RwLock<T> {
-    #[inline(always)]
-    pub fn new(inner: T) -> Self {
-        RwLock(InnerRwLock::new(inner))
-    }
-
-    #[inline(always)]
-    pub fn into_inner(self) -> T {
-        self.0.into_inner()
-    }
-
-    #[inline(always)]
-    pub fn get_mut(&mut self) -> &mut T {
-        self.0.get_mut()
-    }
-
-    #[cfg(not(parallel_compiler))]
-    #[inline(always)]
-    #[track_caller]
-    pub fn read(&self) -> ReadGuard<'_, T> {
-        self.0.borrow()
-    }
-
-    #[cfg(parallel_compiler)]
-    #[inline(always)]
-    pub fn read(&self) -> ReadGuard<'_, T> {
-        if ERROR_CHECKING {
-            self.0.try_read().expect("lock was already held")
-        } else {
-            self.0.read()
-        }
-    }
-
-    #[inline(always)]
-    #[track_caller]
-    pub fn with_read_lock<F: FnOnce(&T) -> R, R>(&self, f: F) -> R {
-        f(&*self.read())
-    }
-
-    #[cfg(not(parallel_compiler))]
-    #[inline(always)]
-    pub fn try_write(&self) -> Result<WriteGuard<'_, T>, ()> {
-        self.0.try_borrow_mut().map_err(|_| ())
-    }
-
-    #[cfg(parallel_compiler)]
-    #[inline(always)]
-    pub fn try_write(&self) -> Result<WriteGuard<'_, T>, ()> {
-        self.0.try_write().ok_or(())
-    }
-
-    #[cfg(not(parallel_compiler))]
-    #[inline(always)]
-    #[track_caller]
-    pub fn write(&self) -> WriteGuard<'_, T> {
-        self.0.borrow_mut()
-    }
-
-    #[cfg(parallel_compiler)]
-    #[inline(always)]
-    pub fn write(&self) -> WriteGuard<'_, T> {
-        if ERROR_CHECKING {
-            self.0.try_write().expect("lock was already held")
-        } else {
-            self.0.write()
-        }
-    }
-
-    #[inline(always)]
-    #[track_caller]
-    pub fn with_write_lock<F: FnOnce(&mut T) -> R, R>(&self, f: F) -> R {
-        f(&mut *self.write())
-    }
-
-    #[inline(always)]
-    #[track_caller]
-    pub fn borrow(&self) -> ReadGuard<'_, T> {
-        self.read()
-    }
-
-    #[inline(always)]
-    #[track_caller]
-    pub fn borrow_mut(&self) -> WriteGuard<'_, T> {
-        self.write()
-    }
-
-    #[cfg(not(parallel_compiler))]
-    #[inline(always)]
-    pub fn leak(&self) -> &T {
-        ReadGuard::leak(self.read())
-    }
-
-    #[cfg(parallel_compiler)]
-    #[inline(always)]
-    pub fn leak(&self) -> &T {
-        let guard = self.read();
-        let ret = unsafe { &*(&*guard as *const T) };
-        std::mem::forget(guard);
-        ret
-    }
-}
-
-// FIXME: Probably a bad idea
-impl<T: Clone> Clone for RwLock<T> {
-    #[inline]
-    fn clone(&self) -> Self {
-        RwLock::new(self.borrow().clone())
     }
 }
 
