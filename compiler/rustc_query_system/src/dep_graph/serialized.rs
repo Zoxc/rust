@@ -47,8 +47,8 @@ use rustc_data_structures::unhash::UnhashMap;
 use rustc_index::{Idx, IndexVec};
 use rustc_serialize::opaque::{FileEncodeResult, FileEncoder, IntEncodedWithFixedSize, MemDecoder};
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
-use std::iter;
 use std::marker::PhantomData;
+use std::{cmp, iter};
 
 // The maximum value of `SerializedDepNodeIndex` leaves the upper two bits
 // unused so that we can store multiple index types in `CompressedHybridIndex`,
@@ -226,11 +226,9 @@ impl<'a, K: DepKind + Decodable<MemDecoder<'a>>> Decodable<MemDecoder<'a>>
             let node_header =
                 SerializedNodeHeader::<K> { bytes: d.read_array(), _marker: PhantomData };
 
-            let _i: SerializedDepNodeIndex = nodes.push(node_header.node());
-            debug_assert_eq!(_i.index(), _index);
+            nodes.raw.push_within_capacity(node_header.node()).ok();
 
-            let _i: SerializedDepNodeIndex = fingerprints.push(node_header.fingerprint());
-            debug_assert_eq!(_i.index(), _index);
+            fingerprints.raw.push_within_capacity(node_header.fingerprint()).ok();
 
             // If the length of this node's edge list is small, the length is stored in the header.
             // If it is not, we fall back to another decoder call.
@@ -246,8 +244,7 @@ impl<'a, K: DepKind + Decodable<MemDecoder<'a>>> Decodable<MemDecoder<'a>>
 
             edge_list_data.extend(d.read_raw_bytes(edges_len_bytes));
 
-            let _i: SerializedDepNodeIndex = edge_list_indices.push(edges_header);
-            debug_assert_eq!(_i.index(), _index);
+            edge_list_indices.raw.push_within_capacity(edges_header).ok();
         }
 
         // When we access the edge list data, we do a fixed-size read from the edge list data then
@@ -359,7 +356,7 @@ impl<K: DepKind> SerializedNodeHeader<K> {
         Unpacked {
             len: len.checked_sub(1),
             bytes_per_index: bytes_per_index as usize + 1,
-            kind: DepKind::from_u16(kind),
+            kind: DepKind::from_u16(cmp::min(kind, K::MAX)),
             hash: Fingerprint::from_le_bytes(hash).into(),
             fingerprint: Fingerprint::from_le_bytes(fingerprint),
         }

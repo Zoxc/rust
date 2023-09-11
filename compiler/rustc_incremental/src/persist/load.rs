@@ -208,6 +208,8 @@ pub fn load_dep_graph(sess: &Session) -> DepGraphFuture {
                     return LoadResult::DataOutOfDate;
                 }
 
+                let _prof_timer = prof.verbose_generic_activity("incr_comp_decode_dep_graph");
+
                 let dep_graph = SerializedDepGraph::decode(&mut decoder);
 
                 LoadResult::Ok { data: (dep_graph, prev_work_products) }

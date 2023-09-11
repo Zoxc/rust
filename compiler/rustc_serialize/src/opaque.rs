@@ -370,6 +370,7 @@ impl<'a> MemDecoder<'a> {
             current: *const u8,
         }
         impl Drop for SetOnDrop<'_, '_> {
+            #[inline]
             fn drop(&mut self) {
                 self.decoder.current = self.current;
             }
