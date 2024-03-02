@@ -7,11 +7,9 @@ use std::num::NonZero;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
 use rustc_data_structures::unord::UnordMap;
 use rustc_hashes::Hash64;
-use rustc_index::Idx;
 use rustc_middle::bug;
 use rustc_middle::dep_graph::{
-    self, DepContext, DepKind, DepKindStruct, DepNode, DepNodeIndex, SerializedDepNodeIndex,
-    dep_kinds,
+    self, DepContext, DepKind, DepKindStruct, DepNode, DepNodeIndex, PrevDepNodeIndex, dep_kinds,
 };
 use rustc_middle::query::Key;
 use rustc_middle::query::on_disk_cache::{
@@ -89,10 +87,7 @@ impl QueryContext for QueryCtxt<'_> {
     }
 
     // Interactions with on_disk_cache
-    fn load_side_effect(
-        self,
-        prev_dep_node_index: SerializedDepNodeIndex,
-    ) -> Option<QuerySideEffect> {
+    fn load_side_effect(self, prev_dep_node_index: PrevDepNodeIndex) -> Option<QuerySideEffect> {
         self.query_system
             .on_disk_cache
             .as_ref()
@@ -347,12 +342,12 @@ pub(crate) fn encode_query_results<'a, 'tcx, Q>(
     let cache = query.query_cache(qcx);
     cache.iter(&mut |key, value, dep_node| {
         if query.cache_on_disk(qcx.tcx, key) {
-            let dep_node = SerializedDepNodeIndex::new(dep_node.index());
+            let dep_node = encoder.serialized_index(dep_node);
 
             // Record position of the cache entry.
             query_result_index.push((dep_node, AbsoluteBytePos::new(encoder.position())));
 
-            // Encode the type check tables with the `SerializedDepNodeIndex`
+            // Encode the type check tables with the `PrevDepNodeIndex`
             // as tag.
             encoder.encode_tagged(dep_node, &Q::restore(*value));
         }
@@ -401,7 +396,7 @@ where
     }
 }
 
-pub(crate) fn loadable_from_disk<'tcx>(tcx: TyCtxt<'tcx>, id: SerializedDepNodeIndex) -> bool {
+pub(crate) fn loadable_from_disk<'tcx>(tcx: TyCtxt<'tcx>, id: PrevDepNodeIndex) -> bool {
     if let Some(cache) = tcx.query_system.on_disk_cache.as_ref() {
         cache.loadable_from_disk(id)
     } else {
@@ -409,11 +404,7 @@ pub(crate) fn loadable_from_disk<'tcx>(tcx: TyCtxt<'tcx>, id: SerializedDepNodeI
     }
 }
 
-pub(crate) fn try_load_from_disk<'tcx, V>(
-    tcx: TyCtxt<'tcx>,
-    prev_index: SerializedDepNodeIndex,
-    index: DepNodeIndex,
-) -> Option<V>
+pub(crate) fn try_load_from_disk<'tcx, V>(tcx: TyCtxt<'tcx>, index: PrevDepNodeIndex) -> Option<V>
 where
     V: for<'a> Decodable<CacheDecoder<'a, 'tcx>>,
 {
@@ -426,9 +417,9 @@ where
     // details.
     let value = tcx
         .dep_graph
-        .with_query_deserialization(|| on_disk_cache.try_load_query_result(tcx, prev_index));
+        .with_query_deserialization(|| on_disk_cache.try_load_query_result(tcx, index));
 
-    prof_timer.finish_with_query_invocation_id(index.into());
+    prof_timer.finish_with_query_invocation_id(index.current().into());
 
     value
 }
@@ -603,7 +594,7 @@ macro_rules! define_queries {
                                 {
                                     let ret = call_provider!([$($modifiers)*][tcx, $name, key]);
                                     rustc_middle::ty::print::with_reduced_queries!({
-                                        tracing::trace!(?ret);
+                                    tracing::trace!(?ret);
                                     });
                                     ret
                                 }
@@ -612,22 +603,18 @@ macro_rules! define_queries {
                     },
                     can_load_from_disk: should_ever_cache_on_disk!([$($modifiers)*] true false),
                     try_load_from_disk: should_ever_cache_on_disk!([$($modifiers)*] {
-                        |tcx, key, prev_index, index| {
+                        |tcx, key, index| {
                             if ::rustc_middle::query::cached::$name(tcx, key) {
                                 let value = $crate::plumbing::try_load_from_disk::<
                                     queries::$name::ProvidedValue<'tcx>
-                                >(
-                                    tcx,
-                                    prev_index,
-                                    index,
-                                );
+                                >(tcx, index);
                                 value.map(|value| queries::$name::provided_to_erased(tcx, value))
                             } else {
                                 None
                             }
                         }
                     } {
-                        |_tcx, _key, _prev_index, _index| None
+                        |_tcx, _key, _index| None
                     }),
                     value_from_cycle_error: |tcx, cycle, guar| {
                         let result: queries::$name::Value<'tcx> = Value::from_cycle_error(tcx, cycle, guar);
@@ -695,7 +682,7 @@ macro_rules! define_queries {
                         "Failed to collect active jobs for query with name `{}`!",
                         stringify!($name)
                     );
-                }
+            }
             }
 
             pub(crate) fn alloc_self_profile_query_strings<'tcx>(

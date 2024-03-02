@@ -23,8 +23,16 @@ use rustc_middle::util::Providers;
 
 #[allow(missing_docs)]
 pub fn provide(providers: &mut Providers) {
-    providers.hooks.save_dep_graph =
-        |tcx| tcx.sess.time("serialize_dep_graph", || persist::save_dep_graph(tcx));
+    providers.hooks.save_dep_graph = |tcx| {
+        let index_mapper = match tcx.dep_graph.finish_encoding() {
+            Ok(mapper) => mapper,
+            Err((path, error)) => {
+                tcx.sess.dcx().emit_fatal(errors::FailedWritingFile { path: &path, error })
+            }
+        };
+
+        tcx.sess.time("serialize_dep_graph", || persist::save_dep_graph(tcx, index_mapper))
+    };
 }
 
 rustc_fluent_macro::fluent_messages! { "../messages.ftl" }

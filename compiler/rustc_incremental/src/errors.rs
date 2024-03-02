@@ -1,7 +1,15 @@
+use std::io;
 use std::path::{Path, PathBuf};
 
 use rustc_macros::Diagnostic;
 use rustc_span::{Ident, Span, Symbol};
+
+#[derive(Diagnostic)]
+#[diag(incremental_failed_writing_file)]
+pub(crate) struct FailedWritingFile<'a> {
+    pub path: &'a Path,
+    pub error: io::Error,
+}
 
 #[derive(Diagnostic)]
 #[diag(incremental_unrecognized_depnode)]

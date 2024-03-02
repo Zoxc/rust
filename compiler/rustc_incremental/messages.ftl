@@ -46,6 +46,9 @@ incremental_delete_partial = failed to delete partly initialized session dir `{$
 
 incremental_delete_workproduct = file-system error deleting outdated file `{$path}`: {$err}
 
+incremental_failed_writing_file =
+    failed to write file {$path}: {$error}"
+
 incremental_finalize = error finalizing incremental compilation session directory `{$path}`: {$err}
 
 incremental_finalized_gc_failed =

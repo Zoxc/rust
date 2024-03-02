@@ -19,7 +19,7 @@ use rustc_span::Span;
 use rustc_span::def_id::DefId;
 
 pub use self::config::{HashResult, QueryConfig};
-use crate::dep_graph::{DepKind, DepNodeIndex, HasDepContext, SerializedDepNodeIndex};
+use crate::dep_graph::{DepKind, DepNodeIndex, HasDepContext, PrevDepNodeIndex};
 
 /// Description of a frame in the query stack.
 ///
@@ -89,10 +89,7 @@ pub trait QueryContext: HasDepContext {
     fn collect_active_jobs(self) -> QueryMap;
 
     /// Load a side effect associated to the node in the previous session.
-    fn load_side_effect(
-        self,
-        prev_dep_node_index: SerializedDepNodeIndex,
-    ) -> Option<QuerySideEffect>;
+    fn load_side_effect(self, prev_dep_node_index: PrevDepNodeIndex) -> Option<QuerySideEffect>;
 
     /// Register a side effect for the given node, for use in next session.
     fn store_side_effect(self, dep_node_index: DepNodeIndex, side_effect: QuerySideEffect);

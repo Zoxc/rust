@@ -35,9 +35,10 @@
 //! If the number of edges in this node does not fit in the bits available in the header, we
 //! store it directly after the header with leb128.
 
-use std::iter;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::{io, iter};
 
 use rustc_data_structures::fingerprint::{Fingerprint, PackedFingerprint};
 use rustc_data_structures::fx::FxHashMap;
@@ -46,10 +47,11 @@ use rustc_data_structures::profiling::SelfProfilerRef;
 use rustc_data_structures::sync::Lock;
 use rustc_data_structures::unhash::UnhashMap;
 use rustc_index::{Idx, IndexVec};
-use rustc_serialize::opaque::{FileEncodeResult, FileEncoder, IntEncodedWithFixedSize, MemDecoder};
+use rustc_serialize::opaque::{FileEncoder, IntEncodedWithFixedSize, MemDecoder};
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
 use tracing::{debug, instrument};
 
+use super::graph::PrevDepNodeIndex;
 use super::query::DepGraphQuery;
 use super::{DepKind, DepNode, DepNodeIndex, Deps};
 use crate::dep_graph::edges::EdgesVec;
@@ -61,6 +63,13 @@ rustc_index::newtype_index! {
     #[encodable]
     #[max = 0x7FFF_FFFF]
     pub struct SerializedDepNodeIndex {}
+}
+
+impl SerializedDepNodeIndex {
+    #[inline]
+    pub fn lift(self) -> PrevDepNodeIndex {
+        PrevDepNodeIndex::from_u32(self.as_u32())
+    }
 }
 
 const DEP_NODE_SIZE: usize = size_of::<SerializedDepNodeIndex>();
@@ -77,28 +86,28 @@ const DEP_NODE_WIDTH_BITS: usize = DEP_NODE_SIZE / 2;
 #[derive(Debug, Default)]
 pub struct SerializedDepGraph {
     /// The set of all DepNodes in the graph
-    nodes: IndexVec<SerializedDepNodeIndex, DepNode>,
+    nodes: IndexVec<PrevDepNodeIndex, DepNode>,
     /// The set of all Fingerprints in the graph. Each Fingerprint corresponds to
     /// the DepNode at the same index in the nodes vector.
-    fingerprints: IndexVec<SerializedDepNodeIndex, Fingerprint>,
+    fingerprints: IndexVec<PrevDepNodeIndex, Fingerprint>,
     /// For each DepNode, stores the list of edges originating from that
     /// DepNode. Encoded as a [start, end) pair indexing into edge_list_data,
     /// which holds the actual DepNodeIndices of the target nodes.
-    edge_list_indices: IndexVec<SerializedDepNodeIndex, EdgeHeader>,
+    edge_list_indices: IndexVec<PrevDepNodeIndex, EdgeHeader>,
     /// A flattened list of all edge targets in the graph, stored in the same
     /// varint encoding that we use on disk. Edge sources are implicit in edge_list_indices.
     edge_list_data: Vec<u8>,
     /// Stores a map from fingerprints to nodes per dep node kind.
     /// This is the reciprocal of `nodes`.
-    index: Vec<UnhashMap<PackedFingerprint, SerializedDepNodeIndex>>,
+    index: Vec<UnhashMap<PackedFingerprint, PrevDepNodeIndex>>,
 }
 
 impl SerializedDepGraph {
     #[inline]
     pub fn edge_targets_from(
         &self,
-        source: SerializedDepNodeIndex,
-    ) -> impl Iterator<Item = SerializedDepNodeIndex> + Clone {
+        source: PrevDepNodeIndex,
+    ) -> impl Iterator<Item = PrevDepNodeIndex> + Clone {
         let header = self.edge_list_indices[source];
         let mut raw = &self.edge_list_data[header.start()..];
         // Figure out where the edge list for `source` ends by getting the start index of the next
@@ -122,22 +131,27 @@ impl SerializedDepGraph {
             let index = &raw[..DEP_NODE_SIZE];
             raw = &raw[bytes_per_index..];
             let index = u32::from_le_bytes(index.try_into().unwrap()) & mask;
-            SerializedDepNodeIndex::from_u32(index)
+            PrevDepNodeIndex::from_u32(index)
         })
     }
 
     #[inline]
-    pub fn index_to_node(&self, dep_node_index: SerializedDepNodeIndex) -> DepNode {
+    pub fn index_to_node(&self, dep_node_index: PrevDepNodeIndex) -> DepNode {
         self.nodes[dep_node_index]
     }
 
     #[inline]
-    pub fn node_to_index_opt(&self, dep_node: &DepNode) -> Option<SerializedDepNodeIndex> {
+    pub fn index_to_node_opt(&self, dep_node_index: PrevDepNodeIndex) -> Option<DepNode> {
+        self.nodes.get(dep_node_index).copied()
+    }
+
+    #[inline]
+    pub fn node_to_index_opt(&self, dep_node: &DepNode) -> Option<PrevDepNodeIndex> {
         self.index.get(dep_node.kind.as_usize())?.get(&dep_node.hash).cloned()
     }
 
     #[inline]
-    pub fn fingerprint_by_index(&self, dep_node_index: SerializedDepNodeIndex) -> Fingerprint {
+    pub fn fingerprint_by_index(&self, dep_node_index: PrevDepNodeIndex) -> Fingerprint {
         self.fingerprints[dep_node_index]
     }
 
@@ -217,10 +231,10 @@ impl SerializedDepGraph {
             let node_header =
                 SerializedNodeHeader::<D> { bytes: d.read_array(), _marker: PhantomData };
 
-            let _i: SerializedDepNodeIndex = nodes.push(node_header.node());
+            let _i: PrevDepNodeIndex = nodes.push(node_header.node());
             debug_assert_eq!(_i.index(), _index);
 
-            let _i: SerializedDepNodeIndex = fingerprints.push(node_header.fingerprint());
+            let _i: PrevDepNodeIndex = fingerprints.push(node_header.fingerprint());
             debug_assert_eq!(_i.index(), _index);
 
             // If the length of this node's edge list is small, the length is stored in the header.
@@ -237,7 +251,7 @@ impl SerializedDepGraph {
 
             edge_list_data.extend(d.read_raw_bytes(edges_len_bytes));
 
-            let _i: SerializedDepNodeIndex = edge_list_indices.push(edges_header);
+            let _i: PrevDepNodeIndex = edge_list_indices.push(edges_header);
             debug_assert_eq!(_i.index(), _index);
         }
 
@@ -401,69 +415,21 @@ struct NodeInfo {
     edges: EdgesVec,
 }
 
-impl NodeInfo {
-    fn encode<D: Deps>(&self, e: &mut FileEncoder) {
-        let NodeInfo { node, fingerprint, ref edges } = *self;
-        let header =
-            SerializedNodeHeader::<D>::new(node, fingerprint, edges.max_index(), edges.len());
-        e.write_array(header.bytes);
-
-        if header.len().is_none() {
-            e.emit_usize(edges.len());
-        }
-
-        let bytes_per_index = header.bytes_per_index();
-        for node_index in edges.iter() {
-            e.write_with(|dest| {
-                *dest = node_index.as_u32().to_le_bytes();
-                bytes_per_index
-            });
-        }
-    }
-
-    /// Encode a node that was promoted from the previous graph. It reads the edges directly from
-    /// the previous dep graph and expects all edges to already have a new dep node index assigned.
-    /// This avoids the overhead of constructing `EdgesVec`, which would be needed to call `encode`.
-    #[inline]
-    fn encode_promoted<D: Deps>(
-        e: &mut FileEncoder,
-        node: DepNode,
-        fingerprint: Fingerprint,
-        prev_index: SerializedDepNodeIndex,
-        prev_index_to_index: &IndexVec<SerializedDepNodeIndex, Option<DepNodeIndex>>,
-        previous: &SerializedDepGraph,
-    ) -> usize {
-        let edges = previous.edge_targets_from(prev_index);
-        let edge_count = edges.size_hint().0;
-
-        // Find the highest edge in the new dep node indices
-        let edge_max =
-            edges.clone().map(|i| prev_index_to_index[i].unwrap().as_u32()).max().unwrap_or(0);
-
-        let header = SerializedNodeHeader::<D>::new(node, fingerprint, edge_max, edge_count);
-        e.write_array(header.bytes);
-
-        if header.len().is_none() {
-            e.emit_usize(edge_count);
-        }
-
-        let bytes_per_index = header.bytes_per_index();
-        for node_index in edges {
-            let node_index = prev_index_to_index[node_index].unwrap();
-            e.write_with(|dest| {
-                *dest = node_index.as_u32().to_le_bytes();
-                bytes_per_index
-            });
-        }
-
-        edge_count
-    }
-}
-
 struct Stat {
     kind: DepKind,
     node_counter: u64,
     edge_counter: u64,
+}
+
+#[derive(Default)]
+pub struct DepIndexMapper {
+    index_to_serialized_index: IndexVec<DepNodeIndex, Option<SerializedDepNodeIndex>>,
+}
+
+impl DepIndexMapper {
+    pub fn map(&self, index: DepNodeIndex) -> SerializedDepNodeIndex {
+        self.index_to_serialized_index[index].expect("serialized index")
+    }
 }
 
 struct EncoderState<D: Deps> {
@@ -473,18 +439,26 @@ struct EncoderState<D: Deps> {
     total_edge_count: usize,
     stats: Option<FxHashMap<DepKind, Stat>>,
 
+    index_to_serialized_index: IndexVec<DepNodeIndex, Option<SerializedDepNodeIndex>>,
+
     /// Stores the number of times we've encoded each dep kind.
     kind_stats: Vec<u32>,
     marker: PhantomData<D>,
 }
 
 impl<D: Deps> EncoderState<D> {
-    fn new(encoder: FileEncoder, record_stats: bool, previous: Arc<SerializedDepGraph>) -> Self {
+    fn new(
+        encoder: FileEncoder,
+        record_stats: bool,
+        previous: Arc<SerializedDepGraph>,
+        new_node_count_estimate: usize,
+    ) -> Self {
         Self {
             previous,
             encoder,
             total_edge_count: 0,
             total_node_count: 0,
+            index_to_serialized_index: IndexVec::from_elem_n(None, new_node_count_estimate),
             stats: record_stats.then(FxHashMap::default),
             kind_stats: iter::repeat(0).take(D::DEP_KIND_MAX as usize + 1).collect(),
             marker: PhantomData,
@@ -492,14 +466,81 @@ impl<D: Deps> EncoderState<D> {
     }
 
     #[inline]
-    fn record(
+    fn serialized_index(&self, index: DepNodeIndex) -> SerializedDepNodeIndex {
+        self.index_to_serialized_index[index].expect("correct node recording order")
+    }
+
+    fn encode_node(&mut self, node: &NodeInfo) {
+        let NodeInfo { node, fingerprint, ref edges } = *node;
+        let header =
+            SerializedNodeHeader::<D>::new(node, fingerprint, edges.max_index(), edges.len());
+        self.encoder.write_array(header.bytes);
+
+        if header.len().is_none() {
+            self.encoder.emit_usize(edges.len());
+        }
+
+        let bytes_per_index = header.bytes_per_index();
+        for node_index in edges.iter() {
+            let serialized_index = self.serialized_index(*node_index);
+            self.encoder.write_with(|dest| {
+                *dest = serialized_index.as_u32().to_le_bytes();
+                bytes_per_index
+            });
+        }
+    }
+
+    /// Encode a node that was promoted from the previous graph. It reads the edges directly from
+    /// the previous dep graph and expects all edges to already have a new dep node index assigned.
+    /// This avoids the overhead of constructing `EdgesVec`, which would be needed to call `encode`.
+    #[inline]
+    fn encode_promoted_node(
         &mut self,
+        node: DepNode,
+        fingerprint: Fingerprint,
+        prev_index: PrevDepNodeIndex,
+    ) -> usize {
+        let edges = self.previous.edge_targets_from(prev_index);
+        let edge_count = edges.size_hint().0;
+
+        // Find the highest edge in the new dep node indices
+        let edge_max =
+            edges.clone().map(|i| self.serialized_index(i.current()).as_u32()).max().unwrap_or(0);
+
+        let header = SerializedNodeHeader::<D>::new(node, fingerprint, edge_max, edge_count);
+        self.encoder.write_array(header.bytes);
+
+        if header.len().is_none() {
+            self.encoder.emit_usize(edge_count);
+        }
+
+        let bytes_per_index = header.bytes_per_index();
+        for node_index in edges {
+            let serialized_index = self.index_to_serialized_index[node_index.current()]
+                .expect("correct node recording order");
+            self.encoder.write_with(|dest| {
+                *dest = serialized_index.as_u32().to_le_bytes();
+                bytes_per_index
+            });
+        }
+
+        edge_count
+    }
+
+    #[inline]
+    fn update_stats(
+        &mut self,
+        index: DepNodeIndex,
         node: DepNode,
         edge_count: usize,
         edges: impl FnOnce(&mut Self) -> Vec<DepNodeIndex>,
         record_graph: &Option<Lock<DepGraphQuery>>,
-    ) -> DepNodeIndex {
-        let index = DepNodeIndex::new(self.total_node_count);
+    ) {
+        let serialized_index = SerializedDepNodeIndex::new(self.total_node_count);
+
+        self.index_to_serialized_index.ensure_contains_elem(index, || None);
+        debug_assert!(self.index_to_serialized_index[index].is_none());
+        self.index_to_serialized_index[index] = Some(serialized_index);
 
         self.total_node_count += 1;
         self.kind_stats[node.kind.as_usize()] += 1;
@@ -529,59 +570,52 @@ impl<D: Deps> EncoderState<D> {
                 stat.edge_counter += edge_count as u64;
             });
         }
-
-        index
     }
 
     /// Encodes a node to the current graph.
-    fn encode_node(
+    fn record_node(
         &mut self,
+        index: DepNodeIndex,
         node: &NodeInfo,
         record_graph: &Option<Lock<DepGraphQuery>>,
-    ) -> DepNodeIndex {
-        node.encode::<D>(&mut self.encoder);
-        self.record(node.node, node.edges.len(), |_| node.edges[..].to_vec(), record_graph)
+    ) {
+        self.encode_node(node);
+        self.update_stats(
+            index,
+            node.node,
+            node.edges.len(),
+            |_| node.edges[..].to_vec(),
+            record_graph,
+        );
     }
 
     /// Encodes a node that was promoted from the previous graph. It reads the information directly from
     /// the previous dep graph for performance reasons.
     ///
-    /// This differs from `encode_node` where you have to explicitly provide the relevant `NodeInfo`.
+    /// This differs from `record_node` where you have to explicitly provide the relevant `NodeInfo`.
     ///
     /// It expects all edges to already have a new dep node index assigned.
     #[inline]
-    fn encode_promoted_node(
+    fn record_promoted_node(
         &mut self,
-        prev_index: SerializedDepNodeIndex,
+        prev_index: PrevDepNodeIndex,
         record_graph: &Option<Lock<DepGraphQuery>>,
-        prev_index_to_index: &IndexVec<SerializedDepNodeIndex, Option<DepNodeIndex>>,
-    ) -> DepNodeIndex {
+    ) {
         let node = self.previous.index_to_node(prev_index);
-
         let fingerprint = self.previous.fingerprint_by_index(prev_index);
-        let edge_count = NodeInfo::encode_promoted::<D>(
-            &mut self.encoder,
-            node,
-            fingerprint,
-            prev_index,
-            prev_index_to_index,
-            &self.previous,
-        );
 
-        self.record(
+        let edge_count = self.encode_promoted_node(node, fingerprint, prev_index);
+
+        self.update_stats(
+            prev_index.current(),
             node,
             edge_count,
-            |this| {
-                this.previous
-                    .edge_targets_from(prev_index)
-                    .map(|i| prev_index_to_index[i].unwrap())
-                    .collect()
-            },
+            |this| this.previous.edge_targets_from(prev_index).map(|i| i.current()).collect(),
             record_graph,
-        )
+        );
     }
 
-    fn finish(self, profiler: &SelfProfilerRef) -> FileEncodeResult {
+    fn finish(self, profiler: &SelfProfilerRef) -> Result<DepIndexMapper, (PathBuf, io::Error)> {
         let Self {
             mut encoder,
             total_node_count,
@@ -590,6 +624,7 @@ impl<D: Deps> EncoderState<D> {
             kind_stats,
             marker: _,
             previous: _,
+            index_to_serialized_index,
         } = self;
 
         let node_count = total_node_count.try_into().unwrap();
@@ -612,7 +647,7 @@ impl<D: Deps> EncoderState<D> {
             // don't need a dependency on rustc_incremental just for that.
             profiler.artifact_size("dep_graph", "dep-graph.bin", position as u64);
         }
-        result
+        result.map(|_| DepIndexMapper { index_to_serialized_index })
     }
 }
 
@@ -625,14 +660,20 @@ pub(crate) struct GraphEncoder<D: Deps> {
 impl<D: Deps> GraphEncoder<D> {
     pub(crate) fn new(
         encoder: FileEncoder,
-        prev_node_count: usize,
+        new_node_count_estimate: usize,
         record_graph: bool,
         record_stats: bool,
         profiler: &SelfProfilerRef,
         previous: Arc<SerializedDepGraph>,
     ) -> Self {
-        let record_graph = record_graph.then(|| Lock::new(DepGraphQuery::new(prev_node_count)));
-        let status = Lock::new(Some(EncoderState::new(encoder, record_stats, previous)));
+        let record_graph =
+            record_graph.then(|| Lock::new(DepGraphQuery::new(new_node_count_estimate)));
+        let status = Lock::new(Some(EncoderState::new(
+            encoder,
+            record_stats,
+            previous,
+            new_node_count_estimate,
+        )));
         GraphEncoder { status, record_graph, profiler: profiler.clone() }
     }
 
@@ -697,32 +738,31 @@ impl<D: Deps> GraphEncoder<D> {
 
     pub(crate) fn send(
         &self,
+        index: DepNodeIndex,
         node: DepNode,
         fingerprint: Fingerprint,
         edges: EdgesVec,
-    ) -> DepNodeIndex {
+    ) {
         let _prof_timer = self.profiler.generic_activity("incr_comp_encode_dep_graph");
         let node = NodeInfo { node, fingerprint, edges };
-        self.status.lock().as_mut().unwrap().encode_node(&node, &self.record_graph)
+        self.status
+            .lock()
+            .as_mut()
+            .map(|status| status.record_node(index, &node, &self.record_graph));
     }
 
     /// Encodes a node that was promoted from the previous graph. It reads the information directly from
     /// the previous dep graph and expects all edges to already have a new dep node index assigned.
     #[inline]
-    pub(crate) fn send_promoted(
-        &self,
-        prev_index: SerializedDepNodeIndex,
-        prev_index_to_index: &IndexVec<SerializedDepNodeIndex, Option<DepNodeIndex>>,
-    ) -> DepNodeIndex {
+    pub(crate) fn send_promoted(&self, prev_index: PrevDepNodeIndex) {
         let _prof_timer = self.profiler.generic_activity("incr_comp_encode_dep_graph");
-        self.status.lock().as_mut().unwrap().encode_promoted_node(
-            prev_index,
-            &self.record_graph,
-            prev_index_to_index,
-        )
+        self.status
+            .lock()
+            .as_mut()
+            .map(|status| status.record_promoted_node(prev_index, &self.record_graph));
     }
 
-    pub(crate) fn finish(&self) -> FileEncodeResult {
+    pub(crate) fn finish(&self) -> Result<DepIndexMapper, (PathBuf, io::Error)> {
         let _prof_timer = self.profiler.generic_activity("incr_comp_encode_dep_graph_finish");
 
         self.status.lock().take().unwrap().finish(&self.profiler)

@@ -9,8 +9,9 @@ use rustc_data_structures::unhash::UnhashMap;
 use rustc_data_structures::unord::{UnordMap, UnordSet};
 use rustc_hir::def_id::{CrateNum, DefId, DefIndex, LOCAL_CRATE, LocalDefId, StableCrateId};
 use rustc_hir::definitions::DefPathHash;
-use rustc_index::{Idx, IndexVec};
+use rustc_index::IndexVec;
 use rustc_macros::{Decodable, Encodable};
+use rustc_query_system::dep_graph::{DepIndexMapper, PrevDepNodeIndex, SerializedDepNodeIndex};
 use rustc_query_system::query::QuerySideEffect;
 use rustc_serialize::opaque::{FileEncodeResult, FileEncoder, IntEncodedWithFixedSize, MemDecoder};
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
@@ -24,7 +25,7 @@ use rustc_span::{
     SpanDecoder, SpanEncoder, StableSourceFileId, Symbol,
 };
 
-use crate::dep_graph::{DepNodeIndex, SerializedDepNodeIndex};
+use crate::dep_graph::DepNodeIndex;
 use crate::mir::interpret::{AllocDecodingSession, AllocDecodingState};
 use crate::mir::mono::MonoItem;
 use crate::mir::{self, interpret};
@@ -66,11 +67,11 @@ pub struct OnDiskCache {
 
     // A map from dep-node to the position of the cached query result in
     // `serialized_data`.
-    query_result_index: FxHashMap<SerializedDepNodeIndex, AbsoluteBytePos>,
+    query_result_index: FxHashMap<PrevDepNodeIndex, AbsoluteBytePos>,
 
     // A map from dep-node to the position of any associated `QuerySideEffect` in
     // `serialized_data`.
-    prev_side_effects_index: FxHashMap<SerializedDepNodeIndex, AbsoluteBytePos>,
+    prev_side_effects_index: FxHashMap<PrevDepNodeIndex, AbsoluteBytePos>,
 
     alloc_decoding_state: AllocDecodingState,
 
@@ -177,8 +178,16 @@ impl OnDiskCache {
             file_index_to_stable_id: footer.file_index_to_stable_id,
             file_index_to_file: Default::default(),
             current_side_effects: Default::default(),
-            query_result_index: footer.query_result_index.into_iter().collect(),
-            prev_side_effects_index: footer.side_effects_index.into_iter().collect(),
+            query_result_index: footer
+                .query_result_index
+                .into_iter()
+                .map(|(i, p)| (i.lift(), p))
+                .collect(),
+            prev_side_effects_index: footer
+                .side_effects_index
+                .into_iter()
+                .map(|(i, p)| (i.lift(), p))
+                .collect(),
             alloc_decoding_state: AllocDecodingState::new(footer.interpret_alloc_index),
             syntax_contexts: footer.syntax_contexts,
             expn_data: footer.expn_data,
@@ -220,7 +229,12 @@ impl OnDiskCache {
         *self.serialized_data.write() = None;
     }
 
-    pub fn serialize(&self, tcx: TyCtxt<'_>, encoder: FileEncoder) -> FileEncodeResult {
+    pub fn serialize(
+        &self,
+        tcx: TyCtxt<'_>,
+        encoder: FileEncoder,
+        index_mapper: DepIndexMapper,
+    ) -> FileEncodeResult {
         // Serializing the `DepGraph` should not modify it.
         tcx.dep_graph.with_ignore(|| {
             // Allocate `SourceFileIndex`es.
@@ -246,6 +260,7 @@ impl OnDiskCache {
 
             let mut encoder = CacheEncoder {
                 tcx,
+                index_mapper,
                 encoder,
                 type_shorthands: Default::default(),
                 predicate_shorthands: Default::default(),
@@ -272,7 +287,8 @@ impl OnDiskCache {
                 .iter()
                 .map(|(dep_node_index, side_effect)| {
                     let pos = AbsoluteBytePos::new(encoder.position());
-                    let dep_node_index = SerializedDepNodeIndex::new(dep_node_index.index());
+
+                    let dep_node_index = encoder.serialized_index(*dep_node_index);
                     encoder.encode_tagged(dep_node_index, side_effect);
 
                     (dep_node_index, pos)
@@ -356,7 +372,7 @@ impl OnDiskCache {
     pub fn load_side_effect(
         &self,
         tcx: TyCtxt<'_>,
-        dep_node_index: SerializedDepNodeIndex,
+        dep_node_index: PrevDepNodeIndex,
     ) -> Option<QuerySideEffect> {
         let side_effect: Option<QuerySideEffect> =
             self.load_indexed(tcx, dep_node_index, &self.prev_side_effects_index);
@@ -374,17 +390,17 @@ impl OnDiskCache {
 
     /// Return whether the cached query result can be decoded.
     #[inline]
-    pub fn loadable_from_disk(&self, dep_node_index: SerializedDepNodeIndex) -> bool {
+    pub fn loadable_from_disk(&self, dep_node_index: PrevDepNodeIndex) -> bool {
         self.query_result_index.contains_key(&dep_node_index)
         // with_decoder is infallible, so we can stop here
     }
 
     /// Returns the cached query result if there is something in the cache for
-    /// the given `SerializedDepNodeIndex`; otherwise returns `None`.
+    /// the given `PrevDepNodeIndex`; otherwise returns `None`.
     pub fn try_load_query_result<'tcx, T>(
         &self,
         tcx: TyCtxt<'tcx>,
-        dep_node_index: SerializedDepNodeIndex,
+        dep_node_index: PrevDepNodeIndex,
     ) -> Option<T>
     where
         T: for<'a> Decodable<CacheDecoder<'a, 'tcx>>,
@@ -397,14 +413,16 @@ impl OnDiskCache {
     fn load_indexed<'tcx, T>(
         &self,
         tcx: TyCtxt<'tcx>,
-        dep_node_index: SerializedDepNodeIndex,
-        index: &FxHashMap<SerializedDepNodeIndex, AbsoluteBytePos>,
+        dep_node_index: PrevDepNodeIndex,
+        index: &FxHashMap<PrevDepNodeIndex, AbsoluteBytePos>,
     ) -> Option<T>
     where
         T: for<'a> Decodable<CacheDecoder<'a, 'tcx>>,
     {
         let pos = index.get(&dep_node_index).cloned()?;
-        let value = self.with_decoder(tcx, pos, |decoder| decode_tagged(decoder, dep_node_index));
+        let value = self.with_decoder(tcx, pos, |decoder| {
+            decode_tagged(decoder, SerializedDepNodeIndex::from_u32(dep_node_index.as_u32()))
+        });
         Some(value)
     }
 
@@ -801,6 +819,7 @@ impl_ref_decoder! {<'tcx>
 /// An encoder that can write to the incremental compilation cache.
 pub struct CacheEncoder<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
+    index_mapper: DepIndexMapper,
     encoder: FileEncoder,
     type_shorthands: FxHashMap<Ty<'tcx>, usize>,
     predicate_shorthands: FxHashMap<ty::PredicateKind<'tcx>, usize>,
@@ -815,6 +834,11 @@ impl<'a, 'tcx> CacheEncoder<'a, 'tcx> {
     #[inline]
     fn source_file_index(&mut self, source_file: Arc<SourceFile>) -> SourceFileIndex {
         self.file_to_file_index[&(&raw const *source_file)]
+    }
+
+    #[inline]
+    pub fn serialized_index(&mut self, index: DepNodeIndex) -> SerializedDepNodeIndex {
+        self.index_mapper.map(index)
     }
 
     /// Encode something with additional information that allows to do some

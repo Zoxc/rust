@@ -9,11 +9,13 @@ use std::panic;
 
 pub use dep_node::{DepKind, DepKindStruct, DepNode, DepNodeParams, WorkProductId};
 pub(crate) use graph::DepGraphData;
-pub use graph::{DepGraph, DepNodeIndex, TaskDepsRef, WorkProduct, WorkProductMap, hash_result};
+pub use graph::{
+    DepGraph, DepNodeIndex, PrevDepNodeIndex, TaskDepsRef, WorkProduct, WorkProductMap, hash_result,
+};
 pub use query::DepGraphQuery;
 use rustc_data_structures::profiling::SelfProfilerRef;
 use rustc_session::Session;
-pub use serialized::{SerializedDepGraph, SerializedDepNodeIndex};
+pub use serialized::{DepIndexMapper, SerializedDepGraph, SerializedDepNodeIndex};
 use tracing::instrument;
 
 use self::graph::{MarkFrame, print_markframe_trace};
@@ -61,7 +63,7 @@ pub trait DepContext: Copy {
     fn try_force_from_dep_node(
         self,
         dep_node: DepNode,
-        prev_index: SerializedDepNodeIndex,
+        prev_index: PrevDepNodeIndex,
         frame: Option<&MarkFrame<'_>>,
     ) -> bool {
         let cb = self.dep_kind_info(dep_node.kind);

@@ -14,7 +14,7 @@
 use rustc_data_structures::stable_hasher::HashStable;
 use rustc_data_structures::sync::AtomicU64;
 use rustc_middle::arena::Arena;
-use rustc_middle::dep_graph::{self, DepKind, DepKindStruct, DepNodeIndex};
+use rustc_middle::dep_graph::{self, DepKind, DepKindStruct};
 use rustc_middle::query::erase::{Erase, erase, restore};
 use rustc_middle::query::on_disk_cache::{CacheEncoder, EncodedDepNodeIndex, OnDiskCache};
 use rustc_middle::query::plumbing::{DynamicQuery, QuerySystem, QuerySystemFns};
@@ -23,7 +23,7 @@ use rustc_middle::query::{
     queries,
 };
 use rustc_middle::ty::TyCtxt;
-use rustc_query_system::dep_graph::SerializedDepNodeIndex;
+use rustc_query_system::dep_graph::PrevDepNodeIndex;
 use rustc_query_system::ich::StableHashingContext;
 use rustc_query_system::query::{
     CycleError, HashResult, QueryCache, QueryConfig, QueryMap, QueryMode, QueryState,
@@ -126,11 +126,10 @@ where
         self,
         qcx: QueryCtxt<'tcx>,
         key: &Self::Key,
-        prev_index: SerializedDepNodeIndex,
-        index: DepNodeIndex,
+        index: PrevDepNodeIndex,
     ) -> Option<Self::Value> {
         if self.dynamic.can_load_from_disk {
-            (self.dynamic.try_load_from_disk)(qcx.tcx, key, prev_index, index)
+            (self.dynamic.try_load_from_disk)(qcx.tcx, key, index)
         } else {
             None
         }
@@ -141,7 +140,7 @@ where
         self,
         qcx: QueryCtxt<'tcx>,
         key: &Self::Key,
-        index: SerializedDepNodeIndex,
+        index: PrevDepNodeIndex,
     ) -> bool {
         (self.dynamic.loadable_from_disk)(qcx.tcx, key, index)
     }

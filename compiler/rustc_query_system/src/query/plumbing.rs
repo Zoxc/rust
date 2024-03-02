@@ -19,11 +19,13 @@ use tracing::instrument;
 
 use super::QueryConfig;
 use crate::HandleCycleError;
-use crate::dep_graph::{DepContext, DepGraphData, DepNode, DepNodeIndex, DepNodeParams};
+use crate::dep_graph::{
+    DepContext, DepGraphData, DepNode, DepNodeIndex, DepNodeParams, PrevDepNodeIndex,
+};
 use crate::ich::StableHashingContext;
 use crate::query::caches::QueryCache;
 use crate::query::job::{QueryInfo, QueryJob, QueryJobId, QueryJobInfo, QueryLatch, report_cycle};
-use crate::query::{QueryContext, QueryMap, QueryStackFrame, SerializedDepNodeIndex};
+use crate::query::{QueryContext, QueryMap, QueryStackFrame};
 
 pub struct QueryState<K> {
     active: Sharded<FxHashMap<K, QueryResult>>,
@@ -554,13 +556,13 @@ where
     // Note this function can be called concurrently from the same query
     // We must ensure that this is handled correctly.
 
-    let (prev_dep_node_index, dep_node_index) = dep_graph_data.try_mark_green(qcx, dep_node)?;
+    let prev_dep_node_index = dep_graph_data.try_mark_green(qcx, dep_node)?;
 
     debug_assert!(dep_graph_data.is_index_green(prev_dep_node_index));
 
     // First we try to load the result from the on-disk cache.
     // Some things are never cached on disk.
-    if let Some(result) = query.try_load_from_disk(qcx, key, prev_dep_node_index, dep_node_index) {
+    if let Some(result) = query.try_load_from_disk(qcx, key, prev_dep_node_index) {
         if std::intrinsics::unlikely(qcx.dep_context().sess().opts.unstable_opts.query_dep_graph) {
             dep_graph_data.mark_debug_loaded_from_disk(*dep_node)
         }
@@ -587,7 +589,7 @@ where
             );
         }
 
-        return Some((result, dep_node_index));
+        return Some((result, prev_dep_node_index.current()));
     }
 
     // We always expect to find a cached result for things that
@@ -612,7 +614,7 @@ where
     // The dep-graph for this computation is already in-place.
     let result = qcx.dep_context().dep_graph().with_ignore(|| query.compute(qcx, *key));
 
-    prof_timer.finish_with_query_invocation_id(dep_node_index.into());
+    prof_timer.finish_with_query_invocation_id(prev_dep_node_index.current().into());
 
     // Verify that re-running the query produced a result with the expected hash
     // This catches bugs in query implementations, turning them into ICEs.
@@ -632,7 +634,7 @@ where
         query.format_value(),
     );
 
-    Some((result, dep_node_index))
+    Some((result, prev_dep_node_index.current()))
 }
 
 #[inline]
@@ -641,7 +643,7 @@ pub(crate) fn incremental_verify_ich<Tcx, V>(
     tcx: Tcx,
     dep_graph_data: &DepGraphData<Tcx::Deps>,
     result: &V,
-    prev_index: SerializedDepNodeIndex,
+    prev_index: PrevDepNodeIndex,
     hash_result: Option<fn(&mut StableHashingContext<'_>, &V) -> Fingerprint>,
     format_value: fn(&V) -> String,
 ) where
@@ -664,7 +666,7 @@ pub(crate) fn incremental_verify_ich<Tcx, V>(
 
 #[cold]
 #[inline(never)]
-fn incremental_verify_ich_not_green<Tcx>(tcx: Tcx, prev_index: SerializedDepNodeIndex)
+fn incremental_verify_ich_not_green<Tcx>(tcx: Tcx, prev_index: PrevDepNodeIndex)
 where
     Tcx: DepContext,
 {
@@ -681,7 +683,7 @@ where
 #[inline(never)]
 fn incremental_verify_ich_failed<Tcx>(
     tcx: Tcx,
-    prev_index: SerializedDepNodeIndex,
+    prev_index: PrevDepNodeIndex,
     result: &dyn Fn() -> String,
 ) where
     Tcx: DepContext,
@@ -747,7 +749,7 @@ where
     let dep_node = query.construct_dep_node(*qcx.dep_context(), key);
 
     let dep_graph = qcx.dep_context().dep_graph();
-    let serialized_dep_node_index = match dep_graph.try_mark_green(qcx, &dep_node) {
+    let dep_node_index = match dep_graph.try_mark_green(qcx, &dep_node) {
         None => {
             // A None return from `try_mark_green` means that this is either
             // a new dep node or that the dep node has already been marked red.
@@ -757,10 +759,10 @@ where
             // in-memory cache, or another query down the line will.
             return (true, Some(dep_node));
         }
-        Some((serialized_dep_node_index, dep_node_index)) => {
-            dep_graph.read_index(dep_node_index);
-            qcx.dep_context().profiler().query_cache_hit(dep_node_index.into());
-            serialized_dep_node_index
+        Some(dep_node_index) => {
+            dep_graph.read_index(dep_node_index.current());
+            qcx.dep_context().profiler().query_cache_hit(dep_node_index.current().into());
+            dep_node_index
         }
     };
 
@@ -769,7 +771,7 @@ where
         return (false, None);
     }
 
-    let loadable = query.loadable_from_disk(qcx, key, serialized_dep_node_index);
+    let loadable = query.loadable_from_disk(qcx, key, dep_node_index);
     (!loadable, Some(dep_node))
 }
 

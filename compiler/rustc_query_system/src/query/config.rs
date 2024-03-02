@@ -6,11 +6,11 @@ use std::hash::Hash;
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_span::ErrorGuaranteed;
 
-use crate::dep_graph::{DepKind, DepNode, DepNodeParams, SerializedDepNodeIndex};
+use crate::dep_graph::{DepKind, DepNode, DepNodeParams, PrevDepNodeIndex};
 use crate::error::HandleCycleError;
 use crate::ich::StableHashingContext;
 use crate::query::caches::QueryCache;
-use crate::query::{CycleError, DepNodeIndex, QueryContext, QueryState};
+use crate::query::{CycleError, QueryContext, QueryState};
 
 pub type HashResult<V> = Option<fn(&mut StableHashingContext<'_>, &V) -> Fingerprint>;
 
@@ -47,11 +47,10 @@ pub trait QueryConfig<Qcx: QueryContext>: Copy {
         self,
         tcx: Qcx,
         key: &Self::Key,
-        prev_index: SerializedDepNodeIndex,
-        index: DepNodeIndex,
+        index: PrevDepNodeIndex,
     ) -> Option<Self::Value>;
 
-    fn loadable_from_disk(self, qcx: Qcx, key: &Self::Key, idx: SerializedDepNodeIndex) -> bool;
+    fn loadable_from_disk(self, qcx: Qcx, key: &Self::Key, idx: PrevDepNodeIndex) -> bool;
 
     /// Synthesize an error value to let compilation continue after a cycle.
     fn value_from_cycle_error(

@@ -39,7 +39,7 @@ use rustc_hir::{self as hir, Attribute, HirId, Node, TraitCandidate};
 use rustc_index::IndexVec;
 use rustc_macros::{HashStable, TyDecodable, TyEncodable};
 use rustc_query_system::cache::WithDepNode;
-use rustc_query_system::dep_graph::DepNodeIndex;
+use rustc_query_system::dep_graph::{DepIndexMapper, DepNodeIndex};
 use rustc_query_system::ich::StableHashingContext;
 use rustc_serialize::opaque::{FileEncodeResult, FileEncoder};
 use rustc_session::config::CrateType;
@@ -2037,8 +2037,15 @@ impl<'tcx> TyCtxt<'tcx> {
         f(StableHashingContext::new(self.sess, &self.untracked))
     }
 
-    pub fn serialize_query_result_cache(self, encoder: FileEncoder) -> FileEncodeResult {
-        self.query_system.on_disk_cache.as_ref().map_or(Ok(0), |c| c.serialize(self, encoder))
+    pub fn serialize_query_result_cache(
+        self,
+        encoder: FileEncoder,
+        index_mapper: DepIndexMapper,
+    ) -> FileEncodeResult {
+        self.query_system
+            .on_disk_cache
+            .as_ref()
+            .map_or(Ok(0), |c| c.serialize(self, encoder, index_mapper))
     }
 
     #[inline]
@@ -2224,10 +2231,6 @@ impl<'tcx> TyCtxt<'tcx> {
 
         self.save_dep_graph();
         self.query_key_hash_verify_all();
-
-        if let Err((path, error)) = self.dep_graph.finish_encoding() {
-            self.sess.dcx().emit_fatal(crate::error::FailedWritingFile { path: &path, error });
-        }
     }
 }
 

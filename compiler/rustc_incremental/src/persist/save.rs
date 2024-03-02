@@ -7,6 +7,7 @@ use rustc_middle::dep_graph::{
     DepGraph, SerializedDepGraph, WorkProduct, WorkProductId, WorkProductMap,
 };
 use rustc_middle::ty::TyCtxt;
+use rustc_query_system::dep_graph::DepIndexMapper;
 use rustc_serialize::Encodable as RustcEncodable;
 use rustc_serialize::opaque::{FileEncodeResult, FileEncoder};
 use rustc_session::Session;
@@ -25,7 +26,7 @@ use crate::errors;
 ///
 /// This function should only run after all queries have completed.
 /// Trying to execute a query afterwards would attempt to read the result cache we just dropped.
-pub(crate) fn save_dep_graph(tcx: TyCtxt<'_>) {
+pub(crate) fn save_dep_graph(tcx: TyCtxt<'_>, index_mapper: DepIndexMapper) {
     debug!("save_dep_graph()");
     tcx.dep_graph.with_ignore(|| {
         let sess = tcx.sess;
@@ -70,7 +71,7 @@ pub(crate) fn save_dep_graph(tcx: TyCtxt<'_>) {
                     }
 
                     file_format::save_in(sess, query_cache_path, "query cache", |e| {
-                        encode_query_cache(tcx, e)
+                        encode_query_cache(tcx, e, index_mapper)
                     });
                 });
             },
@@ -136,8 +137,14 @@ fn encode_work_product_index(
     serialized_products.encode(encoder)
 }
 
-fn encode_query_cache(tcx: TyCtxt<'_>, encoder: FileEncoder) -> FileEncodeResult {
-    tcx.sess.time("incr_comp_serialize_result_cache", || tcx.serialize_query_result_cache(encoder))
+fn encode_query_cache(
+    tcx: TyCtxt<'_>,
+    encoder: FileEncoder,
+    index_mapper: DepIndexMapper,
+) -> FileEncodeResult {
+    tcx.sess.time("incr_comp_serialize_result_cache", || {
+        tcx.serialize_query_result_cache(encoder, index_mapper)
+    })
 }
 
 /// Builds the dependency graph.

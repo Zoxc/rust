@@ -5,7 +5,7 @@ use rustc_hir::def_id::{DefId, LocalDefId};
 use rustc_hir::hir_id::OwnerId;
 use rustc_macros::HashStable;
 use rustc_query_system::HandleCycleError;
-use rustc_query_system::dep_graph::{DepNodeIndex, SerializedDepNodeIndex};
+use rustc_query_system::dep_graph::PrevDepNodeIndex;
 pub(crate) use rustc_query_system::query::QueryJobId;
 use rustc_query_system::query::*;
 use rustc_span::{DUMMY_SP, ErrorGuaranteed, Span};
@@ -17,7 +17,6 @@ use crate::query::{
     DynamicQueries, ExternProviders, Providers, QueryArenas, QueryCaches, QueryEngine, QueryStates,
 };
 use crate::ty::TyCtxt;
-
 pub struct DynamicQuery<'tcx, C: QueryCache> {
     pub name: &'static str,
     pub eval_always: bool,
@@ -31,14 +30,9 @@ pub struct DynamicQuery<'tcx, C: QueryCache> {
     pub execute_query: fn(tcx: TyCtxt<'tcx>, k: C::Key) -> C::Value,
     pub compute: fn(tcx: TyCtxt<'tcx>, key: C::Key) -> C::Value,
     pub can_load_from_disk: bool,
-    pub try_load_from_disk: fn(
-        tcx: TyCtxt<'tcx>,
-        key: &C::Key,
-        prev_index: SerializedDepNodeIndex,
-        index: DepNodeIndex,
-    ) -> Option<C::Value>,
-    pub loadable_from_disk:
-        fn(tcx: TyCtxt<'tcx>, key: &C::Key, index: SerializedDepNodeIndex) -> bool,
+    pub try_load_from_disk:
+        fn(tcx: TyCtxt<'tcx>, key: &C::Key, index: PrevDepNodeIndex) -> Option<C::Value>,
+    pub loadable_from_disk: fn(tcx: TyCtxt<'tcx>, key: &C::Key, index: PrevDepNodeIndex) -> bool,
     pub hash_result: HashResult<C::Value>,
     pub value_from_cycle_error:
         fn(tcx: TyCtxt<'tcx>, cycle_error: &CycleError, guar: ErrorGuaranteed) -> C::Value,
