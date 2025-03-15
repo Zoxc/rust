@@ -12,7 +12,7 @@
 //! node and edge count are stored at the end of the file, all the arrays can be
 //! pre-allocated with the right length.
 //!
-//! The encoding of the de-pgraph is generally designed around the fact that fixed-size
+//! The encoding of the dep-graph is generally designed around the fact that fixed-size
 //! reads of encoded data are generally faster than variable-sized reads. Ergo we adopt
 //! essentially the same varint encoding scheme used in the rmeta format; the edge lists
 //! for each node on the graph store a 2-bit integer which is the number of bytes per edge
@@ -21,7 +21,7 @@
 //! The overhead of calculating the correct byte width for each edge is mitigated by
 //! building edge lists with [`EdgesVec`] which keeps a running max of the edges in a node.
 //!
-//! When we decode this data, we do not immediately create [`SerializedDepNodeIndex`] and
+//! When we decode this data, we do not immediately create [`PrevDepNodeIndex`] and
 //! instead keep the data in its denser serialized form which lets us turn our on-disk size
 //! efficiency directly into a peak memory reduction. When we convert these encoded-in-memory
 //! values into their fully-deserialized type, we use a fixed-size read of the encoded array
@@ -56,27 +56,27 @@ use super::query::DepGraphQuery;
 use super::{DepKind, DepNode, DepNodeIndex, Deps};
 use crate::dep_graph::edges::EdgesVec;
 
-// The maximum value of `SerializedDepNodeIndex` leaves the upper two bits
+// The maximum value of `NextDepNodeIndex` leaves the upper two bits
 // unused so that we can store multiple index types in `CompressedHybridIndex`,
 // and use those bits to encode which index type it contains.
 rustc_index::newtype_index! {
     #[encodable]
     #[max = 0x7FFF_FFFF]
-    pub struct SerializedDepNodeIndex {}
+    pub struct NextDepNodeIndex {}
 }
 
-impl SerializedDepNodeIndex {
+impl NextDepNodeIndex {
     #[inline]
     pub fn lift(self) -> PrevDepNodeIndex {
         PrevDepNodeIndex::from_u32(self.as_u32())
     }
 }
 
-const DEP_NODE_SIZE: usize = size_of::<SerializedDepNodeIndex>();
+const DEP_NODE_SIZE: usize = size_of::<NextDepNodeIndex>();
 /// Amount of padding we need to add to the edge list data so that we can retrieve every
-/// SerializedDepNodeIndex with a fixed-size read then mask.
+/// NextDepNodeIndex with a fixed-size read then mask.
 const DEP_NODE_PAD: usize = DEP_NODE_SIZE - 1;
-/// Number of bits we need to store the number of used bytes in a SerializedDepNodeIndex.
+/// Number of bits we need to store the number of used bytes in a NextDepNodeIndex.
 /// Note that wherever we encode byte widths like this we actually store the number of bytes used
 /// minus 1; for a 4-byte value we technically would have 5 widths to store, but using one byte to
 /// store zeroes (which are relatively rare) is a decent tradeoff to save a bit in our bitfields.
@@ -423,11 +423,11 @@ struct Stat {
 
 #[derive(Default)]
 pub struct DepIndexMapper {
-    index_to_serialized_index: IndexVec<DepNodeIndex, Option<SerializedDepNodeIndex>>,
+    index_to_serialized_index: IndexVec<DepNodeIndex, Option<NextDepNodeIndex>>,
 }
 
 impl DepIndexMapper {
-    pub fn map(&self, index: DepNodeIndex) -> SerializedDepNodeIndex {
+    pub fn map(&self, index: DepNodeIndex) -> NextDepNodeIndex {
         self.index_to_serialized_index[index].expect("serialized index")
     }
 }
@@ -439,7 +439,7 @@ struct EncoderState<D: Deps> {
     total_edge_count: usize,
     stats: Option<FxHashMap<DepKind, Stat>>,
 
-    index_to_serialized_index: IndexVec<DepNodeIndex, Option<SerializedDepNodeIndex>>,
+    index_to_serialized_index: IndexVec<DepNodeIndex, Option<NextDepNodeIndex>>,
 
     /// Stores the number of times we've encoded each dep kind.
     kind_stats: Vec<u32>,
@@ -466,7 +466,7 @@ impl<D: Deps> EncoderState<D> {
     }
 
     #[inline]
-    fn serialized_index(&self, index: DepNodeIndex) -> SerializedDepNodeIndex {
+    fn serialized_index(&self, index: DepNodeIndex) -> NextDepNodeIndex {
         self.index_to_serialized_index[index].expect("correct node recording order")
     }
 
@@ -536,7 +536,7 @@ impl<D: Deps> EncoderState<D> {
         edges: impl FnOnce(&mut Self) -> Vec<DepNodeIndex>,
         record_graph: &Option<Lock<DepGraphQuery>>,
     ) {
-        let serialized_index = SerializedDepNodeIndex::new(self.total_node_count);
+        let serialized_index = NextDepNodeIndex::new(self.total_node_count);
 
         self.index_to_serialized_index.ensure_contains_elem(index, || None);
         debug_assert!(self.index_to_serialized_index[index].is_none());

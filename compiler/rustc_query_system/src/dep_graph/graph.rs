@@ -24,9 +24,7 @@ use {super::debug::EdgeFilter, std::env};
 
 use super::query::DepGraphQuery;
 use super::serialized::{DepIndexMapper, GraphEncoder, SerializedDepGraph};
-use super::{
-    DepContext, DepKind, DepNode, Deps, HasDepContext, SerializedDepNodeIndex, WorkProductId,
-};
+use super::{DepContext, DepKind, DepNode, Deps, HasDepContext, NextDepNodeIndex, WorkProductId};
 use crate::dep_graph::edges::EdgesVec;
 use crate::ich::StableHashingContext;
 use crate::query::{QueryContext, QuerySideEffect};
@@ -68,8 +66,8 @@ impl PrevDepNodeIndex {
     }
 
     #[inline]
-    pub fn lower(self) -> SerializedDepNodeIndex {
-        SerializedDepNodeIndex::from_u32(self.as_u32())
+    pub fn lower(self) -> NextDepNodeIndex {
+        NextDepNodeIndex::from_u32(self.as_u32())
     }
 
     #[inline]
@@ -1098,18 +1096,7 @@ rustc_index::newtype_index! {
 /// For this reason, we avoid storing `DepNode`s more than once as map
 /// keys. The `new_node_to_index` map only contains nodes not in the previous
 /// graph, and we map nodes in the previous graph to indices via a two-step
-/// mapping. `SerializedDepGraph` maps from `DepNode` to `SerializedDepNodeIndex`,
-/// and the `prev_index_to_index` vector (which is more compact and faster than
-/// using a map) maps from `SerializedDepNodeIndex` to `DepNodeIndex`.
-///
-/// This struct uses three locks internally. The `data`, `new_node_to_index`,
-/// and `prev_index_to_index` fields are locked separately. Operations that take
-/// a `DepNodeIndex` typically just access the `data` field.
-///
-/// We only need to manipulate at most two locks simultaneously:
-/// `new_node_to_index` and `data`, or `prev_index_to_index` and `data`. When
-/// manipulating both, we acquire `new_node_to_index` or `prev_index_to_index`
-/// first, and `data` second.
+/// mapping. `SerializedDepGraph` maps from `DepNode` to `PrevDepNodeIndex`.
 pub(super) struct CurrentDepGraph<D: Deps> {
     encoder: GraphEncoder<D>,
     new_node_to_index: ShardedHashMap<DepNode, DepNodeIndex>,

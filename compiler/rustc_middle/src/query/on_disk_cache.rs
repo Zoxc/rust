@@ -11,7 +11,7 @@ use rustc_hir::def_id::{CrateNum, DefId, DefIndex, LOCAL_CRATE, LocalDefId, Stab
 use rustc_hir::definitions::DefPathHash;
 use rustc_index::IndexVec;
 use rustc_macros::{Decodable, Encodable};
-use rustc_query_system::dep_graph::{DepIndexMapper, PrevDepNodeIndex, SerializedDepNodeIndex};
+use rustc_query_system::dep_graph::{DepIndexMapper, PrevDepNodeIndex, NextDepNodeIndex};
 use rustc_query_system::query::QuerySideEffect;
 use rustc_serialize::opaque::{FileEncodeResult, FileEncoder, IntEncodedWithFixedSize, MemDecoder};
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
@@ -117,7 +117,7 @@ struct Footer {
     foreign_expn_data: UnhashMap<ExpnHash, u32>,
 }
 
-pub type EncodedDepNodeIndex = Vec<(SerializedDepNodeIndex, AbsoluteBytePos)>;
+pub type EncodedDepNodeIndex = Vec<(NextDepNodeIndex, AbsoluteBytePos)>;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encodable, Decodable)]
 struct SourceFileIndex(u32);
@@ -421,7 +421,7 @@ impl OnDiskCache {
     {
         let pos = index.get(&dep_node_index).cloned()?;
         let value = self.with_decoder(tcx, pos, |decoder| {
-            decode_tagged(decoder, SerializedDepNodeIndex::from_u32(dep_node_index.as_u32()))
+            decode_tagged(decoder, NextDepNodeIndex::from_u32(dep_node_index.as_u32()))
         });
         Some(value)
     }
@@ -837,7 +837,7 @@ impl<'a, 'tcx> CacheEncoder<'a, 'tcx> {
     }
 
     #[inline]
-    pub fn serialized_index(&mut self, index: DepNodeIndex) -> SerializedDepNodeIndex {
+    pub fn serialized_index(&mut self, index: DepNodeIndex) -> NextDepNodeIndex {
         self.index_mapper.map(index)
     }
 

@@ -15,7 +15,7 @@ pub use graph::{
 pub use query::DepGraphQuery;
 use rustc_data_structures::profiling::SelfProfilerRef;
 use rustc_session::Session;
-pub use serialized::{DepIndexMapper, SerializedDepGraph, SerializedDepNodeIndex};
+pub use serialized::{DepIndexMapper, SerializedDepGraph, NextDepNodeIndex};
 use tracing::instrument;
 
 use self::graph::{MarkFrame, print_markframe_trace};
