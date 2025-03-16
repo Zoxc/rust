@@ -534,7 +534,7 @@ pub fn break_query_cycles<I: Clone + Debug>(
             // improvements in the common case, and no regressions compared to the
             // single-threaded case. More investigation is still needed, and once fixed,
             // we can wake up all the waiters up.
-            break;
+            //  break;
         }
     }
 
