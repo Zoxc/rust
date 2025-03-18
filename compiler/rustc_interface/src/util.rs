@@ -188,24 +188,7 @@ pub(crate) fn run_in_thread_pool_with_globals<F: FnOnce(CurrentGcx) -> R + Send,
             // On deadlock, creates a new thread and forwards information in thread
             // locals to it. The new thread runs the deadlock handler.
 
-            // Get a `GlobalCtxt` reference from `CurrentGcx` as we cannot rely on having a
-            // `TyCtxt` TLS reference here.
-            let query_map = current_gcx2.access(|gcx| {
-                tls::enter_context(&tls::ImplicitCtxt::new(gcx), || {
-                    tls::with(|tcx| {
-                        let (query_map, complete) = QueryCtxt::new(tcx).collect_active_jobs();
-                        if !complete {
-                            // There was an unexpected error collecting all active jobs, which we need
-                            // to find cycles to break.
-                            // We want to avoid panicking in the deadlock handler, so we abort instead.
-                            eprintln!("internal compiler error: failed to get query map in deadlock handler, aborting process");
-                            process::abort();
-                        }
-                        query_map
-                    })
-                })
-            });
-            let query_map = FromDyn::from(query_map);
+            let current_gcx2 = current_gcx2.clone();
             let registry = rayon_core::Registry::current();
             thread::Builder::new()
                 .name("rustc query cycle handler".to_string())
@@ -216,7 +199,24 @@ pub(crate) fn run_in_thread_pool_with_globals<F: FnOnce(CurrentGcx) -> R + Send,
                         // otherwise the compiler could just hang,
                         process::abort();
                     });
-                    break_query_cycles(query_map.into_inner(), &registry);
+
+                    // Get a `GlobalCtxt` reference from `CurrentGcx` as we cannot rely on having a
+                    // `TyCtxt` TLS reference here.
+                    current_gcx2.access(|gcx| {
+                        tls::enter_context(&tls::ImplicitCtxt::new(gcx), || {
+                            tls::with(|tcx| {
+                                let (query_map, complete) = QueryCtxt::new(tcx).collect_active_jobs();
+                                if !complete {
+                                    // There was an unexpected error collecting all active jobs, which we need
+                                    // to find cycles to break.
+                                    // We want to avoid panicking in the deadlock handler, so we abort instead.
+                                    panic!("failed to get query map in deadlock handler, aborting process");
+                                }
+                                break_query_cycles(query_map, &registry);
+                            })
+                        })
+                    });
+
                     on_panic.disable();
                 })
                 .unwrap();
