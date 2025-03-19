@@ -18,7 +18,7 @@ use rustc_session::{EarlyDiagCtxt, Session, filesearch};
 use rustc_span::edit_distance::find_best_match_for_name;
 use rustc_span::edition::Edition;
 use rustc_span::source_map::SourceMapInputs;
-use rustc_span::{Symbol, sym};
+use rustc_span::{SessionGlobals, Symbol, sym};
 use rustc_target::spec::Target;
 use tracing::info;
 
@@ -190,6 +190,9 @@ pub(crate) fn run_in_thread_pool_with_globals<F: FnOnce(CurrentGcx) -> R + Send,
 
             let current_gcx2 = current_gcx2.clone();
             let registry = rayon_core::Registry::current();
+            let session_globals = rustc_span::with_session_globals(|session_globals| {
+                session_globals as *const SessionGlobals as usize
+            });
             thread::Builder::new()
                 .name("rustc query cycle handler".to_string())
                 .spawn(move || {
@@ -205,7 +208,9 @@ pub(crate) fn run_in_thread_pool_with_globals<F: FnOnce(CurrentGcx) -> R + Send,
                     current_gcx2.access(|gcx| {
                         tls::enter_context(&tls::ImplicitCtxt::new(gcx), || {
                             tls::with(|tcx| {
-                                let (query_map, complete) = QueryCtxt::new(tcx).collect_active_jobs();
+                                let (query_map, complete) = rustc_span::set_session_globals_then(unsafe { &*(session_globals as *const SessionGlobals) }, || {
+                                    QueryCtxt::new(tcx).collect_active_jobs()
+                                });
                                 if !complete {
                                     // There was an unexpected error collecting all active jobs, which we need
                                     // to find cycles to break.
