@@ -80,9 +80,9 @@ impl<'tcx> Value<TyCtxt<'tcx>> for Representability {
     fn from_cycle_error(
         tcx: TyCtxt<'tcx>,
         cycle_error: &CycleError,
-        _guar: ErrorGuaranteed,
+        guar: ErrorGuaranteed,
     ) -> Self {
-        let mut item_and_field_ids = Vec::new();
+        /*   let mut item_and_field_ids = Vec::new();
         let mut representable_ids = FxHashSet::default();
         for info in &cycle_error.cycle {
             if info.query.dep_kind == dep_kinds::representability
@@ -107,7 +107,7 @@ impl<'tcx> Value<TyCtxt<'tcx>> for Representability {
                 representable_ids.insert(def_id);
             }
         }
-        let guar = recursive_type_error(tcx, item_and_field_ids, &representable_ids);
+        let guar = recursive_type_error(tcx, item_and_field_ids, &representable_ids);*/
         Representability::Infinite(guar)
     }
 }
