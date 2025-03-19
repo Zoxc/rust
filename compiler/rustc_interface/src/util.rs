@@ -6,12 +6,10 @@ use std::{env, iter, thread};
 
 use rustc_ast as ast;
 use rustc_codegen_ssa::traits::CodegenBackend;
-use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::sync;
 use rustc_metadata::{DylibError, load_symbol_from_dylib};
 use rustc_middle::ty::CurrentGcx;
 use rustc_parse::validate_attr;
-use rustc_query_system::query::{QueryJobId, QueryJobInfo, QueryStackDeferred};
 use rustc_session::config::{Cfg, OutFileName, OutputFilenames, OutputTypes, host_tuple};
 use rustc_session::filesearch::sysroot_candidates;
 use rustc_session::lint::{self, BuiltinLintDiag, LintBuffer};
@@ -20,7 +18,7 @@ use rustc_session::{EarlyDiagCtxt, Session, filesearch};
 use rustc_span::edit_distance::find_best_match_for_name;
 use rustc_span::edition::Edition;
 use rustc_span::source_map::SourceMapInputs;
-use rustc_span::{Symbol, sym};
+use rustc_span::{SessionGlobals, Symbol, sym};
 use rustc_target::spec::Target;
 use tracing::info;
 
@@ -190,26 +188,11 @@ pub(crate) fn run_in_thread_pool_with_globals<F: FnOnce(CurrentGcx) -> R + Send,
             // On deadlock, creates a new thread and forwards information in thread
             // locals to it. The new thread runs the deadlock handler.
 
-            // Get a `GlobalCtxt` reference from `CurrentGcx` as we cannot rely on having a
-            // `TyCtxt` TLS reference here.
-            let query_map = current_gcx2.access(|gcx| {
-                tls::enter_context(&tls::ImplicitCtxt::new(gcx), || {
-                    tls::with(|tcx| {
-                        let (query_map, complete) = QueryCtxt::new(tcx).collect_active_jobs();
-                        if !complete {
-                            // There was an unexpected error collecting all active jobs, which we need
-                            // to find cycles to break.
-                            // We want to avoid panicking in the deadlock handler, so we abort instead.
-                            eprintln!("internal compiler error: failed to get query map in deadlock handler, aborting process");
-                            process::abort();
-                        }
-                        let query_map: FxHashMap<QueryJobId, QueryJobInfo<QueryStackDeferred<'static>>> = unsafe { std::mem::transmute(query_map) };
-                        query_map
-                    })
-                })
-            });
-            let query_map = FromDyn::from(query_map);
+            let current_gcx2 = current_gcx2.clone();
             let registry = rayon_core::Registry::current();
+            let session_globals = rustc_span::with_session_globals(|session_globals| {
+                session_globals as *const SessionGlobals as usize
+            });
             thread::Builder::new()
                 .name("rustc query cycle handler".to_string())
                 .spawn(move || {
@@ -219,8 +202,26 @@ pub(crate) fn run_in_thread_pool_with_globals<F: FnOnce(CurrentGcx) -> R + Send,
                         // otherwise the compiler could just hang,
                         process::abort();
                     });
-                    let query_map: FxHashMap<QueryJobId, QueryJobInfo<QueryStackDeferred<'_>>> = unsafe { std::mem::transmute(query_map.into_inner()) };
-                    break_query_cycles(query_map, &registry);
+
+                    // Get a `GlobalCtxt` reference from `CurrentGcx` as we cannot rely on having a
+                    // `TyCtxt` TLS reference here.
+                    current_gcx2.access(|gcx| {
+                        tls::enter_context(&tls::ImplicitCtxt::new(gcx), || {
+                            tls::with(|tcx| {
+                                let (query_map, complete) = rustc_span::set_session_globals_then(unsafe { &*(session_globals as *const SessionGlobals) }, || {
+                                    QueryCtxt::new(tcx).collect_active_jobs()
+                                });
+                                if !complete {
+                                    // There was an unexpected error collecting all active jobs, which we need
+                                    // to find cycles to break.
+                                    // We want to avoid panicking in the deadlock handler, so we abort instead.
+                                    panic!("failed to get query map in deadlock handler, aborting process");
+                                }
+                                break_query_cycles(query_map, &registry);
+                            })
+                        })
+                    });
+
                     on_panic.disable();
                 })
                 .unwrap();
