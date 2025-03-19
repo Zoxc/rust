@@ -5,7 +5,7 @@
 use std::num::NonZero;
 use std::sync::Arc;
 
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::HashStable;
 use rustc_data_structures::sync::{DynSend, DynSync, Lock};
 use rustc_data_structures::unord::UnordMap;
 use rustc_errors::DiagInner;
@@ -20,10 +20,9 @@ use rustc_middle::query::Key;
 use rustc_middle::query::on_disk_cache::{
     AbsoluteBytePos, CacheDecoder, CacheEncoder, EncodedDepNodeIndex,
 };
+use rustc_middle::ty::TyCtxt;
 use rustc_middle::ty::codec::TyEncoder;
-use rustc_middle::ty::print::with_reduced_queries;
 use rustc_middle::ty::tls::{self, ImplicitCtxt};
-use rustc_middle::ty::{self, TyCtxt};
 use rustc_query_system::dep_graph::{DepNodeParams, HasDepContext};
 use rustc_query_system::ich::StableHashingContext;
 use rustc_query_system::query::{
@@ -322,52 +321,24 @@ pub(crate) fn create_query_frame<
     'tcx,
     K: Copy + DynSend + DynSync + Key + for<'a> HashStable<StableHashingContext<'a>> + 'tcx,
 >(
-    tcx: TyCtxt<'tcx>,
-    do_describe: fn(TyCtxt<'tcx>, K) -> String,
-    key: K,
+    _tcx: TyCtxt<'tcx>,
+    _do_describe: fn(TyCtxt<'tcx>, K) -> String,
+    _key: K,
     kind: DepKind,
-    name: &'static str,
+    _name: &'static str,
 ) -> QueryStackFrame<QueryStackDeferred<'tcx>> {
-    let def_id = key.key_as_def_id();
+    let def_id = None;
 
     let extra = move || {
-        // If reduced queries are requested, we may be printing a query stack due
-        // to a panic. Avoid using `default_span` and `def_kind` in that case.
-        let reduce_queries = with_reduced_queries();
-
         // Avoid calling queries while formatting the description
-        let description = ty::print::with_no_queries!(do_describe(tcx, key));
-        let description = if tcx.sess.verbose_internals() {
-            format!("{description} [{name:?}]")
-        } else {
-            description
-        };
-        let span = if kind == dep_graph::dep_kinds::def_span || reduce_queries {
-            // The `def_span` query is used to calculate `default_span`,
-            // so exit to avoid infinite recursion.
-            None
-        } else {
-            Some(key.default_span(tcx))
-        };
-
-        let def_kind = if kind == dep_graph::dep_kinds::def_kind || reduce_queries {
-            // Try to avoid infinite recursion.
-            None
-        } else {
-            def_id.and_then(|def_id| def_id.as_local()).map(|def_id| tcx.def_kind(def_id))
-        };
+        let description = String::new();
+        let span = None;
+        let def_kind = None;
         QueryStackFrameExtra::new(description, span, def_kind)
     };
 
-    let hash = || {
-        tcx.with_stable_hashing_context(|mut hcx| {
-            let mut hasher = StableHasher::new();
-            kind.as_usize().hash_stable(&mut hcx, &mut hasher);
-            key.hash_stable(&mut hcx, &mut hasher);
-            hasher.finish::<Hash64>()
-        })
-    };
-    let def_id_for_ty_in_cycle = key.def_id_for_ty_in_cycle();
+    let hash = || Hash64::ZERO;
+    let def_id_for_ty_in_cycle = None;
 
     // SAFETY: None of the captures in `extra` have destructors that access 'tcx
     // as they don't have destructors.
