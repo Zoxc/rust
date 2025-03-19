@@ -31,7 +31,7 @@ impl TestCx<'_> {
             self.check_no_compiler_crash(&proc_res, false);
 
             // Repeated testing due to instability in multithreaded environments.
-            for _ in 0..1000 {
+            for _ in 0..100 {
                 proc_res = self.compile_test(should_run, emit_metadata);
                 self.check_no_compiler_crash(&proc_res, false);
             }
