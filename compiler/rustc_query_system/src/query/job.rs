@@ -514,6 +514,11 @@ pub fn break_query_cycles<I: Clone + Debug>(
     query_map: QueryMap<I>,
     registry: &rayon_core::Registry,
 ) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static C: AtomicUsize = AtomicUsize::new(0);
+
+    let c = C.fetch_add(1, Ordering::Relaxed);
+
     let mut wakelist = Vec::new();
     let mut jobs: Vec<QueryJobId> = query_map.keys().cloned().collect();
 
@@ -548,6 +553,7 @@ pub fn break_query_cycles<I: Clone + Debug>(
     if !found_cycle {
         panic!(
             "deadlock detected as we're unable to find a query cycle to break\n\
+            counter: {c}\n\
             current query map:\n{:#?}",
             query_map
         );

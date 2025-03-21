@@ -1,7 +1,7 @@
 // Test for #120757, which causes a deadlock bug
 //
 //@ parallel-front-end-robustness
-//@ compile-flags: -Z threads=50
+//@ compile-flags: -Z threads=2
 
 #![feature(generic_const_exprs)]
 

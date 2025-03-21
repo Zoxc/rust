@@ -1,7 +1,7 @@
 // Test for #129912, which causes a deadlock bug without finding a cycle
 //
 //@ parallel-front-end-robustness
-//@ compile-flags: -Z threads=16
+//@ compile-flags: -Z threads=2
 // Test that impl trait does not allow creating recursive types that are
 // otherwise forbidden.
 

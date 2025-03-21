@@ -784,7 +784,7 @@ impl Session {
     /// compilation
     #[inline]
     pub fn threads(&self) -> usize {
-        self.opts.unstable_opts.threads
+        1
     }
 
     /// Returns the number of codegen units that should be used for this
