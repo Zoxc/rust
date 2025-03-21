@@ -26,6 +26,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use std::{env, str};
 
+#[cfg(feature = "override_allocator")]
+use libmimalloc_sys as _;
 use rustc_ast as ast;
 use rustc_codegen_ssa::traits::CodegenBackend;
 use rustc_codegen_ssa::{CodegenError, CompiledModules};
