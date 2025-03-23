@@ -1,7 +1,6 @@
 [workspace]
-resolver = "2"
 members = [
-# tidy-alphabetical-start
+  # tidy-alphabetical-start
   "compiler/rustc",
   "src/build_helper",
   "src/etc/test-float-parse",
@@ -46,17 +45,16 @@ members = [
   "src/tools/unicode-table-generator",
   "src/tools/unstable-book-gen",
   "src/tools/wasm-component-ld",
-  "src/tools/x",
-# tidy-alphabetical-end
+  "src/tools/x", # tidy-alphabetical-end
 ]
+resolver = "2"
 
 exclude = [
   "build",
   "compiler/rustc_codegen_cranelift",
   "compiler/rustc_codegen_gcc",
   "src/bootstrap",
-  "tests/rustdoc-gui",
-  # HACK(eddyb) This hardcodes the fact that our CI uses `/checkout/obj`.
+  "tests/rustdoc-gui", # HACK(eddyb) This hardcodes the fact that our CI uses `/checkout/obj`.
   "obj",
 ]
 
@@ -84,8 +82,12 @@ opt-level = 3
 
 # Speed up the binary as much as possible
 [profile.release.package.test-float-parse]
-opt-level = 3
 codegen-units = 1
+opt-level = 3
 # FIXME: LTO cannot be enabled for binaries in a workspace
 # <https://github.com/rust-lang/cargo/issues/9330>
 # lto = true
+
+[patch.crates-io]
+rustc-rayon = {path = "/home/john/dev/rayon"}
+rustc-rayon-core = {path = "/home/john/dev/rayon/rayon-core/"}
