@@ -97,7 +97,7 @@ macro_rules! parallel {
 // This function only works when `mode::is_dyn_thread_safe()`.
 pub fn scope<'scope, OP, R>(op: OP) -> R
 where
-    OP: FnOnce(&rayon::Scope<'scope>) -> R + DynSend,
+    OP: FnOnce(&rayon::Scope<'scope>) -> R + DynSend + 'scope,
     R: DynSend,
 {
     let op = FromDyn::from(op);

@@ -523,9 +523,11 @@ pub fn break_query_cycles<I: Clone + Debug>(
     let mut jobs: Vec<QueryJobId> = query_map.keys().cloned().collect();
 
     let mut found_cycle = false;
+    let mut cf = 0;
 
     while jobs.len() > 0 {
         if remove_cycle(&query_map, &mut jobs, &mut wakelist) {
+            cf += 1;
             found_cycle = true;
 
             // FIXME(#137731): Resume all the waiters at once may cause deadlocks,
@@ -543,6 +545,8 @@ pub fn break_query_cycles<I: Clone + Debug>(
         }
     }
 
+    eprintln!("\nresuming {cf} cycles in {:?}", std::thread::current().id());
+
     // Check that a cycle was found. It is possible for a deadlock to occur without
     // a query cycle if a query which can be waited on uses Rayon to do multithreading
     // internally. Such a query (X) may be executing on 2 threads (A and B) and A may
@@ -558,6 +562,11 @@ pub fn break_query_cycles<I: Clone + Debug>(
             query_map
         );
     }
+
+    let mut ptrs: Vec<_> = wakelist.iter().map(|waiter| Arc::as_ptr(waiter) as usize).collect();
+    ptrs.sort();
+    ptrs.dedup();
+    assert!(ptrs.len() == wakelist.len());
 
     // FIXME: Ensure this won't cause a deadlock before we return
     for waiter in wakelist.into_iter() {

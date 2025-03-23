@@ -196,6 +196,8 @@ pub(crate) fn run_in_thread_pool_with_globals<F: FnOnce(CurrentGcx) -> R + Send,
             thread::Builder::new()
                 .name("rustc query cycle handler".to_string())
                 .spawn(move || {
+                    eprintln!("\nhandling cycles in {:?}", std::thread::current().id());
+
                     let on_panic = defer(|| {
                         eprintln!("internal compiler error: query cycle handler thread panicked, aborting process");
                         // We need to abort here as we failed to resolve the deadlock,

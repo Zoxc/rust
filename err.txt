@@ -1,0 +1,1028 @@
+Building bootstrap
+    Finished `dev` profile [unoptimized] target(s) in 0.27s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.08s
+   Compiling rustc-rayon-core v0.5.0 (/home/john/dev/rayon/rayon-core)
+warning: unexpected `cfg` condition name: `rayon_rs_log`
+  --> /home/john/dev/rayon/rayon-core/src/log.rs:28:47
+   |
+28 | pub(super) const LOG_ENABLED: bool = cfg!(any(rayon_rs_log, debug_assertions));
+   |                                               ^^^^^^^^^^^^
+   |
+   = help: expected names are: `bootstrap`, `docsrs`, `feature`, `llvm_enzyme`, and `test` and 31 more
+   = help: consider using a Cargo feature instead
+   = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+            [lints.rust]
+            unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rayon_rs_log)'] }
+   = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(rayon_rs_log)");` to the top of the `build.rs`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning[E0133]: call to unsafe function `std::ptr::const_ptr::<impl *const T>::as_ref` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/broadcast/mod.rs:119:26
+    |
+119 |     let current_thread = current_thread.as_ref();
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/broadcast/mod.rs:99:1
+    |
+99  | / pub(super) unsafe fn broadcast_in<OP, R>(op: OP, registry: &Arc<Registry>) -> Vec<R>
+100 | | where
+101 | |     OP: Fn(BroadcastContext<'_>) -> R + Sync,
+102 | |     R: Send,
+    | |____________^
+    = note: requested on the command line with `-W unsafe-op-in-unsafe-fn`
+
+warning[E0133]: call to unsafe function `job::StackJob::<L, F, R>::as_job_ref` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/broadcast/mod.rs:125:42
+    |
+125 |     let job_refs = jobs.iter().map(|job| job.as_job_ref());
+    |                                          ^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `job::StackJob::<L, F, R>::as_job_ref` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/broadcast/mod.rs:131:23
+    |
+131 |         .map(|worker| jobs[worker.index].as_job_ref().id());
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `job::StackJob::<L, F, R>::into_result` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/broadcast/mod.rs:139:32
+    |
+139 |     jobs.into_iter().map(|job| job.into_result()).collect()
+    |                                ^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function is unsafe and requires unsafe block
+  --> /home/john/dev/rayon/rayon-core/src/job.rs:71:9
+   |
+71 |         (self.execute_fn)(self.pointer)
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+   |
+   = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+  --> /home/john/dev/rayon/rayon-core/src/job.rs:70:5
+   |
+70 |     pub(super) unsafe fn execute(self) {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `job::JobRef::new` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:107:9
+    |
+107 |         JobRef::new(self)
+    |         ^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:106:5
+    |
+106 |     pub(super) unsafe fn as_job_ref(&self) -> JobRef {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:111:20
+    |
+111 |         let func = (*self.func.get()).take().unwrap();
+    |                    ^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:110:5
+    |
+110 |     pub(super) unsafe fn run_inline(&self, stolen: bool) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:112:9
+    |
+112 |         (*self.result.get()) = match unwind::halt_unwinding(|| func(stolen)) {
+    |         ^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `latch::Latch::set` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:116:9
+    |
+116 |         Latch::set(&self.latch);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:131:21
+    |
+131 |         let this = &*(this as *const Self);
+    |                     ^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:130:5
+    |
+130 |     unsafe fn execute(this: *const ()) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:134:20
+    |
+134 |         let func = (*this.func.get()).take().unwrap();
+    |                    ^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:135:9
+    |
+135 |         (*this.result.get()) = JobResult::call(func);
+    |         ^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `latch::Latch::set` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:136:9
+    |
+136 |         Latch::set(&this.latch);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `job::JobRef::new` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:167:9
+    |
+167 |         JobRef::new(Box::into_raw(self))
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:166:5
+    |
+166 |     pub(super) unsafe fn into_job_ref(self: Box<Self>) -> JobRef {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `std::boxed::Box::<T>::from_raw` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:185:20
+    |
+185 |         let this = Box::from_raw(this as *mut Self);
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:183:5
+    |
+183 |     unsafe fn execute(this: *const ()) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `job::JobRef::new` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:212:9
+    |
+212 |         JobRef::new(Arc::into_raw(Arc::clone(this)))
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:211:5
+    |
+211 |     pub(super) unsafe fn as_job_ref(this: &Arc<Self>) -> JobRef {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `std::sync::Arc::<T>::from_raw` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:230:20
+    |
+230 |         let this = Arc::from_raw(this as *mut Self);
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:228:5
+    |
+228 |     unsafe fn execute(this: *const ()) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `job::JobRef::new` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:273:9
+    |
+273 |         JobRef::new(self)
+    |         ^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:268:5
+    |
+268 |     pub(super) unsafe fn push(&self, job_ref: JobRef) -> JobRef {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:280:21
+    |
+280 |         let this = &*(this as *const Self);
+    |                     ^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:278:5
+    |
+278 |     unsafe fn execute(this: *const ()) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `job::JobRef::execute` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/job.rs:283:50
+    |
+283 |                 Steal::Success(job_ref) => break job_ref.execute(),
+    |                                                  ^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:134:25
+    |
+134 |         let old_state = (*this).state.swap(SET, Ordering::AcqRel);
+    |                         ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:133:5
+    |
+133 |     unsafe fn set(this: *const Self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:194:38
+    |
+194 |         let registry: &Registry = if (*this).cross {
+    |                                      ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:191:5
+    |
+191 |     unsafe fn set(this: *const Self) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:200:41
+    |
+200 |             cross_registry = Arc::clone((*this).registry);
+    |                                         ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:208:13
+    |
+208 |             (*this).registry
+    |             ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:210:35
+    |
+210 |         let target_worker_index = (*this).target_worker_index;
+    |                                   ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `latch::CoreLatch::set` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:213:12
+    |
+213 |         if CoreLatch::set(&(*this).core_latch) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:213:28
+    |
+213 |         if CoreLatch::set(&(*this).core_latch) {
+    |                            ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:261:25
+    |
+261 |         let mut guard = (*this).m.lock().unwrap();
+    |                         ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:260:5
+    |
+260 |     unsafe fn set(this: *const Self) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:263:9
+    |
+263 |         (*this).v.notify_all();
+    |         ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:313:12
+    |
+313 |         if (*this).counter.fetch_sub(1, Ordering::SeqCst) == 1 {
+    |            ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:312:5
+    |
+312 |     pub(super) unsafe fn set(this: *const Self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `latch::CoreLatch::set` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:314:13
+    |
+314 |             CoreLatch::set(&(*this).core_latch);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:314:29
+    |
+314 |             CoreLatch::set(&(*this).core_latch);
+    |                             ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `latch::CountLatch::set` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:330:12
+    |
+330 |         if Self::set(this) {
+    |            ^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:325:5
+    |
+325 | /     pub(super) unsafe fn set_and_tickle_one(
+326 | |         this: *const Self,
+327 | |         registry: &Registry,
+328 | |         target_worker_index: usize,
+329 | |     ) {
+    | |_____^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:372:12
+    |
+372 |         if (*this).counter.fetch_sub(1, Ordering::SeqCst) == 1 {
+    |            ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:371:5
+    |
+371 |     unsafe fn set(this: *const Self) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `latch::Latch::set` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:373:13
+    |
+373 |             LockLatch::set(&(*this).lock_latch);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:373:29
+    |
+373 |             LockLatch::set(&(*this).lock_latch);
+    |                             ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `latch::Latch::set` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:407:9
+    |
+407 |         L::set((*this).inner);
+    |         ^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:406:5
+    |
+406 |     unsafe fn set(this: *const Self) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/latch.rs:407:16
+    |
+407 |         L::set((*this).inner);
+    |                ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:563:25
+    |
+563 |                     op(&*worker_thread, true)
+    |                         ^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:548:5
+    |
+548 | /     unsafe fn in_worker_cold<OP, R>(&self, op: OP) -> R
+549 | |     where
+550 | |         OP: FnOnce(&WorkerThread, bool) -> R + Send,
+551 | |         R: Send,
+    | |________________^
+
+warning[E0133]: call to unsafe function `job::StackJob::<L, F, R>::as_job_ref` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:567:25
+    |
+567 |             self.inject(job.as_job_ref());
+    |                         ^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:548:5
+    |
+548 | /     unsafe fn in_worker_cold<OP, R>(&self, op: OP) -> R
+549 | |     where
+550 | |         OP: FnOnce(&WorkerThread, bool) -> R + Send,
+551 | |         R: Send,
+    | |________________^
+
+warning[E0133]: call to unsafe function `job::StackJob::<L, F, R>::into_result` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:575:13
+    |
+575 |             job.into_result()
+    |             ^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:594:21
+    |
+594 |                 op(&*worker_thread, true)
+    |                     ^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:580:5
+    |
+580 | /     unsafe fn in_worker_cross<OP, R>(&self, current_thread: &WorkerThread, op: OP) -> R
+581 | |     where
+582 | |         OP: FnOnce(&WorkerThread, bool) -> R + Send,
+583 | |         R: Send,
+    | |________________^
+
+warning[E0133]: call to unsafe function `job::StackJob::<L, F, R>::as_job_ref` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:598:21
+    |
+598 |         self.inject(job.as_job_ref());
+    |                     ^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:580:5
+    |
+580 | /     unsafe fn in_worker_cross<OP, R>(&self, current_thread: &WorkerThread, op: OP) -> R
+581 | |     where
+582 | |         OP: FnOnce(&WorkerThread, bool) -> R + Send,
+583 | |         R: Send,
+    | |________________^
+
+warning[E0133]: call to unsafe function `registry::WorkerThread::wait_until` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:599:9
+    |
+599 |         current_thread.wait_until(&job.latch);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `job::StackJob::<L, F, R>::into_result` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:600:9
+    |
+600 |         job.into_result()
+    |         ^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `registry::WorkerThread::push` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:806:9
+    |
+806 |         self.push(self.fifo.push(job));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:805:5
+    |
+805 |     pub(super) unsafe fn push_fifo(&self, job: JobRef) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `job::JobFifo::push` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:806:19
+    |
+806 |         self.push(self.fifo.push(job));
+    |                   ^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `registry::WorkerThread::wait_or_steal_until` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:844:9
+    |
+844 |         self.wait_or_steal_until(latch, false)
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:843:5
+    |
+843 |     pub(super) unsafe fn wait_until<L: AsCoreLatch + ?Sized>(&self, latch: &L) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `registry::WorkerThread::execute` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:881:29
+    |
+881 | ...                   self.execute(job);
+    |                       ^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:850:5
+    |
+850 | /     pub(super) unsafe fn wait_for_jobs<L: AsCoreLatch + ?Sized, const BROADCAST_JOBS: bool>(
+851 | |         &self,
+852 | |         latch: &L,
+853 | |         mut all_jobs_started: impl FnMut() -> bool,
+854 | |         mut is_job: impl FnMut(&JobRef) -> bool,
+855 | |         mut execute_job: impl FnMut(JobRef),
+856 | |     ) {
+    | |_____^
+
+warning[E0133]: call to unsafe function `registry::WorkerThread::wait_until` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:903:9
+    |
+903 |         self.wait_until(latch);
+    |         ^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `registry::WorkerThread::wait_until_cold` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:915:13
+    |
+915 |             self.wait_until_cold(latch, steal);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:908:5
+    |
+908 | /     pub(super) unsafe fn wait_or_steal_until<L: AsCoreLatch + ?Sized>(
+909 | |         &self,
+910 | |         latch: &L,
+911 | |         steal: bool,
+912 | |     ) {
+    | |_____^
+
+warning[E0133]: call to unsafe function `registry::WorkerThread::execute` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:933:21
+    |
+933 |                     self.execute(job);
+    |                     ^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:920:5
+    |
+920 |     unsafe fn wait_until_cold(&self, latch: &CoreLatch, steal: bool) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `job::JobRef::execute` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:988:9
+    |
+988 |         job.execute();
+    |         ^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:987:5
+    |
+987 |     pub(super) unsafe fn execute(&self, job: JobRef) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `registry::WorkerThread::set_current` is unsafe and requires unsafe block
+    --> /home/john/dev/rayon/rayon-core/src/registry.rs:1040:5
+     |
+1040 |     WorkerThread::set_current(worker_thread);
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+     |
+     = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+     = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+    --> /home/john/dev/rayon/rayon-core/src/registry.rs:1038:1
+     |
+1038 | unsafe fn main_loop(thread: ThreadBuilder) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `latch::Latch::set` is unsafe and requires unsafe block
+    --> /home/john/dev/rayon/rayon-core/src/registry.rs:1045:5
+     |
+1045 |     Latch::set(&registry.thread_infos[index].primed);
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+     |
+     = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+     = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `registry::WorkerThread::wait_or_steal_until` is unsafe and requires unsafe block
+    --> /home/john/dev/rayon/rayon-core/src/registry.rs:1063:5
+     |
+1063 |     worker_thread.wait_or_steal_until(my_terminate_latch, true);
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+     |
+     = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+     = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `latch::Latch::set` is unsafe and requires unsafe block
+    --> /home/john/dev/rayon/rayon-core/src/registry.rs:1069:5
+     |
+1069 |     Latch::set(&registry.thread_infos[index].stopped);
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+     |
+     = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+     = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `scope::ScopeBase::<'scope>::execute_job_closure` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:761:29
+    |
+761 |         let _: Option<()> = Self::execute_job_closure(this, func);
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:757:5
+    |
+757 | /     unsafe fn execute_job<FUNC>(this: *const Self, func: FUNC)
+758 | |     where
+759 | |         FUNC: FnOnce(),
+    | |_______________________^
+
+warning[E0133]: call to unsafe function `latch::Latch::set` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:773:17
+    |
+773 |                 Latch::set(&(*this).job_completed_latch);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:767:5
+    |
+767 | /     unsafe fn execute_job_closure<FUNC, R>(this: *const Self, func: FUNC) -> Option<R>
+768 | |     where
+769 | |         FUNC: FnOnce() -> R,
+    | |____________________________^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:773:29
+    |
+773 |                 Latch::set(&(*this).job_completed_latch);
+    |                             ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:777:17
+    |
+777 |                 (*this).job_panicked(err);
+    |                 ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `latch::Latch::set` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:778:17
+    |
+778 |                 Latch::set(&(*this).job_completed_latch);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:778:29
+    |
+778 |                 Latch::set(&(*this).job_completed_latch);
+    |                             ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:870:16
+    |
+870 |         match &*this {
+    |                ^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:869:5
+    |
+869 |     unsafe fn set(this: *const Self) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `latch::CountLatch::set_and_tickle_one` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:875:18
+    |
+875 |             } => CountLatch::set_and_tickle_one(latch, registry, *worker_index),
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `latch::Latch::set` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:876:47
+    |
+876 |             ScopeLatch::Blocking { latch } => Latch::set(latch),
+    |                                               ^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:932:10
+    |
+932 |         &*self.0
+    |          ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:931:5
+    |
+931 |     unsafe fn as_ref(&self) -> &T {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `spawn::spawn_job` is unsafe and requires unsafe block
+  --> /home/john/dev/rayon/rayon-core/src/spawn/mod.rs:82:19
+   |
+82 |     let job_ref = spawn_job(func, registry);
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+   |
+   = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+  --> /home/john/dev/rayon/rayon-core/src/spawn/mod.rs:72:1
+   |
+72 | / pub(super) unsafe fn spawn_in<F>(func: F, registry: &Arc<Registry>)
+73 | | where
+74 | |     F: FnOnce() + Send + 'static,
+   | |_________________________________^
+
+warning[E0133]: call to unsafe function `spawn::spawn_job` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/spawn/mod.rs:152:19
+    |
+152 |     let job_ref = spawn_job(func, registry);
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> /home/john/dev/rayon/rayon-core/src/spawn/mod.rs:142:1
+    |
+142 | / pub(super) unsafe fn spawn_fifo_in<F>(func: F, registry: &Arc<Registry>)
+143 | | where
+144 | |     F: FnOnce() + Send + 'static,
+    | |_________________________________^
+
+warning[E0133]: call to unsafe function `registry::WorkerThread::push_fifo` is unsafe and requires unsafe block
+   --> /home/john/dev/rayon/rayon-core/src/spawn/mod.rs:157:25
+    |
+157 |         Some(worker) => worker.push_fifo(job_ref),
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning: creating a shared reference to mutable static is discouraged
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:174:33
+    |
+174 |         .or_else(|err| unsafe { THE_REGISTRY.as_ref().ok_or(err) })
+    |                                 ^^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/static-mut-references.html>
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+    = note: `#[warn(static_mut_refs)]` on by default
+
+warning: creating a mutable reference to mutable static is discouraged
+   --> /home/john/dev/rayon/rayon-core/src/registry.rs:201:55
+    |
+201 |             .map(|registry: Arc<Registry>| unsafe { &*THE_REGISTRY.get_or_insert(registry) })
+    |                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/static-mut-references.html>
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+
+warning: prefer `FxHashSet` over `HashSet`, it has better performance
+  --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:77:25
+   |
+77 |     pending_jobs: Mutex<HashSet<JobRefId>>,
+   |                         ^^^^^^^^^^^^^^^^^
+   |
+   = note: a `use rustc_data_structures::fx::FxHashSet` may be necessary
+   = note: `-W rustc::default-hash-types` implied by `-W rustc::internal`
+   = help: to override `-W rustc::internal` add `#[allow(rustc::default_hash_types)]`
+
+warning: prefer `FxHashSet` over `HashSet`, it has better performance
+   --> /home/john/dev/rayon/rayon-core/src/scope/mod.rs:689:38
+    |
+689 |             pending_jobs: Mutex::new(HashSet::new()),
+    |                                      ^^^^^^^
+    |
+    = note: a `use rustc_data_structures::fx::FxHashSet` may be necessary
+
+warning: unreachable `pub` item
+  --> /home/john/dev/rayon/rayon-core/src/sleep/mod.rs:35:5
+   |
+35 |     pub fn deadlock_check(&self, deadlock_handler: &Option<Box<DeadlockHandler>>, s:&Sleep) {
+   |     ---^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |     |
+   |     help: consider restricting its visibility: `pub(crate)`
+   |
+   = note: requested on the command line with `-W unreachable-pub`
+
+warning: unreachable `pub` item
+   --> /home/john/dev/rayon/rayon-core/src/sleep/mod.rs:113:5
+    |
+113 |     pub fn mark_blocked(&self, deadlock_handler: &Option<Box<DeadlockHandler>>) {
+    |     ---^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     |
+    |     help: consider restricting its visibility: `pub(crate)`
+
+warning: unreachable `pub` item
+   --> /home/john/dev/rayon/rayon-core/src/sleep/mod.rs:126:5
+    |
+126 |     pub fn mark_unblocked(&self) {
+    |     ---^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     |
+    |     help: consider restricting its visibility: `pub(crate)`
+
+   Compiling rustc-rayon v0.5.1
+For more information about this error, try `rustc --explain E0133`.
+warning: `rustc-rayon-core` (lib) generated 78 warnings (run `cargo fix --lib -p rustc-rayon-core` to apply 38 suggestions)
+   Compiling rustc_data_structures v0.0.0 (/home/john/dev/rust/compiler/rustc_data_structures)
+   Compiling rustc_span v0.0.0 (/home/john/dev/rust/compiler/rustc_span)
+   Compiling rustc_ast_ir v0.0.0 (/home/john/dev/rust/compiler/rustc_ast_ir)
+   Compiling rustc_abi v0.0.0 (/home/john/dev/rust/compiler/rustc_abi)
+   Compiling rustc_error_messages v0.0.0 (/home/john/dev/rust/compiler/rustc_error_messages)
+   Compiling rustc_feature v0.0.0 (/home/john/dev/rust/compiler/rustc_feature)
+   Compiling rustc_ast v0.0.0 (/home/john/dev/rust/compiler/rustc_ast)
+   Compiling rustc_type_ir v0.0.0 (/home/john/dev/rust/compiler/rustc_type_ir)
+   Compiling rustc_target v0.0.0 (/home/john/dev/rust/compiler/rustc_target)
+   Compiling rustc_next_trait_solver v0.0.0 (/home/john/dev/rust/compiler/rustc_next_trait_solver)
+   Compiling rustc_ast_pretty v0.0.0 (/home/john/dev/rust/compiler/rustc_ast_pretty)
+   Compiling rustc_attr_data_structures v0.0.0 (/home/john/dev/rust/compiler/rustc_attr_data_structures)
+   Compiling rustc_hir v0.0.0 (/home/john/dev/rust/compiler/rustc_hir)
+   Compiling rustc_lint_defs v0.0.0 (/home/john/dev/rust/compiler/rustc_lint_defs)
+   Compiling rustc_hir_pretty v0.0.0 (/home/john/dev/rust/compiler/rustc_hir_pretty)
+   Compiling rustc_errors v0.0.0 (/home/john/dev/rust/compiler/rustc_errors)
+   Compiling rustc_session v0.0.0 (/home/john/dev/rust/compiler/rustc_session)
+   Compiling rustc_query_system v0.0.0 (/home/john/dev/rust/compiler/rustc_query_system)
+   Compiling rustc_parse v0.0.0 (/home/john/dev/rust/compiler/rustc_parse)
+   Compiling rustc_middle v0.0.0 (/home/john/dev/rust/compiler/rustc_middle)
+warning: unused variable: `tcx`
+  --> compiler/rustc_middle/src/values.rs:81:9
+   |
+81 |         tcx: TyCtxt<'tcx>,
+   |         ^^^ help: if this is intentional, prefix it with an underscore: `_tcx`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `cycle_error`
+  --> compiler/rustc_middle/src/values.rs:82:9
+   |
+82 |         cycle_error: &CycleError,
+   |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cycle_error`
+
+   Compiling rustc_attr_parsing v0.0.0 (/home/john/dev/rust/compiler/rustc_attr_parsing)
+   Compiling rustc_infer v0.0.0 (/home/john/dev/rust/compiler/rustc_infer)
+   Compiling rustc_transmute v0.0.0 (/home/john/dev/rust/compiler/rustc_transmute)
+   Compiling rustc_mir_dataflow v0.0.0 (/home/john/dev/rust/compiler/rustc_mir_dataflow)
+   Compiling rustc_symbol_mangling v0.0.0 (/home/john/dev/rust/compiler/rustc_symbol_mangling)
+   Compiling rustc_incremental v0.0.0 (/home/john/dev/rust/compiler/rustc_incremental)
+   Compiling rustc_ast_passes v0.0.0 (/home/john/dev/rust/compiler/rustc_ast_passes)
+   Compiling rustc_pattern_analysis v0.0.0 (/home/john/dev/rust/compiler/rustc_pattern_analysis)
+   Compiling rustc_trait_selection v0.0.0 (/home/john/dev/rust/compiler/rustc_trait_selection)
+   Compiling rustc_expand v0.0.0 (/home/john/dev/rust/compiler/rustc_expand)
+   Compiling rustc_ast_lowering v0.0.0 (/home/john/dev/rust/compiler/rustc_ast_lowering)
+   Compiling rustc_monomorphize v0.0.0 (/home/john/dev/rust/compiler/rustc_monomorphize)
+   Compiling rustc_query_impl v0.0.0 (/home/john/dev/rust/compiler/rustc_query_impl)
+   Compiling rustc_metadata v0.0.0 (/home/john/dev/rust/compiler/rustc_metadata)
+   Compiling rustc_resolve v0.0.0 (/home/john/dev/rust/compiler/rustc_resolve)
+   Compiling rustc_builtin_macros v0.0.0 (/home/john/dev/rust/compiler/rustc_builtin_macros)
+   Compiling rustc_lint v0.0.0 (/home/john/dev/rust/compiler/rustc_lint)
+   Compiling rustc_ty_utils v0.0.0 (/home/john/dev/rust/compiler/rustc_ty_utils)
+   Compiling rustc_privacy v0.0.0 (/home/john/dev/rust/compiler/rustc_privacy)
+warning: `rustc_middle` (lib) generated 2 warnings
+   Compiling rustc_mir_build v0.0.0 (/home/john/dev/rust/compiler/rustc_mir_build)
+   Compiling rustc_sanitizers v0.0.0 (/home/john/dev/rust/compiler/rustc_sanitizers)
+   Compiling rustc_traits v0.0.0 (/home/john/dev/rust/compiler/rustc_traits)
+   Compiling rustc_const_eval v0.0.0 (/home/john/dev/rust/compiler/rustc_const_eval)
+   Compiling rustc_hir_analysis v0.0.0 (/home/john/dev/rust/compiler/rustc_hir_analysis)
+   Compiling rustc_codegen_ssa v0.0.0 (/home/john/dev/rust/compiler/rustc_codegen_ssa)
+   Compiling rustc_codegen_llvm v0.0.0 (/home/john/dev/rust/compiler/rustc_codegen_llvm)
+   Compiling rustc_hir_typeck v0.0.0 (/home/john/dev/rust/compiler/rustc_hir_typeck)
+   Compiling rustc_mir_transform v0.0.0 (/home/john/dev/rust/compiler/rustc_mir_transform)
+   Compiling rustc_borrowck v0.0.0 (/home/john/dev/rust/compiler/rustc_borrowck)
+   Compiling rustc_passes v0.0.0 (/home/john/dev/rust/compiler/rustc_passes)
+   Compiling rustc_smir v0.0.0 (/home/john/dev/rust/compiler/rustc_smir)
+   Compiling rustc_interface v0.0.0 (/home/john/dev/rust/compiler/rustc_interface)
+   Compiling rustc_driver_impl v0.0.0 (/home/john/dev/rust/compiler/rustc_driver_impl)
+   Compiling rustc_driver v0.0.0 (/home/john/dev/rust/compiler/rustc_driver)
+   Compiling rustc-main v0.0.0 (/home/john/dev/rust/compiler/rustc)
+    Finished `release` profile [optimized + debuginfo] target(s) in 4m 20s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.52s
+   Compiling compiler_builtins v0.1.151
+   Compiling core v0.0.0 (/home/john/dev/rust/library/core)
+   Compiling libc v0.2.171
+   Compiling object v0.36.7
+   Compiling std v0.0.0 (/home/john/dev/rust/library/std)
+   Compiling rustc-std-workspace-core v1.99.0 (/home/john/dev/rust/library/rustc-std-workspace-core)
+   Compiling alloc v0.0.0 (/home/john/dev/rust/library/alloc)
+   Compiling cfg-if v1.0.0
+   Compiling memchr v2.7.4
+   Compiling adler2 v2.0.0
+   Compiling rustc-demangle v0.1.24
+   Compiling unwind v0.0.0 (/home/john/dev/rust/library/unwind)
+   Compiling rustc-std-workspace-alloc v1.99.0 (/home/john/dev/rust/library/rustc-std-workspace-alloc)
+   Compiling panic_unwind v0.0.0 (/home/john/dev/rust/library/panic_unwind)
+   Compiling panic_abort v0.0.0 (/home/john/dev/rust/library/panic_abort)
+   Compiling gimli v0.31.1
+   Compiling hashbrown v0.15.2
+   Compiling miniz_oxide v0.8.3
+   Compiling std_detect v0.1.5 (/home/john/dev/rust/library/stdarch/crates/std_detect)
+   Compiling addr2line v0.24.2
+   Compiling rustc-std-workspace-std v1.99.0 (/home/john/dev/rust/library/rustc-std-workspace-std)
+   Compiling proc_macro v0.0.0 (/home/john/dev/rust/library/proc_macro)
+   Compiling unicode-width v0.1.14
+   Compiling getopts v0.2.21
+   Compiling test v0.0.0 (/home/john/dev/rust/library/test)
+   Compiling sysroot v0.0.0 (/home/john/dev/rust/library/sysroot)
+    Finished `release` profile [optimized + debuginfo] target(s) in 45.62s
+Build completed successfully in 0:05:08
