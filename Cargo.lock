@@ -3110,8 +3110,6 @@ dependencies = [
 [[package]]
 name = "rustc-rayon"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cd9fb077db982d7ceb42a90471e5a69a990b58f71e06f0d8340bb2cf35eb751"
 dependencies = [
  "either",
  "indexmap",
@@ -3121,13 +3119,12 @@ dependencies = [
 [[package]]
 name = "rustc-rayon-core"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67668daaf00e359c126f6dcb40d652d89b458a008c8afa727a42a2d20fca0b7f"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-utils",
  "num_cpus",
+ "smallvec",
 ]
 
 [[package]]

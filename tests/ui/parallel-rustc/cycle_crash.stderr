@@ -1,4 +1,4 @@
-deadlock [ count: 2, sleeping: 1 , inactive: 1, blocked: 1, cause: sleep ]
+deadlock [ count: 2, sleeping: 1 , inactive: 1, blocked: 1, cause: sleep, sum: 2 ]
 
 handling cycles in ThreadId(5)
 

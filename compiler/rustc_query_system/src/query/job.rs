@@ -6,6 +6,7 @@ use std::num::NonZero;
 use std::sync::Arc;
 
 use parking_lot::{Condvar, Mutex};
+use rayon_core::mark_unblocked;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::jobserver;
 use rustc_errors::{Diag, DiagCtxtHandle};
@@ -568,9 +569,13 @@ pub fn break_query_cycles<I: Clone + Debug>(
     ptrs.dedup();
     assert!(ptrs.len() == wakelist.len());
 
+    for _ in 0..wakelist.len() {
+        rayon_core::mark_unblocked(registry);
+    }
+
     // FIXME: Ensure this won't cause a deadlock before we return
     for waiter in wakelist.into_iter() {
-        waiter.notify(registry);
+        waiter.condvar.notify_one();
     }
 }
 
