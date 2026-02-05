@@ -1,17 +1,24 @@
-error[E0072]: recursive type `S` has infinite size
+error[E0391]: cycle detected when checking if `S` is representable
   --> $DIR/issue-3779.rs:1:1
    |
 LL | struct S {
    | ^^^^^^^^
-LL |
+   |
+note: ...which requires checking if `S::element` is representable...
+  --> $DIR/issue-3779.rs:3:5
+   |
 LL |     element: Option<S>
-   |                     - recursive without indirection
+   |     ^^^^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `core::option::Option<S>` is representable...
+   = note: ...which requires checking if `S` is representable...
+   = note: ...which again requires checking if `S` is representable, completing the cycle
+note: cycle used when checking that `S` is well-formed
+  --> $DIR/issue-3779.rs:1:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     element: Option<Box<S>>
-   |                     ++++ +
+LL | struct S {
+   | ^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

@@ -1,17 +1,24 @@
-error[E0072]: recursive type `U` has infinite size
+error[E0391]: cycle detected when checking if `U` is representable
   --> $DIR/union-nonrepresentable.rs:1:1
    |
 LL | union U {
    | ^^^^^^^
-LL |     a: u8,
+   |
+note: ...which requires checking if `U::b` is representable...
+  --> $DIR/union-nonrepresentable.rs:3:5
+   |
 LL |     b: std::mem::ManuallyDrop<U>,
-   |                               - recursive without indirection
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `core::mem::manually_drop::ManuallyDrop<U>` is representable...
+   = note: ...which requires checking if `U` is representable...
+   = note: ...which again requires checking if `U` is representable, completing the cycle
+note: cycle used when checking that `U` is well-formed
+  --> $DIR/union-nonrepresentable.rs:1:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     b: std::mem::ManuallyDrop<Box<U>>,
-   |                               ++++ +
+LL | union U {
+   | ^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

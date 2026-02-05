@@ -14,17 +14,26 @@ LL | trait Bar<Self> {}
    |
    = note: you cannot use `Self` as a generic parameter because it is reserved for associated items
 
-error[E0072]: recursive type `Foo` has infinite size
+error[E0391]: cycle detected when checking if `Foo` is representable
   --> $DIR/keyword-self-as-type-param.rs:3:1
    |
 LL | struct Foo<Self>(Self);
-   | ^^^^^^^^^^^^^^^^ ---- recursive without indirection
+   | ^^^^^^^^^^^^^^^^
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
+note: ...which requires checking if `Foo::0` is representable...
+  --> $DIR/keyword-self-as-type-param.rs:3:18
    |
-LL | struct Foo<Self>(Box<Self>);
-   |                  ++++    +
+LL | struct Foo<Self>(Self);
+   |                  ^^^^
+   = note: ...which requires checking if `Foo` is representable...
+   = note: ...which again requires checking if `Foo` is representable, completing the cycle
+note: cycle used when checking that `Foo` is well-formed
+  --> $DIR/keyword-self-as-type-param.rs:3:1
+   |
+LL | struct Foo<Self>(Self);
+   | ^^^^^^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 3 previous errors
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

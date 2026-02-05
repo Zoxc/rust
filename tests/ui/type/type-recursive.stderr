@@ -1,93 +1,150 @@
-error[E0072]: recursive type `T1` has infinite size
+error[E0391]: cycle detected when checking if `T1` is representable
   --> $DIR/type-recursive.rs:1:1
    |
 LL | struct T1 {
    | ^^^^^^^^^
-LL |     foo: isize,
+   |
+note: ...which requires checking if `T1::foolish` is representable...
+  --> $DIR/type-recursive.rs:3:5
+   |
 LL |     foolish: T1,
-   |              -- recursive without indirection
+   |     ^^^^^^^^^^^
+   = note: ...which requires checking if `T1` is representable...
+   = note: ...which again requires checking if `T1` is representable, completing the cycle
+note: cycle used when checking that `T1` is well-formed
+  --> $DIR/type-recursive.rs:1:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     foolish: Box<T1>,
-   |              ++++  +
+LL | struct T1 {
+   | ^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
-error[E0072]: recursive type `T2` has infinite size
+error[E0391]: cycle detected when checking if `T2` is representable
   --> $DIR/type-recursive.rs:6:1
    |
 LL | struct T2 {
    | ^^^^^^^^^
+   |
+note: ...which requires checking if `T2::inner` is representable...
+  --> $DIR/type-recursive.rs:7:5
+   |
 LL |     inner: Option<T2>,
-   |                   -- recursive without indirection
+   |     ^^^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `core::option::Option<T2>` is representable...
+   = note: ...which requires checking if `T2` is representable...
+   = note: ...which again requires checking if `T2` is representable, completing the cycle
+note: cycle used when checking that `T2` is well-formed
+  --> $DIR/type-recursive.rs:6:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     inner: Option<Box<T2>>,
-   |                   ++++  +
+LL | struct T2 {
+   | ^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
-error[E0072]: recursive type `T3` has infinite size
+error[E0391]: cycle detected when checking if `T3` is representable
   --> $DIR/type-recursive.rs:12:1
    |
 LL | struct T3 {
    | ^^^^^^^^^
+   |
+note: ...which requires checking if `T3::inner` is representable...
+  --> $DIR/type-recursive.rs:13:5
+   |
 LL |     inner: OptionT3,
-   |            -------- recursive without indirection
+   |     ^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `core::option::Option<T3>` is representable...
+   = note: ...which requires checking if `T3` is representable...
+   = note: ...which again requires checking if `T3` is representable, completing the cycle
+note: cycle used when checking that `T3` is well-formed
+  --> $DIR/type-recursive.rs:12:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     inner: Box<OptionT3>,
-   |            ++++        +
+LL | struct T3 {
+   | ^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
-error[E0072]: recursive type `T4` has infinite size
+error[E0391]: cycle detected when checking if `T4` is representable
   --> $DIR/type-recursive.rs:16:1
    |
 LL | struct T4(Option<T4>);
-   | ^^^^^^^^^        -- recursive without indirection
+   | ^^^^^^^^^
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
+note: ...which requires checking if `T4::0` is representable...
+  --> $DIR/type-recursive.rs:16:11
    |
-LL | struct T4(Option<Box<T4>>);
-   |                  ++++  +
+LL | struct T4(Option<T4>);
+   |           ^^^^^^^^^^
+   = note: ...which requires checking if `core::option::Option<T4>` is representable...
+   = note: ...which requires checking if `T4` is representable...
+   = note: ...which again requires checking if `T4` is representable, completing the cycle
+note: cycle used when checking that `T4` is well-formed
+  --> $DIR/type-recursive.rs:16:1
+   |
+LL | struct T4(Option<T4>);
+   | ^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
-error[E0072]: recursive type `T5` has infinite size
+error[E0391]: cycle detected when checking if `T5` is representable
   --> $DIR/type-recursive.rs:18:1
    |
 LL | enum T5 {
    | ^^^^^^^
+   |
+note: ...which requires checking if `T5::Variant::0` is representable...
+  --> $DIR/type-recursive.rs:19:13
+   |
 LL |     Variant(Option<T5>),
-   |                    -- recursive without indirection
+   |             ^^^^^^^^^^
+   = note: ...which requires checking if `core::option::Option<T5>` is representable...
+   = note: ...which requires checking if `T5` is representable...
+   = note: ...which again requires checking if `T5` is representable, completing the cycle
+note: cycle used when checking that `T5` is well-formed
+  --> $DIR/type-recursive.rs:18:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     Variant(Option<Box<T5>>),
-   |                    ++++  +
+LL | enum T5 {
+   | ^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
-error[E0072]: recursive type `T6` has infinite size
+error[E0391]: cycle detected when checking if `T6` is representable
   --> $DIR/type-recursive.rs:22:1
    |
 LL | enum T6 {
    | ^^^^^^^
+   |
+note: ...which requires checking if `T6::Variant::field` is representable...
+  --> $DIR/type-recursive.rs:23:14
+   |
 LL |     Variant{ field: Option<T6> },
-   |                            -- recursive without indirection
+   |              ^^^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `core::option::Option<T6>` is representable...
+   = note: ...which requires checking if `T6` is representable...
+   = note: ...which again requires checking if `T6` is representable, completing the cycle
+note: cycle used when checking that `T6` is well-formed
+  --> $DIR/type-recursive.rs:22:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     Variant{ field: Option<Box<T6>> },
-   |                            ++++  +
+LL | enum T6 {
+   | ^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
-error[E0072]: recursive type `T7` has infinite size
+error[E0391]: cycle detected when checking if `T7` is representable
   --> $DIR/type-recursive.rs:26:1
    |
 LL | struct T7 {
    | ^^^^^^^^^
+   |
+note: ...which requires checking if `T7::foo` is representable...
+  --> $DIR/type-recursive.rs:27:5
+   |
 LL |     foo: std::cell::Cell<Option<T7>>,
-   |                                 -- recursive without indirection
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `core::cell::Cell<core::option::Option<T7>>` is representable...
+   = note: ...which requires checking if `core::option::Option<T7>` is representable...
+   = note: ...which requires checking if `T7` is representable...
+   = note: ...which again requires checking if `T7` is representable, completing the cycle
+note: cycle used when checking that `T7` is well-formed
+  --> $DIR/type-recursive.rs:26:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     foo: std::cell::Cell<Option<Box<T7>>>,
-   |                                 ++++  +
+LL | struct T7 {
+   | ^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 7 previous errors
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

@@ -1,14 +1,23 @@
-error[E0072]: recursive type `E2` has infinite size
+error[E0391]: cycle detected when checking if `E2<E1>` is representable
+   |
+note: ...which requires checking if `E2` is representable...
   --> $DIR/issue-3008-3.rs:4:1
    |
 LL | enum E2<T> { V2(E2<E1>, marker::PhantomData<T>), }
-   | ^^^^^^^^^^      ------ recursive without indirection
+   | ^^^^^^^^^^
+note: ...which requires checking if `E2::V2::0` is representable...
+  --> $DIR/issue-3008-3.rs:4:17
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
+LL | enum E2<T> { V2(E2<E1>, marker::PhantomData<T>), }
+   |                 ^^^^^^
+   = note: ...which again requires checking if `E2<E1>` is representable, completing the cycle
+note: cycle used when checking if `E1::V1::0` is representable
+  --> $DIR/issue-3008-3.rs:3:14
    |
-LL | enum E2<T> { V2(Box<E2<E1>>, marker::PhantomData<T>), }
-   |                 ++++      +
+LL | enum E1 { V1(E2<E1>), }
+   |              ^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

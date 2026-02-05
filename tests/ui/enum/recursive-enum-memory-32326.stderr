@@ -1,16 +1,23 @@
-error[E0072]: recursive type `Expr` has infinite size
+error[E0391]: cycle detected when checking if `Expr` is representable
   --> $DIR/recursive-enum-memory-32326.rs:5:1
    |
 LL | enum Expr {
    | ^^^^^^^^^
+   |
+note: ...which requires checking if `Expr::Plus::0` is representable...
+  --> $DIR/recursive-enum-memory-32326.rs:6:10
+   |
 LL |     Plus(Expr, Expr),
-   |          ---- recursive without indirection
+   |          ^^^^
+   = note: ...which requires checking if `Expr` is representable...
+   = note: ...which again requires checking if `Expr` is representable, completing the cycle
+note: cycle used when checking that `Expr` is well-formed
+  --> $DIR/recursive-enum-memory-32326.rs:5:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     Plus(Box<Expr>, Expr),
-   |          ++++    +
+LL | enum Expr {
+   | ^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

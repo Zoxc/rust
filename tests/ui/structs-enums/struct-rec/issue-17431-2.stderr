@@ -1,20 +1,36 @@
-error[E0072]: recursive types `Baz` and `Foo` have infinite size
+error[E0391]: cycle detected when checking if `Baz` is representable
   --> $DIR/issue-17431-2.rs:1:1
    |
 LL | struct Baz { q: Option<Foo> }
-   | ^^^^^^^^^^             --- recursive without indirection
-...
+   | ^^^^^^^^^^
+   |
+note: ...which requires checking if `Baz::q` is representable...
+  --> $DIR/issue-17431-2.rs:1:14
+   |
+LL | struct Baz { q: Option<Foo> }
+   |              ^^^^^^^^^^^^^^
+   = note: ...which requires checking if `core::option::Option<Foo>` is representable...
+   = note: ...which requires checking if `Foo` is representable...
+note: ...which requires checking if `Foo` is representable...
+  --> $DIR/issue-17431-2.rs:4:1
+   |
 LL | struct Foo { q: Option<Baz> }
-   | ^^^^^^^^^^             --- recursive without indirection
+   | ^^^^^^^^^^
+note: ...which requires checking if `Foo::q` is representable...
+  --> $DIR/issue-17431-2.rs:4:14
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
+LL | struct Foo { q: Option<Baz> }
+   |              ^^^^^^^^^^^^^^
+   = note: ...which requires checking if `core::option::Option<Baz>` is representable...
+   = note: ...which requires checking if `Baz` is representable...
+   = note: ...which again requires checking if `Baz` is representable, completing the cycle
+note: cycle used when checking that `Baz` is well-formed
+  --> $DIR/issue-17431-2.rs:1:1
    |
-LL ~ struct Baz { q: Option<Box<Foo>> }
-LL |
-LL |
-LL ~ struct Foo { q: Option<Box<Baz>> }
-   |
+LL | struct Baz { q: Option<Foo> }
+   | ^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

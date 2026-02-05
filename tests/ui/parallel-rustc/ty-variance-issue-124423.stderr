@@ -261,26 +261,10 @@ error[E0224]: at least one trait is required for an object type
 LL | impl<'a> LifetimeTrait<'a> for &'a Box<dyn 'a> {}
    |                                        ^^^^^^
 
-error[E0121]: the placeholder `_` is not allowed within types on item signatures for return types
-  --> $DIR/ty-variance-issue-124423.rs:8:34
    |
 LL | fn elided(_: &impl Copy + 'a) -> _ { x }
-   |                                  ^ not allowed in type signatures
 
-error[E0599]: no function or associated item named `u32` found for struct `Box<_, _>` in the current scope
-  --> $DIR/ty-variance-issue-124423.rs:41:55
    |
 LL | fn x<'b>(_: &'a impl Copy + 'a) -> Box<dyn 'b> { Box::u32(x) }
-   |                                                       ^^^ function or associated item not found in `Box<_, _>`
    |
-note: if you're trying to build a new `Box<_, _>` consider using one of the following associated functions:
-      Box::<T>::new
-      Box::<T>::new_uninit
-      Box::<T>::new_zeroed
-      Box::<T>::try_new
-  --> $SRC_DIR/alloc/src/boxed.rs:LL:COL
 
-error: aborting due to 30 previous errors
-
-Some errors have detailed explanations: E0121, E0224, E0261, E0425, E0599.
-For more information about an error, try `rustc --explain E0121`.

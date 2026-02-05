@@ -1,49 +1,69 @@
-error[E0072]: recursive types `A` and `B` have infinite size
+error[E0391]: cycle detected when checking if `A` is representable
   --> $DIR/mutual-struct-recursion.rs:1:1
    |
 LL | struct A<T> {
    | ^^^^^^^^^^^
-...
+   |
+note: ...which requires checking if `A::y` is representable...
+  --> $DIR/mutual-struct-recursion.rs:4:5
+   |
 LL |     y: B<T>,
-   |        ---- recursive without indirection
-...
+   |     ^^^^^^^
+   = note: ...which requires checking if `B<T>` is representable...
+note: ...which requires checking if `B` is representable...
+  --> $DIR/mutual-struct-recursion.rs:7:1
+   |
 LL | struct B<T> {
    | ^^^^^^^^^^^
+note: ...which requires checking if `B::z` is representable...
+  --> $DIR/mutual-struct-recursion.rs:8:5
+   |
 LL |     z: A<T>
-   |        ---- recursive without indirection
+   |     ^^^^^^^
+   = note: ...which requires checking if `A<T>` is representable...
+   = note: ...which again requires checking if `A` is representable, completing the cycle
+note: cycle used when checking that `A` is well-formed
+  --> $DIR/mutual-struct-recursion.rs:1:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL ~     y: Box<B<T>>,
-LL | }
-LL |
-LL | struct B<T> {
-LL ~     z: Box<A<T>>
-   |
+LL | struct A<T> {
+   | ^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
-error[E0072]: recursive types `C` and `D` have infinite size
+error[E0391]: cycle detected when checking if `C` is representable
   --> $DIR/mutual-struct-recursion.rs:11:1
    |
 LL | struct C<T> {
    | ^^^^^^^^^^^
-...
+   |
+note: ...which requires checking if `C::y` is representable...
+  --> $DIR/mutual-struct-recursion.rs:14:5
+   |
 LL |     y: Option<Option<D<T>>>,
-   |                      ---- recursive without indirection
-...
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `core::option::Option<core::option::Option<D<T>>>` is representable...
+   = note: ...which requires checking if `core::option::Option<D<T>>` is representable...
+   = note: ...which requires checking if `D<T>` is representable...
+note: ...which requires checking if `D` is representable...
+  --> $DIR/mutual-struct-recursion.rs:17:1
+   |
 LL | struct D<T> {
    | ^^^^^^^^^^^
+note: ...which requires checking if `D::z` is representable...
+  --> $DIR/mutual-struct-recursion.rs:18:5
+   |
 LL |     z: Option<Option<C<T>>>,
-   |                      ---- recursive without indirection
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `core::option::Option<core::option::Option<C<T>>>` is representable...
+   = note: ...which requires checking if `core::option::Option<C<T>>` is representable...
+   = note: ...which requires checking if `C<T>` is representable...
+   = note: ...which again requires checking if `C` is representable, completing the cycle
+note: cycle used when checking that `C` is well-formed
+  --> $DIR/mutual-struct-recursion.rs:11:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL ~     y: Option<Option<Box<D<T>>>>,
-LL | }
-LL |
-LL | struct D<T> {
-LL ~     z: Option<Option<Box<C<T>>>>,
-   |
+LL | struct C<T> {
+   | ^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 2 previous errors
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

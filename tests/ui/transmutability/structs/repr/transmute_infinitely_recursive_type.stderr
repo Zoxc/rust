@@ -1,21 +1,23 @@
-error[E0072]: recursive type `ExplicitlyPadded` has infinite size
+error[E0391]: cycle detected when checking if `should_pad_explicitly_packed_field::ExplicitlyPadded` is representable
   --> $DIR/transmute_infinitely_recursive_type.rs:21:5
    |
 LL |     struct ExplicitlyPadded(ExplicitlyPadded);
-   |     ^^^^^^^^^^^^^^^^^^^^^^^ ---------------- recursive without indirection
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
+note: ...which requires checking if `should_pad_explicitly_packed_field::ExplicitlyPadded::0` is representable...
+  --> $DIR/transmute_infinitely_recursive_type.rs:21:29
    |
-LL |     struct ExplicitlyPadded(Box<ExplicitlyPadded>);
-   |                             ++++                +
-
-error[E0391]: cycle detected when computing layout of `should_pad_explicitly_packed_field::ExplicitlyPadded`
+LL |     struct ExplicitlyPadded(ExplicitlyPadded);
+   |                             ^^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `should_pad_explicitly_packed_field::ExplicitlyPadded` is representable...
+   = note: ...which again requires checking if `should_pad_explicitly_packed_field::ExplicitlyPadded` is representable, completing the cycle
+note: cycle used when checking that `should_pad_explicitly_packed_field::ExplicitlyPadded` is well-formed
+  --> $DIR/transmute_infinitely_recursive_type.rs:21:5
    |
-   = note: ...which immediately requires computing layout of `should_pad_explicitly_packed_field::ExplicitlyPadded` again
-   = note: cycle used when evaluating trait selection obligation `(): core::mem::transmutability::TransmuteFrom<should_pad_explicitly_packed_field::ExplicitlyPadded, ValTree(Branch([ValTree(Leaf(0x00): bool), ValTree(Leaf(0x00): bool), ValTree(Leaf(0x00): bool), ValTree(Leaf(0x00): bool)]): core::mem::transmutability::Assume)>`
+LL |     struct ExplicitlyPadded(ExplicitlyPadded);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
    = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
-error: aborting due to 2 previous errors
+error: aborting due to 1 previous error
 
-Some errors have detailed explanations: E0072, E0391.
-For more information about an error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

@@ -1,17 +1,23 @@
-error[E0072]: recursive type `Bar` has infinite size
+error[E0391]: cycle detected when checking if `Bar` is representable
+   |
+note: ...which requires checking if `Bar` is representable...
   --> $DIR/issue-3008-1.rs:5:1
    |
 LL | enum Bar {
    | ^^^^^^^^
-...
+note: ...which requires checking if `Bar::BarSome::0` is representable...
+  --> $DIR/issue-3008-1.rs:8:13
+   |
 LL |     BarSome(Bar)
-   |             --- recursive without indirection
+   |             ^^^
+   = note: ...which again requires checking if `Bar` is representable, completing the cycle
+note: cycle used when checking if `Foo::Foo_::0` is representable
+  --> $DIR/issue-3008-1.rs:2:10
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     BarSome(Box<Bar>)
-   |             ++++   +
+LL |     Foo_(Bar)
+   |          ^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

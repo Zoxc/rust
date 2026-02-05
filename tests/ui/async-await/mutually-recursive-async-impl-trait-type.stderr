@@ -1,20 +1,24 @@
-error[E0733]: recursion in an async fn requires boxing
-  --> $DIR/mutually-recursive-async-impl-trait-type.rs:5:1
+error[E0391]: cycle detected when computing layout of `{async fn body of rec_1()}`
+  --> $DIR/mutually-recursive-async-impl-trait-type.rs:6:5
    |
-LL | async fn rec_1() {
-   | ^^^^^^^^^^^^^^^^
 LL |     rec_2().await;
-   |     ------------- recursive call here
+   |     ^^^^^^^^^^^^^
    |
-note: which leads to this async fn
-  --> $DIR/mutually-recursive-async-impl-trait-type.rs:9:1
+   = note: ...which requires computing layout of `core::mem::maybe_uninit::MaybeUninit<{async fn body of rec_2()}>`...
+   = note: ...which requires computing layout of `core::mem::manually_drop::ManuallyDrop<{async fn body of rec_2()}>`...
+   = note: ...which requires computing layout of `core::mem::maybe_dangling::MaybeDangling<{async fn body of rec_2()}>`...
+note: ...which requires computing layout of `{async fn body of rec_2()}`...
+  --> $DIR/mutually-recursive-async-impl-trait-type.rs:10:5
    |
-LL | async fn rec_2() {
-   | ^^^^^^^^^^^^^^^^
 LL |     rec_1().await;
-   |     ------------- ...leading to this recursive call
-   = note: a recursive `async fn` call must introduce indirection such as `Box::pin` to avoid an infinitely sized future
+   |     ^^^^^^^^^^^^^
+   = note: ...which requires computing layout of `core::mem::maybe_uninit::MaybeUninit<{async fn body of rec_1()}>`...
+   = note: ...which requires computing layout of `core::mem::manually_drop::ManuallyDrop<{async fn body of rec_1()}>`...
+   = note: ...which requires computing layout of `core::mem::maybe_dangling::MaybeDangling<{async fn body of rec_1()}>`...
+   = note: ...which again requires computing layout of `{async fn body of rec_1()}`, completing the cycle
+   = note: cycle used when running analysis passes on crate `mutually_recursive_async_impl_trait_type`
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0733`.
+For more information about this error, try `rustc --explain E0391`.

@@ -1,17 +1,24 @@
-error[E0072]: recursive type `ListNode` has infinite size
+error[E0391]: cycle detected when checking if `ListNode` is representable
   --> $DIR/E0072.rs:1:1
    |
 LL | struct ListNode {
    | ^^^^^^^^^^^^^^^
-LL |     head: u8,
+   |
+note: ...which requires checking if `ListNode::tail` is representable...
+  --> $DIR/E0072.rs:3:5
+   |
 LL |     tail: Option<ListNode>,
-   |                  -------- recursive without indirection
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `core::option::Option<ListNode>` is representable...
+   = note: ...which requires checking if `ListNode` is representable...
+   = note: ...which again requires checking if `ListNode` is representable, completing the cycle
+note: cycle used when checking that `ListNode` is well-formed
+  --> $DIR/E0072.rs:1:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     tail: Option<Box<ListNode>>,
-   |                  ++++        +
+LL | struct ListNode {
+   | ^^^^^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

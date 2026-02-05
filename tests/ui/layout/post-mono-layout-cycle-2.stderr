@@ -1,17 +1,16 @@
-error[E0733]: recursion in an async fn requires boxing
-  --> $DIR/post-mono-layout-cycle-2.rs:28:5
+error[E0391]: cycle detected when computing layout of `{async fn body of <impl at $DIR/post-mono-layout-cycle-2.rs:27:1: 27:17>::iter<T>()}`
+  --> $DIR/post-mono-layout-cycle-2.rs:33:9
    |
-LL | /     async fn iter<T>(&mut self, iterator: T)
-LL | |
-LL | |     where
-LL | |         T: IntoIterator<Item = ()>,
-   | |___________________________________^
-LL |       {
-LL |           Blah::iter(self, iterator).await
-   |           -------------------------------- recursive call here
+LL |         Blah::iter(self, iterator).await
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-   = note: a recursive `async fn` call must introduce indirection such as `Box::pin` to avoid an infinitely sized future
+   = note: ...which requires computing layout of `core::mem::maybe_uninit::MaybeUninit<{async fn body of <impl at $DIR/post-mono-layout-cycle-2.rs:27:1: 27:17>::iter<T>()}>`...
+   = note: ...which requires computing layout of `core::mem::manually_drop::ManuallyDrop<{async fn body of <impl at $DIR/post-mono-layout-cycle-2.rs:27:1: 27:17>::iter<T>()}>`...
+   = note: ...which requires computing layout of `core::mem::maybe_dangling::MaybeDangling<{async fn body of <impl at $DIR/post-mono-layout-cycle-2.rs:27:1: 27:17>::iter<T>()}>`...
+   = note: ...which again requires computing layout of `{async fn body of <impl at $DIR/post-mono-layout-cycle-2.rs:27:1: 27:17>::iter<T>()}`, completing the cycle
+   = note: cycle used when running analysis passes on crate `post_mono_layout_cycle_2`
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0733`.
+For more information about this error, try `rustc --explain E0391`.

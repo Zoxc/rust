@@ -1,15 +1,28 @@
-error[E0121]: the placeholder `_` is not allowed within types on item signatures for return types
-  --> $DIR/return-cycle.rs:6:17
+error[E0391]: cycle detected when computing the variances of `Token`
+  --> $DIR/return-cycle.rs:3:1
+   |
+LL | struct Token<T>(PhantomData<T>);
+   | ^^^^^^^^^^^^^^^
+   |
+   = note: ...which requires computing the variances for items in this crate...
+note: ...which requires computing function signature of `<impl at $DIR/return-cycle.rs:5:1: 5:17>::new`...
+  --> $DIR/return-cycle.rs:6:5
    |
 LL |     fn new() -> _ {
-   |                 ^ not allowed in type signatures
+   |     ^^^^^^^^^^^^^
+note: ...which requires type-checking `<impl at $DIR/return-cycle.rs:5:1: 5:17>::new`...
+  --> $DIR/return-cycle.rs:6:5
    |
-help: replace with the correct return type
+LL |     fn new() -> _ {
+   |     ^^^^^^^^^^^^^
+   = note: ...which again requires computing the variances of `Token`, completing the cycle
+note: cycle used when checking that `Token` is well-formed
+  --> $DIR/return-cycle.rs:3:1
    |
-LL -     fn new() -> _ {
-LL +     fn new() -> Token<()> {
-   |
+LL | struct Token<T>(PhantomData<T>);
+   | ^^^^^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0121`.
+For more information about this error, try `rustc --explain E0391`.

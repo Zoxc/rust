@@ -1,17 +1,23 @@
-error[E0072]: recursive type `Foo` has infinite size
+error[E0391]: cycle detected when checking if `Foo` is representable
   --> $DIR/type-recursive-box-shadowed.rs:7:1
    |
 LL | struct Foo {
    | ^^^^^^^^^^
-LL |
+   |
+note: ...which requires checking if `Foo::inner` is representable...
+  --> $DIR/type-recursive-box-shadowed.rs:9:5
+   |
 LL |     inner: Foo,
-   |            --- recursive without indirection
+   |     ^^^^^^^^^^
+   = note: ...which requires checking if `Foo` is representable...
+   = note: ...which again requires checking if `Foo` is representable, completing the cycle
+note: cycle used when checking that `Foo` is well-formed
+  --> $DIR/type-recursive-box-shadowed.rs:7:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     inner: Box<Foo>,
-   |            ++++   +
+LL | struct Foo {
+   | ^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

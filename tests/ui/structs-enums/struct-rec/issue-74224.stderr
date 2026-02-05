@@ -1,17 +1,23 @@
-error[E0072]: recursive type `A` has infinite size
+error[E0391]: cycle detected when checking if `A` is representable
   --> $DIR/issue-74224.rs:1:1
    |
 LL | struct A<T> {
    | ^^^^^^^^^^^
-...
+   |
+note: ...which requires checking if `A::y` is representable...
+  --> $DIR/issue-74224.rs:4:5
+   |
 LL |     y: A<A<T>>,
-   |        ------- recursive without indirection
+   |     ^^^^^^^^^^
+   = note: ...which requires checking if `A<A<T>>` is representable...
+   = note: ...which again requires checking if `A` is representable, completing the cycle
+note: cycle used when checking that `A` is well-formed
+  --> $DIR/issue-74224.rs:1:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL |     y: Box<A<A<T>>>,
-   |        ++++       +
+LL | struct A<T> {
+   | ^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

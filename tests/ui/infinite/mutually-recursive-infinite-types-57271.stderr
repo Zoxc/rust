@@ -1,27 +1,34 @@
-error[E0072]: recursive types `ObjectType` and `TypeSignature` have infinite size
+error[E0391]: cycle detected when checking if `ObjectType` is representable
   --> $DIR/mutually-recursive-infinite-types-57271.rs:8:1
    |
 LL | pub enum ObjectType {
    | ^^^^^^^^^^^^^^^^^^^
-LL |     Class(ClassTypeSignature),
+   |
+note: ...which requires checking if `ObjectType::Array::0` is representable...
+  --> $DIR/mutually-recursive-infinite-types-57271.rs:10:11
+   |
 LL |     Array(TypeSignature),
-   |           ------------- recursive without indirection
-...
+   |           ^^^^^^^^^^^^^
+   = note: ...which requires checking if `TypeSignature` is representable...
+note: ...which requires checking if `TypeSignature` is representable...
+  --> $DIR/mutually-recursive-infinite-types-57271.rs:20:1
+   |
 LL | pub enum TypeSignature {
    | ^^^^^^^^^^^^^^^^^^^^^^
-LL |     Base(BaseType),
+note: ...which requires checking if `TypeSignature::Object::0` is representable...
+  --> $DIR/mutually-recursive-infinite-types-57271.rs:22:12
+   |
 LL |     Object(ObjectType),
-   |            ---------- recursive without indirection
+   |            ^^^^^^^^^^
+   = note: ...which requires checking if `ObjectType` is representable...
+   = note: ...which again requires checking if `ObjectType` is representable, completing the cycle
+note: cycle used when checking that `ObjectType` is well-formed
+  --> $DIR/mutually-recursive-infinite-types-57271.rs:8:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL ~     Array(Box<TypeSignature>),
-LL |     TypeVariable(()),
-...
-LL |     Base(BaseType),
-LL ~     Object(Box<ObjectType>),
-   |
+LL | pub enum ObjectType {
+   | ^^^^^^^^^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

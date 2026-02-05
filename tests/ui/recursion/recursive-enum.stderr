@@ -1,14 +1,23 @@
-error[E0072]: recursive type `List` has infinite size
+error[E0391]: cycle detected when checking if `List` is representable
   --> $DIR/recursive-enum.rs:1:1
    |
 LL | enum List<T> { Cons(T, List<T>), Nil }
-   | ^^^^^^^^^^^^           ------- recursive without indirection
+   | ^^^^^^^^^^^^
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
+note: ...which requires checking if `List::Cons::1` is representable...
+  --> $DIR/recursive-enum.rs:1:24
    |
-LL | enum List<T> { Cons(T, Box<List<T>>), Nil }
-   |                        ++++       +
+LL | enum List<T> { Cons(T, List<T>), Nil }
+   |                        ^^^^^^^
+   = note: ...which requires checking if `List<T>` is representable...
+   = note: ...which again requires checking if `List` is representable, completing the cycle
+note: cycle used when checking that `List` is well-formed
+  --> $DIR/recursive-enum.rs:1:1
+   |
+LL | enum List<T> { Cons(T, List<T>), Nil }
+   | ^^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

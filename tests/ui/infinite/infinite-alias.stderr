@@ -1,14 +1,24 @@
-error[E0072]: recursive type `Rec` has infinite size
+error[E0391]: cycle detected when checking if `Rec` is representable
   --> $DIR/infinite-alias.rs:7:1
    |
 LL | struct Rec(Wrapper<Rec>);
-   | ^^^^^^^^^^ ------------ recursive without indirection
+   | ^^^^^^^^^^
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
+note: ...which requires checking if `Rec::0` is representable...
+  --> $DIR/infinite-alias.rs:7:12
    |
-LL | struct Rec(Box<Wrapper<Rec>>);
-   |            ++++            +
+LL | struct Rec(Wrapper<Rec>);
+   |            ^^^^^^^^^^^^
+   = note: ...which requires checking if `alias::W<Rec>` is representable...
+   = note: ...which requires checking if `Rec` is representable...
+   = note: ...which again requires checking if `Rec` is representable, completing the cycle
+note: cycle used when checking that `Rec` is well-formed
+  --> $DIR/infinite-alias.rs:7:1
+   |
+LL | struct Rec(Wrapper<Rec>);
+   | ^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

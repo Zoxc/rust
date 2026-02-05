@@ -6,28 +6,36 @@ LL | enum Foo<'a> {
    |
    = help: consider removing `'a`, referring to it in a field, or using a marker such as `PhantomData`
 
-error[E0072]: recursive types `Foo` and `Bar` have infinite size
+error[E0391]: cycle detected when checking if `Foo` is representable
   --> $DIR/variance-regions-unused-indirect.rs:3:1
    |
 LL | enum Foo<'a> {
    | ^^^^^^^^^^^^
-LL |
+   |
+note: ...which requires checking if `Foo::Foo1::0` is representable...
+  --> $DIR/variance-regions-unused-indirect.rs:5:10
+   |
 LL |     Foo1(Bar<'a>)
-   |          ------- recursive without indirection
-...
+   |          ^^^^^^^
+   = note: ...which requires checking if `Bar<'a>` is representable...
+note: ...which requires checking if `Bar` is representable...
+  --> $DIR/variance-regions-unused-indirect.rs:8:1
+   |
 LL | enum Bar<'a> {
    | ^^^^^^^^^^^^
+note: ...which requires checking if `Bar::Bar1::0` is representable...
+  --> $DIR/variance-regions-unused-indirect.rs:9:10
+   |
 LL |     Bar1(Foo<'a>)
-   |          ------- recursive without indirection
+   |          ^^^^^^^
+   = note: ...which requires checking if `Foo<'a>` is representable...
+   = note: ...which again requires checking if `Foo` is representable, completing the cycle
+note: cycle used when checking that `Foo` is well-formed
+  --> $DIR/variance-regions-unused-indirect.rs:3:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL ~     Foo1(Box<Bar<'a>>)
-LL | }
-LL |
-LL | enum Bar<'a> {
-LL ~     Bar1(Box<Foo<'a>>)
-   |
+LL | enum Foo<'a> {
+   | ^^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error[E0392]: lifetime parameter `'a` is never used
   --> $DIR/variance-regions-unused-indirect.rs:8:10
@@ -39,5 +47,5 @@ LL | enum Bar<'a> {
 
 error: aborting due to 3 previous errors
 
-Some errors have detailed explanations: E0072, E0392.
-For more information about an error, try `rustc --explain E0072`.
+Some errors have detailed explanations: E0391, E0392.
+For more information about an error, try `rustc --explain E0391`.

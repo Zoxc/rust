@@ -1,27 +1,34 @@
-error[E0072]: recursive types `Foo` and `Bar` have infinite size
+error[E0391]: cycle detected when checking if `Foo` is representable
   --> $DIR/recursive-type-field.rs:3:1
    |
 LL | struct Foo<'a> {
    | ^^^^^^^^^^^^^^
+   |
+note: ...which requires checking if `Foo::bar` is representable...
+  --> $DIR/recursive-type-field.rs:4:5
+   |
 LL |     bar: Bar<'a>,
-   |          ------- recursive without indirection
-...
+   |     ^^^^^^^^^^^^
+   = note: ...which requires checking if `Bar<'a>` is representable...
+note: ...which requires checking if `Bar` is representable...
+  --> $DIR/recursive-type-field.rs:8:1
+   |
 LL | struct Bar<'a> {
    | ^^^^^^^^^^^^^^
+note: ...which requires checking if `Bar::y` is representable...
+  --> $DIR/recursive-type-field.rs:9:5
+   |
 LL |     y: (Foo<'a>, Foo<'a>),
-   |         -------  ------- recursive without indirection
-   |         |
-   |         recursive without indirection
+   |     ^^^^^^^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `Foo<'a>` is representable...
+   = note: ...which again requires checking if `Foo` is representable, completing the cycle
+note: cycle used when checking that `Foo` is well-formed
+  --> $DIR/recursive-type-field.rs:3:1
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
-   |
-LL ~     bar: Box<Bar<'a>>,
-LL |     b: Rc<Bar<'a>>,
-...
-LL | struct Bar<'a> {
-LL ~     y: (Box<Foo<'a>>, Box<Foo<'a>>),
-   |
+LL | struct Foo<'a> {
+   | ^^^^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

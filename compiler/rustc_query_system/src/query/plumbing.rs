@@ -12,7 +12,7 @@ use rustc_data_structures::hash_table::{self, Entry, HashTable};
 use rustc_data_structures::sharded::{self, Sharded};
 use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_data_structures::{outline, sync};
-use rustc_errors::{Diag, FatalError, };
+use rustc_errors::{Diag, FatalError};
 use rustc_span::{DUMMY_SP, Span};
 use tracing::instrument;
 
@@ -23,9 +23,7 @@ use crate::dep_graph::{
 use crate::ich::StableHashingContext;
 use crate::query::caches::QueryCache;
 use crate::query::job::{QueryInfo, QueryJob, QueryJobId, QueryJobInfo, QueryLatch, report_cycle};
-use crate::query::{
-     QueryContext, QueryMap, QueryStackFrame, SerializedDepNodeIndex,
-};
+use crate::query::{QueryContext, QueryMap, QueryStackFrame, SerializedDepNodeIndex};
 
 #[inline]
 fn equivalent_key<K: Eq, V>(k: &K) -> impl Fn(&(K, V)) -> bool + '_ {

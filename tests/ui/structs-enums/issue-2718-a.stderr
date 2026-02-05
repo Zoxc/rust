@@ -1,14 +1,25 @@
-error[E0072]: recursive type `Pong` has infinite size
+error[E0391]: cycle detected when checking if `pingpong::Pong` is representable
   --> $DIR/issue-2718-a.rs:8:5
    |
 LL |     pub struct Pong(SendPacket<Ping>);
-   |     ^^^^^^^^^^^^^^^ ---------------- recursive without indirection
+   |     ^^^^^^^^^^^^^^^
    |
-help: insert some indirection (e.g., a `Box`, `Rc`, or `&`) to break the cycle
+note: ...which requires checking if `pingpong::Pong::0` is representable...
+  --> $DIR/issue-2718-a.rs:8:21
    |
-LL |     pub struct Pong(Box<SendPacket<Ping>>);
-   |                     ++++                +
+LL |     pub struct Pong(SendPacket<Ping>);
+   |                     ^^^^^^^^^^^^^^^^
+   = note: ...which requires checking if `SendPacket<SendPacket<pingpong::Pong>>` is representable...
+   = note: ...which requires checking if `SendPacket<pingpong::Pong>` is representable...
+   = note: ...which requires checking if `pingpong::Pong` is representable...
+   = note: ...which again requires checking if `pingpong::Pong` is representable, completing the cycle
+note: cycle used when checking that `pingpong::Pong` is well-formed
+  --> $DIR/issue-2718-a.rs:8:5
+   |
+LL |     pub struct Pong(SendPacket<Ping>);
+   |     ^^^^^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0072`.
+For more information about this error, try `rustc --explain E0391`.

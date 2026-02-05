@@ -1,14 +1,21 @@
-error[E0733]: recursion in an async fn requires boxing
-  --> $DIR/indirect-recursion-issue-112047.rs:31:5
+error[E0391]: cycle detected when computing layout of `core::mem::maybe_uninit::MaybeUninit<{async fn body of <impl at $DIR/indirect-recursion-issue-112047.rs:27:1: 29:14>::second()}>`
    |
-LL |     async fn second(self) {
-   |     ^^^^^^^^^^^^^^^^^^^^^
-LL |
+   = note: ...which requires computing layout of `core::mem::manually_drop::ManuallyDrop<{async fn body of <impl at $DIR/indirect-recursion-issue-112047.rs:27:1: 29:14>::second()}>`...
+   = note: ...which requires computing layout of `core::mem::maybe_dangling::MaybeDangling<{async fn body of <impl at $DIR/indirect-recursion-issue-112047.rs:27:1: 29:14>::second()}>`...
+note: ...which requires computing layout of `{async fn body of <impl at $DIR/indirect-recursion-issue-112047.rs:27:1: 29:14>::second()}`...
+  --> $DIR/indirect-recursion-issue-112047.rs:33:9
+   |
 LL |         self.first().await.second().await;
-   |         --------------------------------- recursive call here
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: ...which requires computing layout of `core::mem::maybe_uninit::MaybeUninit<<<A as First>::Second as Second>::second::{anon_assoc#0}>`...
+   = note: ...which again requires computing layout of `core::mem::maybe_uninit::MaybeUninit<{async fn body of <impl at $DIR/indirect-recursion-issue-112047.rs:27:1: 29:14>::second()}>`, completing the cycle
+note: cycle used when computing layout of `{async block@$DIR/indirect-recursion-issue-112047.rs:4:13: 4:18}`
+  --> $DIR/indirect-recursion-issue-112047.rs:5:9
    |
-   = note: a recursive `async fn` call must introduce indirection such as `Box::pin` to avoid an infinitely sized future
+LL |         A.first().await.second().await;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: see https://rustc-dev-guide.rust-lang.org/overview.html#queries and https://rustc-dev-guide.rust-lang.org/query.html for more information
 
 error: aborting due to 1 previous error
 
-For more information about this error, try `rustc --explain E0733`.
+For more information about this error, try `rustc --explain E0391`.
