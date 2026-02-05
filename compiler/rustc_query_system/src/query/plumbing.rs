@@ -12,7 +12,7 @@ use rustc_data_structures::hash_table::{self, Entry, HashTable};
 use rustc_data_structures::sharded::{self, Sharded};
 use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_data_structures::{outline, sync};
-use rustc_errors::{Diag, FatalError, StashKey};
+use rustc_errors::{Diag, FatalError, };
 use rustc_span::{DUMMY_SP, Span};
 use tracing::instrument;
 
@@ -24,7 +24,7 @@ use crate::ich::StableHashingContext;
 use crate::query::caches::QueryCache;
 use crate::query::job::{QueryInfo, QueryJob, QueryJobId, QueryJobInfo, QueryLatch, report_cycle};
 use crate::query::{
-    CycleErrorHandling, QueryContext, QueryMap, QueryStackFrame, SerializedDepNodeIndex,
+     QueryContext, QueryMap, QueryStackFrame, SerializedDepNodeIndex,
 };
 
 #[inline]
@@ -159,31 +159,8 @@ fn handle_cycle_error<'tcx, Q>(
 where
     Q: QueryDispatcher<'tcx>,
 {
-    match query.cycle_error_handling() {
-        CycleErrorHandling::Error => {
-            let guar = error.emit();
-            query.value_from_cycle_error(*qcx.dep_context(), cycle_error, guar)
-        }
-        CycleErrorHandling::Fatal => {
-            error.emit();
-            qcx.dep_context().sess().dcx().abort_if_errors();
-            unreachable!()
-        }
-        CycleErrorHandling::DelayBug => {
-            let guar = error.delay_as_bug();
-            query.value_from_cycle_error(*qcx.dep_context(), cycle_error, guar)
-        }
-        CycleErrorHandling::Stash => {
-            let guar = if let Some(root) = cycle_error.cycle.first()
-                && let Some(span) = root.frame.info.span
-            {
-                error.stash(span, StashKey::Cycle).unwrap()
-            } else {
-                error.emit()
-            };
-            query.value_from_cycle_error(*qcx.dep_context(), cycle_error, guar)
-        }
-    }
+    error.emit();
+    FatalError::raise(FatalError);
 }
 
 impl<'tcx, K> JobOwner<'tcx, K>
