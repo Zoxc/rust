@@ -14,8 +14,8 @@ use rustc_session::config::{
     DebugInfo, DumpMonoStatsFormat, ErrorOutputType, ExternEntry, ExternLocation, Externs,
     FmtDebug, FunctionReturn, InliningThreshold, Input, InstrumentCoverage, InstrumentXRay,
     LinkSelfContained, LinkerPluginLto, LocationDetail, LtoCli, MirIncludeSpans, NextSolverConfig,
-    Offload, Options, OutFileName, OutputType, OutputTypes, PAuthKey, PacRet, Passes,
-    PatchableFunctionEntry, Polonius, ProcMacroExecutionStrategy, Strip, SwitchWithOptPath,
+    Offload, Options, OutFileName, OutputType, OutputTypes, PAuthKey, PacRet, ParallelFuzzingSeed,
+    Passes, PatchableFunctionEntry, Polonius, ProcMacroExecutionStrategy, Strip, SwitchWithOptPath,
     SymbolManglingVersion, WasiExecModel, build_configuration, build_session_options,
     rustc_optgroups,
 };
@@ -719,6 +719,7 @@ fn test_unstable_options_tracking_hash() {
     untracked!(no_leak_check, true);
     untracked!(no_parallel_backend, true);
     untracked!(no_steal_thir, true);
+    untracked!(parallel_fuzz_seed, Some(ParallelFuzzingSeed::Random));
     untracked!(parse_crate_root_only, true);
     // `pre_link_arg` is omitted because it just forwards to `pre_link_args`.
     untracked!(pre_link_args, vec![String::from("abc"), String::from("def")]);

@@ -392,6 +392,16 @@ pub fn run_compiler<R: Send>(config: Config, f: impl FnOnce(&Compiler) -> R + Se
     // Set parallel mode before thread pool creation, which will create `Lock`s.
     rustc_data_structures::sync::set_dyn_thread_safe_mode(config.opts.unstable_opts.threads > 1);
 
+    // Enable fuzzing if requested or if we are using
+    // multiple threads to make ordering bugs easier to reproduce.
+    if config.opts.unstable_opts.parallel_fuzz_seed.is_some()
+        || config.opts.unstable_opts.threads > 1
+    {
+        rustc_data_structures::sync::fuzzing::enable_fuzzing(
+            config.opts.unstable_opts.parallel_fuzz_seed,
+        );
+    }
+
     // Check jobserver before run_in_thread_pool_with_globals, which call jobserver::acquire_thread
     let early_dcx = EarlyDiagCtxt::new(config.opts.error_format);
     initialize_checked_jobserver(&early_dcx);

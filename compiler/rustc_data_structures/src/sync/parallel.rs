@@ -7,6 +7,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use parking_lot::Mutex;
 
 use crate::FatalErrorMarker;
+use crate::sync::fuzzing::{self, is_fuzzing, shuffle_slice};
 use crate::sync::{DynSend, DynSync, FromDyn, IntoDynSyncSend, mode};
 
 /// A guard used to hold panics that occur during a parallel section to later by unwound.
@@ -72,6 +73,7 @@ pub fn spawn(func: impl FnOnce() + DynSend + 'static) {
 /// The first block is executed immediately on the current thread.
 /// Use that for the longest running block.
 pub fn par_fns(funcs: &mut [&mut (dyn FnMut() + DynSend)]) {
+    shuffle_slice(funcs);
     parallel_guard(|guard: &ParallelGuard| {
         if mode::is_dyn_thread_safe() {
             let funcs = FromDyn::from(funcs);
@@ -106,18 +108,32 @@ where
     A: FnOnce() -> RA + DynSend,
     B: FnOnce() -> RB + DynSend,
 {
-    if mode::is_dyn_thread_safe() {
-        let oper_a = FromDyn::from(oper_a);
-        let oper_b = FromDyn::from(oper_b);
-        let (a, b) = parallel_guard(|guard| {
-            rustc_thread_pool::join(
-                move || guard.run(move || FromDyn::from(oper_a.into_inner()())),
-                move || guard.run(move || FromDyn::from(oper_b.into_inner()())),
-            )
-        });
-        (a.unwrap().into_inner(), b.unwrap().into_inner())
+    #[inline]
+    fn inner<A, B, RA: DynSend, RB: DynSend>(oper_a: A, oper_b: B) -> (RA, RB)
+    where
+        A: FnOnce() -> RA + DynSend,
+        B: FnOnce() -> RB + DynSend,
+    {
+        if mode::is_dyn_thread_safe() {
+            let oper_a = FromDyn::from(oper_a);
+            let oper_b = FromDyn::from(oper_b);
+            let (a, b) = parallel_guard(|guard| {
+                rustc_thread_pool::join(
+                    move || guard.run(move || FromDyn::from(oper_a.into_inner()())),
+                    move || guard.run(move || FromDyn::from(oper_b.into_inner()())),
+                )
+            });
+            (a.unwrap().into_inner(), b.unwrap().into_inner())
+        } else {
+            serial_join(oper_a, oper_b)
+        }
+    }
+
+    if fuzzing::coin_flip() {
+        let (b, a) = inner(oper_b, oper_a);
+        (a, b)
     } else {
-        serial_join(oper_a, oper_b)
+        inner(oper_a, oper_b)
     }
 }
 
@@ -126,6 +142,7 @@ fn par_slice<I: DynSend>(
     guard: &ParallelGuard,
     for_each: impl Fn(&mut I) + DynSync + DynSend,
 ) {
+    shuffle_slice(items);
     let for_each = FromDyn::from(for_each);
     let mut items = for_each.derive(items);
     rustc_thread_pool::scope(|s| {
@@ -152,9 +169,17 @@ pub fn par_for_each_in<I: DynSend, T: IntoIterator<Item = I>>(
             let mut items: Vec<_> = t.into_iter().collect();
             par_slice(&mut items, guard, |i| for_each(&*i))
         } else {
-            t.into_iter().for_each(|i| {
-                guard.run(|| for_each(&i));
-            });
+            if is_fuzzing() {
+                let mut items: Vec<_> = t.into_iter().collect();
+                shuffle_slice(&mut items);
+                for i in &items {
+                    guard.run(|| for_each(i));
+                }
+            } else {
+                for i in t.into_iter() {
+                    guard.run(|| for_each(&i));
+                }
+            }
         }
     });
 }
@@ -184,7 +209,16 @@ where
 
             if let Some(err) = error.into_inner() { Err(err) } else { Ok(()) }
         } else {
-            t.into_iter().filter_map(|i| guard.run(|| for_each(&i))).fold(Ok(()), Result::and)
+            if is_fuzzing() {
+                let mut items: Vec<_> = t.into_iter().collect();
+                shuffle_slice(&mut items);
+                items
+                    .into_iter()
+                    .filter_map(|i| guard.run(|| for_each(&i)))
+                    .fold(Ok(()), Result::and)
+            } else {
+                t.into_iter().filter_map(|i| guard.run(|| for_each(&i))).fold(Ok(()), Result::and)
+            }
         }
     })
 }
@@ -206,7 +240,13 @@ pub fn par_map<I: DynSend, T: IntoIterator<Item = I>, R: DynSend, C: FromIterato
 
             items.into_iter().filter_map(|i| i.1).collect()
         } else {
-            t.into_iter().filter_map(|i| guard.run(|| map(i))).collect()
+            if is_fuzzing() {
+                let mut items: Vec<_> = t.into_iter().collect();
+                shuffle_slice(&mut items);
+                items.into_iter().filter_map(|i| guard.run(|| map(i))).collect()
+            } else {
+                t.into_iter().filter_map(|i| guard.run(|| map(i))).collect()
+            }
         }
     })
 }

@@ -810,6 +810,7 @@ mod desc {
     pub(crate) const parse_on_broken_pipe: &str = "either `kill`, `error`, or `inherit`";
     pub(crate) const parse_patchable_function_entry: &str = "either two comma separated integers (total_nops,prefix_nops), with prefix_nops <= total_nops, or one integer (total_nops)";
     pub(crate) const parse_opt_panic_strategy: &str = parse_panic_strategy;
+    pub(crate) const parse_opt_parallel_fuzz_seed: &str = "either an integer or `random`";
     pub(crate) const parse_relro_level: &str = "one of: `full`, `partial`, or `off`";
     pub(crate) const parse_sanitizers: &str = "comma separated list of sanitizers: `address`, `cfi`, `dataflow`, `hwaddress`, `kcfi`, `kernel-address`, `leak`, `memory`, `memtag`, `safestack`, `shadow-call-stack`, `thread`, or 'realtime'";
     pub(crate) const parse_sanitizer_memory_track_origins: &str = "0, 1, or 2";
@@ -1441,6 +1442,25 @@ pub mod parse {
                 true
             }
             Some(_) => false,
+        }
+    }
+
+    pub(crate) fn parse_opt_parallel_fuzz_seed(
+        slot: &mut Option<ParallelFuzzingSeed>,
+        v: Option<&str>,
+    ) -> bool {
+        let mut num = None;
+        if parse_opt_number(&mut num, v) {
+            *slot = Some(ParallelFuzzingSeed::Specific(num.unwrap()));
+            true
+        } else {
+            match v {
+                Some("random") => {
+                    *slot = Some(ParallelFuzzingSeed::Random);
+                    true
+                }
+                _ => false,
+            }
         }
     }
 
@@ -2369,6 +2389,8 @@ options! {
         "whether each function should go in its own section"),
     future_incompat_test: bool = (false, parse_bool, [UNTRACKED],
         "forces all lints to be future incompatible, used for internal testing (default: no)"),
+    parallel_fuzz_seed: Option<ParallelFuzzingSeed> = (None, parse_opt_parallel_fuzz_seed, [UNTRACKED],
+        "enable fuzzing of parallel sections using the given seed"),
     graphviz_dark_mode: bool = (false, parse_bool, [UNTRACKED],
         "use dark-themed colors in graphviz output (default: no)"),
     graphviz_font: String = ("Courier, monospace".to_string(), parse_string, [UNTRACKED],

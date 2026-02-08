@@ -3305,6 +3305,13 @@ pub enum DumpMonoStatsFormat {
     Json,
 }
 
+/// `-Z parallel_fuzz_seed` options
+#[derive(Clone, Copy, PartialEq, Hash, Debug)]
+pub enum ParallelFuzzingSeed {
+    Random,
+    Specific(u64),
+}
+
 impl DumpMonoStatsFormat {
     pub fn extension(self) -> &'static str {
         match self {

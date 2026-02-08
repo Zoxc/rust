@@ -1593,6 +1593,9 @@ fn report_ice(
         }
     }
 
+    // Print fuzzing seed if enabled
+    print_fuzzing_seed();
+
     // If backtraces are enabled, also print the query stack
     let backtrace = env::var_os("RUST_BACKTRACE").is_some_and(|x| &x != "0");
 

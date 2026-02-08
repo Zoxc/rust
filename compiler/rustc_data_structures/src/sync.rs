@@ -48,6 +48,7 @@ pub use self::worker_local::{Registry, WorkerLocal};
 pub use crate::marker::*;
 
 mod freeze;
+pub mod fuzzing;
 mod lock;
 mod parallel;
 mod vec;
