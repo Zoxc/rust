@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 
 use rustc_index::{Idx, IndexVec};
 
-use crate::stable_hasher::{HashStable, StableHasher};
+use crate::stable_hasher::{HashStable, StableHasher, StructureState};
 
 /// An indexed multi-map that preserves insertion order while permitting both *O*(log *n*) lookup of
 /// an item by key and *O*(1) lookup by index.
@@ -131,6 +131,11 @@ where
     K: HashStable<C>,
     V: HashStable<C>,
 {
+    fn structure(&self, state: &mut StructureState<C>) -> rmpv::Value {
+        let SortedIndexMultiMap { items, idx_sorted_by_item_key: _ } = self;
+        items.structure(state)
+    }
+
     fn hash_stable(&self, ctx: &mut C, hasher: &mut StableHasher) {
         let SortedIndexMultiMap {
             items,

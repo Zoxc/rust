@@ -8,6 +8,7 @@ use rustc_errors::{DiagArgValue, IntoDiagArg};
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
 
 use crate::ty::TyCtxt;
+use rustc_data_structures::stable_hasher::{StructureState, rmpv};
 
 #[derive(Copy, Clone)]
 /// A type for representing any integer. Only used for printing.
@@ -168,6 +169,11 @@ impl<CTX> crate::ty::HashStable<CTX> for ScalarInt {
         // which is UB.
         { self.data }.hash_stable(hcx, hasher);
         self.size.get().hash_stable(hcx, hasher);
+    }
+
+    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent the raw bytes (little-endian) as binary per canonical representation
+        rmpv::Value::Binary(self.to_bits_unchecked().to_le_bytes().to_vec())
     }
 }
 

@@ -3,7 +3,9 @@ use std::hash::{BuildHasherDefault, Hash, Hasher};
 
 use rustc_data_structures::AtomicRef;
 use rustc_data_structures::fingerprint::Fingerprint;
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StableOrd, ToStableHashKey};
+use rustc_data_structures::stable_hasher::{
+    HashStable, StableHasher, StableOrd, StructureState, ToStableHashKey,
+};
 use rustc_data_structures::unhash::Unhasher;
 use rustc_hashes::Hash64;
 use rustc_index::Idx;
@@ -404,6 +406,18 @@ rustc_data_structures::define_id_collections!(
 
 impl<CTX: HashStableContext> HashStable<CTX> for DefId {
     #[inline]
+    fn structure(
+        &self,
+        state: &mut StructureState<CTX>,
+    ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+        // Represent a DefId structurally as [krate.structure, index].
+        ::rustc_data_structures::stable_hasher::rmpv::Value::Array(vec![
+            self.krate.structure(state),
+            ::rustc_data_structures::stable_hasher::rmpv::Value::from(self.index.as_u32()),
+        ])
+    }
+
+    #[inline]
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         hcx.def_path_hash(*self).hash_stable(hcx, hasher);
     }
@@ -411,12 +425,29 @@ impl<CTX: HashStableContext> HashStable<CTX> for DefId {
 
 impl<CTX: HashStableContext> HashStable<CTX> for LocalDefId {
     #[inline]
+    fn structure(
+        &self,
+        state: &mut StructureState<CTX>,
+    ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+        self.to_def_id().structure(state)
+    }
+
+    #[inline]
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         hcx.def_path_hash(self.to_def_id()).local_hash().hash_stable(hcx, hasher);
     }
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for CrateNum {
+    #[inline]
+    fn structure(
+        &self,
+        state: &mut StructureState<CTX>,
+    ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+        // Represent CrateNum structurally as its u32 value.
+        ::rustc_data_structures::stable_hasher::rmpv::Value::from(self.as_u32())
+    }
+
     #[inline]
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         self.as_def_id().to_stable_hash_key(hcx).stable_crate_id().hash_stable(hcx, hasher);

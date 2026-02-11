@@ -2,7 +2,7 @@ use std::sync::{Arc, OnceLock};
 
 use rustc_data_structures::graph;
 use rustc_data_structures::graph::dominators::{Dominators, dominators};
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 use rustc_index::{IndexSlice, IndexVec};
 use rustc_macros::{HashStable, TyDecodable, TyEncodable, TypeFoldable, TypeVisitable};
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
@@ -174,4 +174,9 @@ impl<D: Decoder> Decodable<D> for Cache {
 impl<CTX> HashStable<CTX> for Cache {
     #[inline]
     fn hash_stable(&self, _: &mut CTX, _: &mut StableHasher) {}
+
+    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+        // Cache is transient and ignored for hashing; represent as Nil.
+        rmpv::Value::Nil
+    }
 }

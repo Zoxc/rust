@@ -584,6 +584,7 @@ macro_rules! define_queries {
             use super::super::*;
             use std::marker::PhantomData;
             use ::rustc_middle::query::erase::{self, Erased};
+            use rustc_data_structures::stable_hasher::HashStable;
 
             pub(crate) mod get_query_incr {
                 use super::*;
@@ -818,6 +819,37 @@ macro_rules! define_queries {
                     QueryCtxt::new(tcx),
                 )
             }
+
+            /// Collects the structural (rmpv) representation of all entries in
+            /// this query's cache. Returns a pair of the query name and a
+            /// MessagePack map of key -> value structures.
+            pub(crate) fn collect_structures<'tcx>(tcx: TyCtxt<'tcx>) -> (
+                String,
+                ::rustc_data_structures::stable_hasher::rmpv::Value,
+            ) {
+                use ::rustc_data_structures::stable_hasher::StructureState;
+                use ::rustc_data_structures::stable_hasher::rmpv;
+
+                let mut map: Vec<(rmpv::Value, rmpv::Value)> = Vec::new();
+
+                let query = QueryType::query_dispatcher(tcx);
+                let qcx = QueryCtxt::new(tcx);
+                let cache = query.query_cache(qcx);
+
+                // Use the tcx's stable hashing context to obtain a
+                // StructureState to call `structure()` on keys and values.
+                tcx.with_stable_hashing_context(|mut hcx| {
+                    let mut state = StructureState::new(&mut hcx);
+                    cache.iter(&mut |key, value, _| {
+                        let k = key.structure(&mut state);
+                        let unerased = QueryType::restore_val(*value);
+                        let v = unerased.structure(&mut state);
+                        map.push((k, v));
+                    });
+                });
+
+                (stringify!($name).to_string(), rmpv::Value::Map(map))
+            }
         })*}
 
         pub(crate) fn engine(incremental: bool) -> QueryEngine {
@@ -877,6 +909,10 @@ macro_rules! define_queries {
         const QUERY_KEY_HASH_VERIFY: &[
             for<'tcx> fn(TyCtxt<'tcx>)
         ] = &[$(query_impl::$name::query_key_hash_verify),*];
+
+        const PER_QUERY_COLLECT_STRUCTURES_FNS: &[
+            for<'tcx> fn(TyCtxt<'tcx>) -> (String, ::rustc_data_structures::stable_hasher::rmpv::Value)
+        ] = &[$(query_impl::$name::collect_structures),*];
 
         /// Module containing a named function for each dep kind (including queries)
         /// that creates a `DepKindVTable`.
@@ -991,6 +1027,23 @@ macro_rules! define_queries {
 
         pub fn make_dep_kind_vtables<'tcx>(arena: &'tcx Arena<'tcx>) -> &'tcx [DepKindVTable<'tcx>] {
             arena.alloc_from_iter(rustc_middle::make_dep_kind_array!(_dep_kind_vtable_ctors))
+        }
+
+        /// Collects structural representations for all queries and returns
+        /// them as a MessagePack map: query_name -> { key -> value }
+        pub fn collect_all_query_structures<'tcx>(tcx: TyCtxt<'tcx>)
+            -> ::rustc_data_structures::stable_hasher::rmpv::Value
+        {
+            use ::rustc_data_structures::stable_hasher::rmpv;
+
+            let mut out: Vec<(rmpv::Value, rmpv::Value)> = Vec::new();
+
+            for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
+                let (name, map) = f(tcx);
+                out.push((rmpv::Value::String(name.into()), map));
+            }
+
+            rmpv::Value::Map(out)
         }
     }
 }

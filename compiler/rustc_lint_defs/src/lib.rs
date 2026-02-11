@@ -5,7 +5,7 @@ use rustc_ast::AttrId;
 use rustc_ast::attr::AttributeExt;
 use rustc_data_structures::fx::FxIndexSet;
 use rustc_data_structures::stable_hasher::{
-    HashStable, StableCompare, StableHasher, ToStableHashKey,
+    HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey, rmpv,
 };
 use rustc_error_messages::{DiagArgValue, IntoDiagArg, MultiSpan};
 use rustc_hir_id::{HashStableContext, HirId, ItemLocalId};
@@ -139,6 +139,22 @@ impl LintExpectationId {
 }
 
 impl<HCX: HashStableContext> HashStable<HCX> for LintExpectationId {
+    #[inline]
+    fn structure(&self, state: &mut StructureState<HCX>) -> rmpv::Value {
+        match self {
+            LintExpectationId::Stable { hir_id, attr_index, lint_index: Some(lint_index) } => {
+                let mut out = Vec::new();
+                out.push(hir_id.structure(state));
+                out.push(rmpv::Value::from(*attr_index));
+                out.push(rmpv::Value::from(*lint_index));
+                rmpv::Value::Array(out)
+            }
+            _ => unreachable!(
+                "HashStable should only be called for filled and stable `LintExpectationId`"
+            ),
+        }
+    }
+
     #[inline]
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
         match self {
@@ -625,6 +641,12 @@ impl<HCX> HashStable<HCX> for LintId {
     #[inline]
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
         self.lint_name_raw().hash_stable(hcx, hasher);
+    }
+
+    #[inline]
+    fn structure(&self, _state: &mut StructureState<HCX>) -> rmpv::Value {
+        // Represent LintId by its static name string.
+        rmpv::Value::from(self.lint_name_raw())
     }
 }
 

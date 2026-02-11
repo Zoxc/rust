@@ -93,6 +93,7 @@ fn hash_stable_derive_with_mode(
 
     let discriminant = hash_stable_discriminant(&mut s);
     let body = hash_stable_body(&mut s);
+    let structure = hash_stable_structure_body(&mut s);
 
     let context: syn::Type = match mode {
         HashStableMode::Normal => {
@@ -116,8 +117,53 @@ fn hash_stable_derive_with_mode(
                 #discriminant
                 match *self { #body }
             }
+            #[inline]
+            fn structure(&self, __state: &mut ::rustc_data_structures::stable_hasher::StructureState<#context>) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+                match *self { #structure }
+            }
         },
     )
+}
+
+fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro2::TokenStream {
+    // For enums we include the discriminant as the first element of the array.
+    let is_enum = matches!(s.ast().data, syn::Data::Enum(_));
+
+    // Build match arms for each variant where we construct a vector `out`,
+    // push an optional discriminant for enums, then push structural
+    // representations of each (non-ignored) field.
+    s.each_variant(|vi| {
+        let pushes: proc_macro2::TokenStream = vi
+            .bindings()
+            .iter()
+            .map(|binding| {
+                let attrs = parse_attributes(binding.ast());
+                let bind_ident = &binding.binding;
+                if attrs.ignore {
+                    quote! {}
+                } else if let Some(project) = attrs.project {
+                    quote! {
+                        out.push((#bind_ident.#project).structure(__state));
+                    }
+                } else {
+                    quote! {
+                        out.push(#bind_ident.structure(__state));
+                    }
+                }
+            })
+            .collect();
+
+        quote! {
+            {
+                let mut out = Vec::new();
+                if #is_enum {
+                    out.push(::std::mem::discriminant(self).structure(__state));
+                }
+                #pushes
+                ::rustc_data_structures::stable_hasher::rmpv::Value::Array(out)
+            }
+        }
+    })
 }
 
 fn hash_stable_discriminant(s: &mut synstructure::Structure<'_>) -> proc_macro2::TokenStream {

@@ -30,7 +30,7 @@ use std::{fmt, iter, mem};
 
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 use rustc_data_structures::sync::Lock;
 use rustc_data_structures::unhash::UnhashMap;
 use rustc_hashes::Hash64;
@@ -1518,6 +1518,18 @@ fn update_disambiguator(expn_data: &mut ExpnData, mut ctx: impl HashStableContex
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+        // Represent SyntaxContext by either nil (root) or [expn_id.structure, transparency.structure]
+        if self.is_root() {
+            ::rustc_data_structures::stable_hasher::rmpv::Value::Nil
+        } else {
+            let (expn_id, transparency) = self.outer_mark();
+            ::rustc_data_structures::stable_hasher::rmpv::Value::Array(
+                vec![expn_id.structure(_state), transparency.structure(_state)],
+            )
+        }
+    }
+
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         const TAG_EXPANSION: u8 = 0;
         const TAG_NO_EXPANSION: u8 = 1;
@@ -1534,6 +1546,14 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+        // Represent ExpnId structurally as [krate.structure, local_id]
+        ::rustc_data_structures::stable_hasher::rmpv::Value::Array(vec![
+            self.krate.structure(_state),
+            ::rustc_data_structures::stable_hasher::rmpv::Value::from(self.local_id.as_u32()),
+        ])
+    }
+
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         ctx.assert_default_hashing_controls("ExpnId");
         let hash = if *self == ExpnId::root() {
@@ -1548,6 +1568,10 @@ impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for LocalExpnId {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        self.to_expn_id().structure(state)
+    }
+
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         self.to_expn_id().hash_stable(hcx, hasher);
     }

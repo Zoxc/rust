@@ -6,7 +6,9 @@
 
 use std::fmt::{self, Debug};
 
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StableOrd, ToStableHashKey};
+use rustc_data_structures::stable_hasher::{
+    HashStable, StableHasher, StableOrd, StructureState, ToStableHashKey, rmpv,
+};
 use rustc_macros::{Decodable, Encodable, HashStable_Generic};
 pub use rustc_span::HashStableContext;
 use rustc_span::def_id::{CRATE_DEF_ID, DefId, DefIndex, DefPathHash, LocalDefId};
@@ -55,6 +57,12 @@ impl rustc_index::Idx for OwnerId {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for OwnerId {
+    #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent OwnerId by its contained LocalDefId
+        self.def_id.structure(state)
+    }
+
     #[inline]
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         self.to_stable_hash_key(hcx).hash_stable(hcx, hasher);

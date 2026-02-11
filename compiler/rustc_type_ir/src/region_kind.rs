@@ -211,6 +211,7 @@ impl<I: Interner> fmt::Debug for RegionKind<I> {
 
 #[cfg(feature = "nightly")]
 // This is not a derived impl because a derive would require `I: HashStable`
+
 impl<CTX, I: Interner> HashStable<CTX> for RegionKind<I>
 where
     I::EarlyParamRegion: HashStable<CTX>,
@@ -218,6 +219,7 @@ where
     I::DefId: HashStable<CTX>,
     I::Symbol: HashStable<CTX>,
 {
+use rustc_data_structures::stable_hasher::{StructureState, rmpv};
     #[inline]
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         std::mem::discriminant(self).hash_stable(hcx, hasher);
@@ -242,5 +244,23 @@ where
                 panic!("region variables should not be hashed: {self:?}")
             }
         }
+    }
+
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        use RegionKind::*;
+        let mut out = Vec::new();
+        out.push(std::mem::discriminant(self).structure(state));
+        match self {
+            ReErased | ReStatic | ReError(_) => {}
+            ReBound(d, r) => {
+                out.push(d.structure(state));
+                out.push(r.structure(state));
+            }
+            ReEarlyParam(r) => out.push(r.structure(state)),
+            ReLateParam(r) => out.push(r.structure(state)),
+            RePlaceholder(r) => out.push(r.structure(state)),
+            ReVar(_) => out.push(rmpv::Value::String("Var".into())),
+        }
+        rmpv::Value::Array(out)
     }
 }

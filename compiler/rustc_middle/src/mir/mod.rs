@@ -910,7 +910,7 @@ pub struct VarBindingIntroduction {
 }
 
 mod binding_form_impl {
-    use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+    use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
     use rustc_query_system::ich::StableHashingContext;
 
     impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for super::BindingForm<'tcx> {
@@ -922,6 +922,16 @@ mod binding_form_impl {
                 Var(binding) => binding.hash_stable(hcx, hasher),
                 ImplicitSelf(kind) => kind.hash_stable(hcx, hasher),
                 RefForGuard(local) => local.hash_stable(hcx, hasher),
+            }
+        }
+
+        fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+            use super::BindingForm::*;
+
+            match self {
+                Var(binding) => rmpv::Value::Array(vec![rmpv::Value::String("Var".into()), binding.structure(state)]),
+                ImplicitSelf(kind) => rmpv::Value::Array(vec![rmpv::Value::String("ImplicitSelf".into()), kind.structure(state)]),
+                RefForGuard(local) => rmpv::Value::Array(vec![rmpv::Value::String("RefForGuard".into()), local.structure(state)]),
             }
         }
     }

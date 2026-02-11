@@ -2345,6 +2345,12 @@ options! {
         "enable default bounds for experimental group of auto traits"),
     export_executable_symbols: bool = (false, parse_bool, [TRACKED],
         "export symbols from executables, as if they were dynamic libraries"),
+    /// If set, export query keys/values for debugging and reproducibility.
+    export_queries: bool = (false, parse_bool, [UNTRACKED],
+        "export internal query results for debugging (default: no)"),
+    /// Directory into which exported queries are written when `-Z export-queries` is enabled.
+    export_queries_dir: Option<PathBuf> = (None, parse_opt_pathbuf, [UNTRACKED],
+        "the directory to write exported query files into"),
     external_clangrt: bool = (false, parse_bool, [UNTRACKED],
         "rely on user specified linker commands to find clangrt"),
     extra_const_ub_checks: bool = (false, parse_bool, [TRACKED],

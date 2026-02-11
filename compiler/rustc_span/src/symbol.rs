@@ -8,7 +8,7 @@ use std::{fmt, str};
 use rustc_arena::DroplessArena;
 use rustc_data_structures::fx::{FxHashSet, FxIndexSet};
 use rustc_data_structures::stable_hasher::{
-    HashStable, StableCompare, StableHasher, ToStableHashKey,
+    HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey, rmpv,
 };
 use rustc_data_structures::sync::Lock;
 use rustc_macros::{Decodable, Encodable, HashStable_Generic, symbols};
@@ -2888,6 +2888,17 @@ impl fmt::Display for Symbol {
 
 impl<CTX> HashStable<CTX> for Symbol {
     #[inline]
+    fn structure(
+        &self,
+        _state: &mut StructureState<CTX>,
+    ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+        // Represent a `Symbol` by its string contents.
+        ::rustc_data_structures::stable_hasher::rmpv::Value::String(
+            self.as_str().to_string().into(),
+        )
+    }
+
+    #[inline]
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         self.as_str().hash_stable(hcx, hasher);
     }
@@ -2947,6 +2958,15 @@ impl fmt::Debug for ByteSymbol {
 }
 
 impl<CTX> HashStable<CTX> for ByteSymbol {
+    #[inline]
+    fn structure(
+        &self,
+        _state: &mut StructureState<CTX>,
+    ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+        // Represent a `ByteSymbol` as a MessagePack binary with the original bytes.
+        ::rustc_data_structures::stable_hasher::rmpv::Value::Binary(self.as_byte_str().to_vec())
+    }
+
     #[inline]
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         self.as_byte_str().hash_stable(hcx, hasher);

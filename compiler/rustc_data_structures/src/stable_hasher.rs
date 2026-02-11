@@ -15,6 +15,27 @@ pub use rustc_stable_hash::{
     FromStableHash, SipHasher128Hash as StableHasherHash, StableSipHasher128 as StableHasher,
 };
 
+// Re-export the MessagePack value crate so other compiler crates can refer to
+// `rmpv::Value` when implementing `HashStable::structure`.
+pub use rmpv;
+
+pub struct StructureState<CTX> {
+    hcx: *mut CTX,
+}
+
+impl<CTX> StructureState<CTX> {
+    // StructureState intentionally does not expose the internal CTX pointer
+    // mutably. `structure()` implementations must not call into `hash_stable`
+    // helpers and therefore do not need access to `&mut CTX`.
+    /// Create a new `StructureState` from a mutable reference to the
+    /// hashing context. This provides the same (opaque) pointer that other
+    /// crates previously constructed directly via field initialization.
+    #[inline]
+    pub fn new(hcx: &mut CTX) -> Self {
+        StructureState { hcx: hcx as *mut CTX }
+    }
+}
+
 /// Something that implements `HashStable<CTX>` can be hashed in a way that is
 /// stable across multiple compilation sessions.
 ///
@@ -42,6 +63,9 @@ pub use rustc_stable_hash::{
 ///   `StableHasher` takes care of endianness and `isize`/`usize` platform
 ///   differences.
 pub trait HashStable<CTX> {
+    /// Returns the exact data that will be hashed by `hash_stable` as a MessagePack value.
+    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value;
+
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher);
 }
 
@@ -134,9 +158,19 @@ impl<T: StableOrd> StableCompare for T {
 /// here in this module.
 ///
 /// Use `#[derive(HashStable_Generic)]` instead.
+#[macro_export]
 macro_rules! impl_stable_traits_for_trivial_type {
-    ($t:ty) => {
+    // The macro accepts a type and an expression (closure) that takes `&T` and
+    // returns an `rmpv::Value`. It will call the expression with `self`.
+
+    // Structure function: the supplied expression is called with `&self`.
+    ($t:ty, $structure_fn:expr) => {
         impl<CTX> $crate::stable_hasher::HashStable<CTX> for $t {
+            #[inline]
+            fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+                ($structure_fn)(self)
+            }
+
             #[inline]
             fn hash_stable(&self, _: &mut CTX, hasher: &mut $crate::stable_hasher::StableHasher) {
                 ::std::hash::Hash::hash(self, hasher);
@@ -150,34 +184,49 @@ macro_rules! impl_stable_traits_for_trivial_type {
             // and `Ord::cmp` depends only on those bytes.
             const THIS_IMPLEMENTATION_HAS_BEEN_TRIPLE_CHECKED: () = ();
         }
-    };
+    }; // (no separate ref form — structure functions always receive `&T`)
 }
 
-pub(crate) use impl_stable_traits_for_trivial_type;
+// The macro is local to this module; no re-export needed.
 
-impl_stable_traits_for_trivial_type!(i8);
-impl_stable_traits_for_trivial_type!(i16);
-impl_stable_traits_for_trivial_type!(i32);
-impl_stable_traits_for_trivial_type!(i64);
-impl_stable_traits_for_trivial_type!(isize);
+impl_stable_traits_for_trivial_type!(i8, |v: &i8| rmpv::Value::from(*v));
+impl_stable_traits_for_trivial_type!(i16, |v: &i16| rmpv::Value::from(*v));
+impl_stable_traits_for_trivial_type!(i32, |v: &i32| rmpv::Value::from(*v));
+impl_stable_traits_for_trivial_type!(i64, |v: &i64| rmpv::Value::from(*v));
+impl_stable_traits_for_trivial_type!(isize, |v: &isize| rmpv::Value::from(*v as i64));
 
-impl_stable_traits_for_trivial_type!(u8);
-impl_stable_traits_for_trivial_type!(u16);
-impl_stable_traits_for_trivial_type!(u32);
-impl_stable_traits_for_trivial_type!(u64);
-impl_stable_traits_for_trivial_type!(usize);
+impl_stable_traits_for_trivial_type!(u8, |v: &u8| rmpv::Value::from(*v));
+impl_stable_traits_for_trivial_type!(u16, |v: &u16| rmpv::Value::from(*v));
+impl_stable_traits_for_trivial_type!(u32, |v: &u32| rmpv::Value::from(*v));
+impl_stable_traits_for_trivial_type!(u64, |v: &u64| rmpv::Value::from(*v));
+impl_stable_traits_for_trivial_type!(usize, |v: &usize| rmpv::Value::from(*v as u64));
 
-impl_stable_traits_for_trivial_type!(u128);
-impl_stable_traits_for_trivial_type!(i128);
+impl_stable_traits_for_trivial_type!(u128, |v: &u128| rmpv::Value::Binary(
+    (*v).to_le_bytes().to_vec()
+));
 
-impl_stable_traits_for_trivial_type!(char);
-impl_stable_traits_for_trivial_type!(());
+impl_stable_traits_for_trivial_type!(i128, |v: &i128| rmpv::Value::Binary(
+    (*v).to_le_bytes().to_vec()
+));
 
-impl_stable_traits_for_trivial_type!(Hash64);
+impl_stable_traits_for_trivial_type!(char, |c: &char| rmpv::Value::String((*c).to_string().into()));
+
+impl_stable_traits_for_trivial_type!((), |_: &()| rmpv::Value::Array(vec![]));
+
+impl_stable_traits_for_trivial_type!(Hash64, |h: &Hash64| rmpv::Value::Binary(
+    h.as_u64().to_le_bytes().to_vec()
+));
 
 // We need a custom impl as the default hash function will only hash half the bits. For stable
 // hashing we want to hash the full 128-bit hash.
 impl<CTX> HashStable<CTX> for Hash128 {
+    #[inline]
+    fn structure(&self, _: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent the 128-bit hash as a 16-byte MessagePack binary.
+        let bytes = self.as_u128().to_le_bytes();
+        rmpv::Value::Binary(bytes.to_vec())
+    }
+
     #[inline]
     fn hash_stable(&self, _: &mut CTX, hasher: &mut StableHasher) {
         self.as_u128().hash(hasher);
@@ -193,16 +242,29 @@ impl StableOrd for Hash128 {
 }
 
 impl<CTX> HashStable<CTX> for ! {
+    fn structure(&self, _: &mut StructureState<CTX>) -> rmpv::Value {
+        unreachable!()
+    }
+
     fn hash_stable(&self, _ctx: &mut CTX, _hasher: &mut StableHasher) {
         unreachable!()
     }
 }
 
 impl<CTX, T> HashStable<CTX> for PhantomData<T> {
+    fn structure(&self, _: &mut StructureState<CTX>) -> rmpv::Value {
+        rmpv::Value::Array(vec![])
+    }
+
     fn hash_stable(&self, _ctx: &mut CTX, _hasher: &mut StableHasher) {}
 }
 
 impl<CTX> HashStable<CTX> for NonZero<u32> {
+    #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        self.get().structure(state)
+    }
+
     #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self.get().hash_stable(ctx, hasher)
@@ -211,12 +273,22 @@ impl<CTX> HashStable<CTX> for NonZero<u32> {
 
 impl<CTX> HashStable<CTX> for NonZero<usize> {
     #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        self.get().structure(state)
+    }
+
+    #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self.get().hash_stable(ctx, hasher)
     }
 }
 
 impl<CTX> HashStable<CTX> for f32 {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let val: u32 = self.to_bits();
+        val.structure(state)
+    }
+
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         let val: u32 = self.to_bits();
         val.hash_stable(ctx, hasher);
@@ -224,6 +296,11 @@ impl<CTX> HashStable<CTX> for f32 {
 }
 
 impl<CTX> HashStable<CTX> for f64 {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let val: u64 = self.to_bits();
+        val.structure(state)
+    }
+
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         let val: u64 = self.to_bits();
         val.hash_stable(ctx, hasher);
@@ -232,12 +309,23 @@ impl<CTX> HashStable<CTX> for f64 {
 
 impl<CTX> HashStable<CTX> for ::std::cmp::Ordering {
     #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        (*self as i8).structure(state)
+    }
+
+    #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         (*self as i8).hash_stable(ctx, hasher);
     }
 }
 
 impl<T1: HashStable<CTX>, CTX> HashStable<CTX> for (T1,) {
+    #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let (ref _0,) = *self;
+        _0.structure(state)
+    }
+
     #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         let (ref _0,) = *self;
@@ -246,6 +334,14 @@ impl<T1: HashStable<CTX>, CTX> HashStable<CTX> for (T1,) {
 }
 
 impl<T1: HashStable<CTX>, T2: HashStable<CTX>, CTX> HashStable<CTX> for (T1, T2) {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let (ref _0, ref _1) = *self;
+        let mut out = Vec::new();
+        out.push(_0.structure(state));
+        out.push(_1.structure(state));
+        rmpv::Value::Array(out)
+    }
+
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         let (ref _0, ref _1) = *self;
         _0.hash_stable(ctx, hasher);
@@ -267,6 +363,15 @@ where
     T2: HashStable<CTX>,
     T3: HashStable<CTX>,
 {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let (ref _0, ref _1, ref _2) = *self;
+        let mut out = Vec::new();
+        out.push(_0.structure(state));
+        out.push(_1.structure(state));
+        out.push(_2.structure(state));
+        rmpv::Value::Array(out)
+    }
+
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         let (ref _0, ref _1, ref _2) = *self;
         _0.hash_stable(ctx, hasher);
@@ -291,6 +396,16 @@ where
     T3: HashStable<CTX>,
     T4: HashStable<CTX>,
 {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let (ref _0, ref _1, ref _2, ref _3) = *self;
+        let mut out = Vec::new();
+        out.push(_0.structure(state));
+        out.push(_1.structure(state));
+        out.push(_2.structure(state));
+        out.push(_3.structure(state));
+        rmpv::Value::Array(out)
+    }
+
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         let (ref _0, ref _1, ref _2, ref _3) = *self;
         _0.hash_stable(ctx, hasher);
@@ -312,6 +427,16 @@ impl<T1: StableOrd, T2: StableOrd, T3: StableOrd, T4: StableOrd> StableOrd for (
 }
 
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for [T] {
+    default fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent slices/arrays using a MessagePack array that mirrors
+        // the in-memory sequence of elements (no explicit length prefix).
+        let mut out = Vec::with_capacity(self.len());
+        for item in self {
+            out.push(item.structure(state));
+        }
+        rmpv::Value::Array(out)
+    }
+
     default fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self.len().hash_stable(ctx, hasher);
         for item in self {
@@ -321,6 +446,12 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for [T] {
 }
 
 impl<CTX> HashStable<CTX> for [u8] {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent byte slices as a MessagePack binary value which already
+        // contains length information and matches the memory representation.
+        rmpv::Value::Binary(self.to_vec())
+    }
+
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self.len().hash_stable(ctx, hasher);
         hasher.write(self);
@@ -328,6 +459,23 @@ impl<CTX> HashStable<CTX> for [u8] {
 }
 
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for Vec<T> {
+    #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        self[..].structure(state)
+    }
+
+    #[inline]
+    fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
+        self[..].hash_stable(ctx, hasher);
+    }
+}
+
+impl<T: HashStable<CTX>, CTX> HashStable<CTX> for thin_vec::ThinVec<T> {
+    #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        self[..].structure(state)
+    }
+
     #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self[..].hash_stable(ctx, hasher);
@@ -340,6 +488,17 @@ where
     V: HashStable<CTX>,
     R: BuildHasher,
 {
+    #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent maps as MessagePack maps so the structure mirrors the
+        // logical key->value relationship instead of a linear sequence.
+        let mut map = Vec::with_capacity(self.len());
+        for (k, v) in self.iter() {
+            map.push((k.structure(state), v.structure(state)));
+        }
+        rmpv::Value::Map(map)
+    }
+
     #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self.len().hash_stable(ctx, hasher);
@@ -355,6 +514,16 @@ where
     R: BuildHasher,
 {
     #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent sets as arrays of elements (order preserved by IndexSet).
+        let mut out = Vec::with_capacity(self.len());
+        for key in self {
+            out.push(key.structure(state));
+        }
+        rmpv::Value::Array(out)
+    }
+
+    #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self.len().hash_stable(ctx, hasher);
         for key in self {
@@ -368,12 +537,22 @@ where
     A: HashStable<CTX>,
 {
     #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        self[..].structure(state)
+    }
+
+    #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self[..].hash_stable(ctx, hasher);
     }
 }
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
+    #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        (**self).structure(state)
+    }
+
     #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         (**self).hash_stable(ctx, hasher);
@@ -382,6 +561,11 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
     #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        (**self).structure(state)
+    }
+
+    #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         (**self).hash_stable(ctx, hasher);
     }
@@ -389,12 +573,24 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::sync::Arc<T> {
     #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        (**self).structure(state)
+    }
+
+    #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         (**self).hash_stable(ctx, hasher);
     }
 }
 
 impl<CTX> HashStable<CTX> for str {
+    #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent strings as MessagePack strings (UTF-8) which mirrors
+        // their in-memory UTF-8 representation.
+        rmpv::Value::String(self.to_owned().into())
+    }
+
     #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self.as_bytes().hash_stable(ctx, hasher);
@@ -410,6 +606,11 @@ impl StableOrd for &str {
 }
 
 impl<CTX> HashStable<CTX> for String {
+    #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        rmpv::Value::String(self.clone().into())
+    }
+
     #[inline]
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         self[..].hash_stable(hcx, hasher);
@@ -442,6 +643,11 @@ impl<HCX, T1: ToStableHashKey<HCX>, T2: ToStableHashKey<HCX>> ToStableHashKey<HC
 
 impl<CTX> HashStable<CTX> for bool {
     #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        (if *self { 1u8 } else { 0u8 }).structure(state)
+    }
+
+    #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         (if *self { 1u8 } else { 0u8 }).hash_stable(ctx, hasher);
     }
@@ -458,6 +664,18 @@ impl<T, CTX> HashStable<CTX> for Option<T>
 where
     T: HashStable<CTX>,
 {
+    #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let mut out = Vec::new();
+        if let Some(ref value) = *self {
+            out.push(1u8.structure(state));
+            out.push(value.structure(state));
+        } else {
+            out.push(0u8.structure(state));
+        }
+        rmpv::Value::Array(out)
+    }
+
     #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         if let Some(ref value) = *self {
@@ -482,6 +700,17 @@ where
     T2: HashStable<CTX>,
 {
     #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let mut out = Vec::new();
+        out.push(mem::discriminant(self).structure(state));
+        match *self {
+            Ok(ref x) => out.push(x.structure(state)),
+            Err(ref x) => out.push(x.structure(state)),
+        }
+        rmpv::Value::Array(out)
+    }
+
+    #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         mem::discriminant(self).hash_stable(ctx, hasher);
         match *self {
@@ -496,12 +725,26 @@ where
     T: HashStable<CTX> + ?Sized,
 {
     #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        (**self).structure(state)
+    }
+
+    #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         (**self).hash_stable(ctx, hasher);
     }
 }
 
 impl<T, CTX> HashStable<CTX> for ::std::mem::Discriminant<T> {
+    #[inline]
+    fn structure(&self, _: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent the discriminant structurally using its Debug
+        // representation. This avoids hashing while still encoding which
+        // variant is present. Note: this is a pragmatic choice; a more
+        // robust option would be per-enum variant-index encodings.
+        rmpv::Value::String(format!("{:?}", self).into())
+    }
+
     #[inline]
     fn hash_stable(&self, _: &mut CTX, hasher: &mut StableHasher) {
         ::std::hash::Hash::hash(self, hasher);
@@ -513,6 +756,14 @@ where
     T: HashStable<CTX>,
 {
     #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let mut out = Vec::new();
+        out.push(self.start().structure(state));
+        out.push(self.end().structure(state));
+        rmpv::Value::Array(out)
+    }
+
+    #[inline]
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self.start().hash_stable(ctx, hasher);
         self.end().hash_stable(ctx, hasher);
@@ -523,6 +774,15 @@ impl<I: Idx, T, CTX> HashStable<CTX> for IndexSlice<I, T>
 where
     T: HashStable<CTX>,
 {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let mut out = Vec::new();
+        out.push(self.len().structure(state));
+        for v in &self.raw {
+            out.push(v.structure(state));
+        }
+        rmpv::Value::Array(out)
+    }
+
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self.len().hash_stable(ctx, hasher);
         for v in &self.raw {
@@ -535,6 +795,15 @@ impl<I: Idx, T, CTX> HashStable<CTX> for IndexVec<I, T>
 where
     T: HashStable<CTX>,
 {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let mut out = Vec::new();
+        out.push(self.len().structure(state));
+        for v in &self.raw {
+            out.push(v.structure(state));
+        }
+        rmpv::Value::Array(out)
+    }
+
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         self.len().hash_stable(ctx, hasher);
         for v in &self.raw {
@@ -544,12 +813,41 @@ where
 }
 
 impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
+    fn structure(&self, _: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent DenseBitSet structurally as [domain_size, [set_indices...]]
+        // by listing the indices of set bits. This avoids accessing private
+        // internals such as the word vector.
+        let mut out = Vec::with_capacity(2);
+        out.push(rmpv::Value::from(self.domain_size()));
+        let mut indices = Vec::new();
+        for idx in self.iter() {
+            indices.push(rmpv::Value::from(idx.index()));
+        }
+        out.push(rmpv::Value::Array(indices));
+        rmpv::Value::Array(out)
+    }
+
     fn hash_stable(&self, _ctx: &mut CTX, hasher: &mut StableHasher) {
         ::std::hash::Hash::hash(self, hasher);
     }
 }
 
 impl<R: Idx, C: Idx, CTX> HashStable<CTX> for bit_set::BitMatrix<R, C> {
+    fn structure(&self, _: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent BitMatrix structurally as an array of rows, where each
+        // row is an array of set column indices. This avoids reading private
+        // fields while preserving the matrix contents.
+        let mut rows_out = Vec::new();
+        for r in self.rows() {
+            let mut cols = Vec::new();
+            for c in self.iter(r) {
+                cols.push(rmpv::Value::from(c.index()));
+            }
+            rows_out.push(rmpv::Value::Array(cols));
+        }
+        rmpv::Value::Array(rows_out)
+    }
+
     fn hash_stable(&self, _ctx: &mut CTX, hasher: &mut StableHasher) {
         ::std::hash::Hash::hash(self, hasher);
     }
@@ -559,15 +857,25 @@ impl<T, CTX> HashStable<CTX> for bit_set::FiniteBitSet<T>
 where
     T: HashStable<CTX> + bit_set::FiniteBitSetTy,
 {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        self.0.structure(state)
+    }
+
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         self.0.hash_stable(hcx, hasher);
     }
 }
 
-impl_stable_traits_for_trivial_type!(::std::ffi::OsStr);
+impl_stable_traits_for_trivial_type!(::std::ffi::OsStr, |s: &::std::ffi::OsStr| {
+    rmpv::Value::String(s.to_string_lossy().into())
+});
 
-impl_stable_traits_for_trivial_type!(::std::path::Path);
-impl_stable_traits_for_trivial_type!(::std::path::PathBuf);
+impl_stable_traits_for_trivial_type!(::std::path::Path, |p: &::std::path::Path| {
+    rmpv::Value::String(p.to_string_lossy().into())
+});
+impl_stable_traits_for_trivial_type!(::std::path::PathBuf, |p: &::std::path::PathBuf| {
+    rmpv::Value::String(p.to_string_lossy().into())
+});
 
 // It is not safe to implement HashStable for HashSet, HashMap or any other collection type
 // with unstable but observable iteration order.
@@ -580,6 +888,16 @@ where
     K: HashStable<HCX> + StableOrd,
     V: HashStable<HCX>,
 {
+    fn structure(&self, state: &mut StructureState<HCX>) -> rmpv::Value {
+        let mut out = Vec::new();
+        out.push(self.len().structure(state));
+        for (k, v) in self.iter() {
+            out.push(k.structure(state));
+            out.push(v.structure(state));
+        }
+        rmpv::Value::Array(out)
+    }
+
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
         self.len().hash_stable(hcx, hasher);
         for entry in self.iter() {
@@ -592,6 +910,15 @@ impl<K, HCX> HashStable<HCX> for ::std::collections::BTreeSet<K>
 where
     K: HashStable<HCX> + StableOrd,
 {
+    fn structure(&self, state: &mut StructureState<HCX>) -> rmpv::Value {
+        let mut out = Vec::new();
+        out.push(self.len().structure(state));
+        for entry in self.iter() {
+            out.push(entry.structure(state));
+        }
+        rmpv::Value::Array(out)
+    }
+
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
         self.len().hash_stable(hcx, hasher);
         for entry in self.iter() {

@@ -82,7 +82,7 @@ use std::sync::Arc;
 use std::{fmt, iter};
 
 use md5::{Digest, Md5};
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 use rustc_data_structures::sync::{FreezeLock, FreezeWriteGuard, Lock};
 use rustc_data_structures::unord::UnordMap;
 use rustc_hashes::{Hash64, Hash128};
@@ -2678,6 +2678,30 @@ impl<D: Decoder> Decodable<D> for BytePos {
 }
 
 impl<H: HashStableContext> HashStable<H> for RelativeBytePos {
+    fn structure(&self, state: &mut StructureState<H>) -> rmpv::Value {
+        self.0.structure(state)
+    }
+
+    fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
+        self.0.hash_stable(hcx, hasher);
+    }
+}
+
+impl<H: HashStableContext> HashStable<H> for BytePos {
+    fn structure(&self, state: &mut StructureState<H>) -> rmpv::Value {
+        self.0.structure(state)
+    }
+
+    fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
+        self.0.hash_stable(hcx, hasher);
+    }
+}
+
+impl<H: HashStableContext> HashStable<H> for CharPos {
+    fn structure(&self, state: &mut StructureState<H>) -> rmpv::Value {
+        self.0.structure(state)
+    }
+
     fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
         self.0.hash_stable(hcx, hasher);
     }
@@ -2810,6 +2834,14 @@ impl<CTX> HashStable<CTX> for Span
 where
     CTX: HashStableContext,
 {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let mut out = Vec::new();
+        out.push(self.lo().structure(state));
+        out.push(self.hi().structure(state));
+        out.push(self.ctxt().structure(state));
+        rmpv::Value::Array(out)
+    }
+
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
         // `span_hash_stable` does all the work.
         ctx.span_hash_stable(*self, hasher)

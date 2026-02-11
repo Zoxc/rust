@@ -118,12 +118,20 @@ impl fmt::Debug for InferConst {
 
 #[cfg(feature = "nightly")]
 impl<CTX> HashStable<CTX> for InferConst {
+use rustc_data_structures::stable_hasher::{StructureState, rmpv};
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         match self {
             InferConst::Var(_) => {
                 panic!("const variables should not be hashed: {self:?}")
             }
             InferConst::Fresh(i) => i.hash_stable(hcx, hasher),
+        }
+    }
+
+    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+        match self {
+            InferConst::Var(_) => rmpv::Value::String("Var".into()),
+            InferConst::Fresh(i) => rmpv::Value::from(*i),
         }
     }
 }

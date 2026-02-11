@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::ptr;
 
-use crate::stable_hasher::{HashStable, StableHasher};
+use crate::stable_hasher::{HashStable, StableHasher, StructureState};
 
 mod private {
     #[derive(Clone, Copy, Debug)]
@@ -107,6 +107,10 @@ impl<T, CTX> HashStable<CTX> for Interned<'_, T>
 where
     T: HashStable<CTX>,
 {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        self.0.structure(state)
+    }
+
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         self.0.hash_stable(hcx, hasher);
     }

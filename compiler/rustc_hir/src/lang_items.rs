@@ -9,7 +9,7 @@
 
 use rustc_ast::attr::AttributeExt;
 use rustc_data_structures::fx::FxIndexMap;
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 use rustc_macros::{BlobDecodable, Encodable, HashStable_Generic};
 use rustc_span::{Span, Symbol, kw, sym};
 
@@ -147,6 +147,11 @@ macro_rules! language_item_table {
 impl<CTX> HashStable<CTX> for LangItem {
     fn hash_stable(&self, _: &mut CTX, hasher: &mut StableHasher) {
         ::std::hash::Hash::hash(self, hasher);
+    }
+
+    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent the variant by its discriminant (as an integer) for structure.
+        rmpv::Value::from(*self as u32)
     }
 }
 

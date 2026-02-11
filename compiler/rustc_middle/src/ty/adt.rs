@@ -7,7 +7,7 @@ use rustc_abi::{FIRST_VARIANT, ReprOptions, VariantIdx};
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::intern::Interned;
-use rustc_data_structures::stable_hasher::{HashStable, HashingControls, StableHasher};
+use rustc_data_structures::stable_hasher::{HashStable, HashingControls, StableHasher, StructureState, rmpv};
 use rustc_errors::ErrorGuaranteed;
 use rustc_hir::attrs::AttributeKind;
 use rustc_hir::def::{CtorKind, DefKind, Res};
@@ -169,6 +169,16 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
         });
 
         hash.hash_stable(hcx, hasher);
+    }
+
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+        // Represent ADT definition by its DefId and variant layout information which is
+        // invariant across sessions.
+        let mut out = Vec::new();
+        out.push(self.did.structure(state));
+        out.push(self.flags.structure(state));
+        out.push(self.repr.discr_type().structure(state));
+        rmpv::Value::Array(out)
     }
 }
 

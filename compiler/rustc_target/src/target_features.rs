@@ -2,7 +2,7 @@
 //! Note that these are similar to but not always identical to LLVM's feature names,
 //! and Rust adds some features that do not correspond to LLVM features at all.
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 use rustc_span::{Symbol, sym};
 
 use crate::spec::{Abi, Arch, FloatAbi, RustcAbi, Target};
@@ -45,6 +45,19 @@ impl<CTX> HashStable<CTX> for Stability {
                 reason.hash_stable(hcx, hasher);
             }
         }
+    }
+
+    #[inline]
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        use Stability::*;
+        let mut out = Vec::new();
+        out.push(std::mem::discriminant(self).structure(state));
+        match self {
+            Stable => {}
+            Unstable(nightly_feature) => out.push(nightly_feature.structure(state)),
+            Forbidden { reason } => out.push(rmpv::Value::from(*reason)),
+        }
+        rmpv::Value::Array(out)
     }
 }
 

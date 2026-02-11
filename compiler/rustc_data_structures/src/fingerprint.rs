@@ -3,7 +3,9 @@ use std::hash::{Hash, Hasher};
 use rustc_hashes::Hash64;
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
 
-use crate::stable_hasher::{FromStableHash, StableHasherHash, impl_stable_traits_for_trivial_type};
+use crate::stable_hasher::{
+    FromStableHash, HashStable, StableHasher, StableHasherHash, StructureState,
+};
 
 #[cfg(test)]
 mod tests;
@@ -165,7 +167,26 @@ impl FromStableHash for Fingerprint {
     }
 }
 
-impl_stable_traits_for_trivial_type!(Fingerprint);
+use crate::stable_hasher::{StableOrd, rmpv};
+
+impl<CTX> HashStable<CTX> for Fingerprint {
+    #[inline]
+    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+        rmpv::Value::Binary(self.to_le_bytes().to_vec())
+    }
+
+    #[inline]
+    fn hash_stable(&self, _ctx: &mut CTX, hasher: &mut StableHasher) {
+        ::std::hash::Hash::hash(self, hasher);
+    }
+}
+
+impl StableOrd for Fingerprint {
+    const CAN_USE_UNSTABLE_SORT: bool = true;
+
+    // Ordering of Fingerprint depends solely on its bytes.
+    const THIS_IMPLEMENTATION_HAS_BEEN_TRIPLE_CHECKED: () = ();
+}
 
 impl<E: Encoder> Encodable<E> for Fingerprint {
     #[inline]

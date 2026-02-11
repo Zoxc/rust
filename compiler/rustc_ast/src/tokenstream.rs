@@ -10,7 +10,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::{cmp, fmt, iter, mem};
 
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 use rustc_data_structures::sync;
 use rustc_macros::{Decodable, Encodable, HashStable_Generic, Walkable};
 use rustc_serialize::{Decodable, Encodable};
@@ -139,6 +139,11 @@ impl<D: SpanDecoder> Decodable<D> for LazyAttrTokenStream {
 }
 
 impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+        // No structural representation for lazy token streams; use Debug string.
+        rmpv::Value::String(format!("LazyAttrTokenStream({:?})", self.to_attr_token_stream()).into())
+    }
+
     fn hash_stable(&self, _hcx: &mut CTX, _hasher: &mut StableHasher) {
         panic!("Attempted to compute stable hash for LazyAttrTokenStream");
     }
@@ -828,6 +833,14 @@ impl<CTX> HashStable<CTX> for TokenStream
 where
     CTX: crate::HashStableContext,
 {
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        let mut out = Vec::new();
+        for sub_tt in self.iter() {
+            out.push(sub_tt.structure(state));
+        }
+        rmpv::Value::Array(out)
+    }
+
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         for sub_tt in self.iter() {
             sub_tt.hash_stable(hcx, hasher);

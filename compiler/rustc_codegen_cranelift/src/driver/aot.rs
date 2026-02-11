@@ -14,7 +14,7 @@ use rustc_codegen_ssa::back::write::{CompiledModules, produce_final_output_artif
 use rustc_codegen_ssa::base::determine_cgu_reuse;
 use rustc_codegen_ssa::{CodegenResults, CompiledModule, CrateInfo, ModuleKind};
 use rustc_data_structures::profiling::SelfProfilerRef;
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 use rustc_data_structures::sync::{IntoDynSyncSend, par_map};
 use rustc_hir::attrs::Linkage as RLinkage;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};
@@ -48,6 +48,11 @@ enum OngoingModuleCodegen {
 impl<HCX> HashStable<HCX> for OngoingModuleCodegen {
     fn hash_stable(&self, _: &mut HCX, _: &mut StableHasher) {
         // do nothing
+    }
+
+    fn structure(&self, _state: &mut StructureState<HCX>) -> rmpv::Value {
+        // OngoingModuleCodegen is transient/runtime-only; represent as Nil
+        rmpv::Value::Nil
     }
 }
 

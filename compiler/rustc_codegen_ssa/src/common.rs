@@ -98,13 +98,17 @@ pub enum TypeKind {
 //            for now we content ourselves with providing a no-op HashStable
 //            implementation for CGUs.
 mod temp_stable_hash_impls {
-    use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+    use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 
     use crate::ModuleCodegen;
 
     impl<HCX, M> HashStable<HCX> for ModuleCodegen<M> {
         fn hash_stable(&self, _: &mut HCX, _: &mut StableHasher) {
             // do nothing
+        }
+        fn structure(&self, _state: &mut StructureState<HCX>) -> rmpv::Value {
+            // ModuleCodegen contents are transient for hashing; represent as Nil
+            rmpv::Value::Nil
         }
     }
 }

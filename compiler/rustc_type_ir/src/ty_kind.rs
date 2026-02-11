@@ -4,7 +4,7 @@ use std::ops::Deref;
 use derive_where::derive_where;
 use rustc_ast_ir::Mutability;
 #[cfg(feature = "nightly")]
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 #[cfg(feature = "nightly")]
 use rustc_macros::{Decodable_NoContext, Encodable_NoContext, HashStable_NoContext};
 use rustc_type_ir::data_structures::{NoError, UnifyKey, UnifyValue};
@@ -680,6 +680,16 @@ impl<CTX> HashStable<CTX> for InferTy {
                 panic!("type variables should not be hashed: {self:?}")
             }
             FreshTy(v) | FreshIntTy(v) | FreshFloatTy(v) => v.hash_stable(ctx, hasher),
+        }
+    }
+
+    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+        use InferTy::*;
+        match self {
+            TyVar(_) => rmpv::Value::String("TyVar".into()),
+            IntVar(_) => rmpv::Value::String("IntVar".into()),
+            FloatVar(_) => rmpv::Value::String("FloatVar".into()),
+            FreshTy(v) | FreshIntTy(v) | FreshFloatTy(v) => rmpv::Value::from(*v),
         }
     }
 }

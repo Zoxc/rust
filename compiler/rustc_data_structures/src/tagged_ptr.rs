@@ -12,7 +12,7 @@ use std::ops::Deref;
 use std::ptr::NonNull;
 
 use crate::aligned::Aligned;
-use crate::stable_hasher::{HashStable, StableHasher};
+use crate::stable_hasher::{HashStable, StableHasher, StructureState};
 
 /// This describes tags that the [`TaggedRef`] struct can hold.
 ///
@@ -262,6 +262,14 @@ where
     P: HashStable<HCX> + Aligned + ?Sized,
     T: Tag + HashStable<HCX>,
 {
+    fn structure(&self, state: &mut StructureState<HCX>) -> rmpv::Value {
+        let mut out = Vec::new();
+        // Keep the same order as `hash_stable`.
+        out.push(self.pointer().structure(state));
+        out.push(self.tag().structure(state));
+        rmpv::Value::Array(out)
+    }
+
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
         self.pointer().hash_stable(hcx, hasher);
         self.tag().hash_stable(hcx, hasher);

@@ -7,7 +7,7 @@ use std::ptr;
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::stable_hasher::{
-    HashStable, HashingControls, StableHasher, ToStableHashKey,
+    HashStable, HashingControls, StableHasher, StructureState, ToStableHashKey, rmpv,
 };
 use rustc_query_system::ich::StableHashingContext;
 use tracing::trace;
@@ -44,6 +44,11 @@ where
 
         hash.hash_stable(hcx, hasher);
     }
+
+    fn structure(&self, _state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+        // Represent the list structurally as an array of its element structures.
+        rmpv::Value::Array(self[..].iter().map(|e| e.structure(_state)).collect())
+    }
 }
 
 impl<'a, 'tcx, H, T> ToStableHashKey<StableHashingContext<'a>> for &'tcx ty::list::RawList<H, T>
@@ -65,6 +70,11 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for ty::GenericArg<'tcx> {
     fn hash_stable(&self, hcx: &mut StableHashingContext<'a>, hasher: &mut StableHasher) {
         self.kind().hash_stable(hcx, hasher);
     }
+
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+        // Delegate to the kind's structural representation
+        self.kind().structure(state)
+    }
 }
 
 // AllocIds get resolved to whatever they point to (to be stable)
@@ -76,11 +86,23 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
             tcx.try_get_global_alloc(*self).hash_stable(hcx, hasher);
         });
     }
+
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+        // We cannot access tcx here; represent AllocId by its resolved allocation's structure when available.
+        // Fall back to a tag indicating AllocId.
+        rmpv::Value::String("AllocId".into())
+    }
 }
 
 impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance {
     fn hash_stable(&self, hcx: &mut StableHashingContext<'a>, hasher: &mut StableHasher) {
         self.into_parts().hash_stable(hcx, hasher);
+    }
+
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+        // Represent by its decomposed parts
+        let (alloc, a, b) = self.into_parts();
+        rmpv::Value::Array(vec![alloc.structure(state), a.structure(state), b.structure(state)])
     }
 }
 

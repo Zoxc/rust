@@ -12,7 +12,10 @@ use rustc_macros::{Decodable_NoContext, Encodable_NoContext};
 
 use crate::fingerprint::Fingerprint;
 use crate::fx::{FxBuildHasher, FxHashMap, FxHashSet};
-use crate::stable_hasher::{HashStable, StableCompare, StableHasher, ToStableHashKey};
+use crate::stable_hasher::rmpv;
+use crate::stable_hasher::{
+    HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey,
+};
 
 /// `UnordItems` is the order-less version of `Iterator`. It only contains methods
 /// that don't (easily) expose an ordering of the underlying items.
@@ -416,6 +419,30 @@ impl<V: Hash + Eq, I: Iterator<Item = V>> From<UnordItems<V, I>> for UnordSet<V>
 }
 
 impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
+    fn structure(&self, state: &mut StructureState<HCX>) -> rmpv::Value {
+        // Represent the set structurally in an order-independent way without
+        // using hashing. Use a MessagePack map where each key is the
+        // structural representation of an element and the value is `1`.
+        let mut out = Vec::new();
+        out.push(self.inner.len().structure(state));
+
+        match self.inner.len() {
+            0 => {}
+            1 => {
+                out.push(self.inner.iter().next().unwrap().structure(state));
+            }
+            _ => {
+                let mut map = Vec::with_capacity(self.inner.len());
+                for item in self.inner.iter() {
+                    map.push((item.structure(state), rmpv::Value::from(1u8)));
+                }
+                out.push(rmpv::Value::Map(map));
+            }
+        }
+
+        rmpv::Value::Array(out)
+    }
+
     #[inline]
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
         hash_iter_order_independent(self.inner.iter(), hcx, hasher);
@@ -639,6 +666,29 @@ where
 }
 
 impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> for UnordMap<K, V> {
+    fn structure(&self, state: &mut StructureState<HCX>) -> rmpv::Value {
+        // Represent the map structurally as a MessagePack map of key->value
+        // where both key and value are their structural representations.
+        let mut out = Vec::new();
+        out.push(self.inner.len().structure(state));
+
+        match self.inner.len() {
+            0 => {}
+            1 => {
+                out.push(self.inner.iter().next().unwrap().structure(state));
+            }
+            _ => {
+                let mut map = Vec::with_capacity(self.inner.len());
+                for (k, v) in self.inner.iter() {
+                    map.push((k.structure(state), v.structure(state)));
+                }
+                out.push(rmpv::Value::Map(map));
+            }
+        }
+
+        rmpv::Value::Array(out)
+    }
+
     #[inline]
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
         hash_iter_order_independent(self.inner.iter(), hcx, hasher);
@@ -702,6 +752,42 @@ impl<T, I: Iterator<Item = T>> From<UnordItems<T, I>> for UnordBag<T> {
 }
 
 impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
+    fn structure(&self, state: &mut StructureState<HCX>) -> rmpv::Value {
+        // Represent bag (multiset) structurally as a MessagePack map from
+        // element-structure -> count. This encodes multiplicity without
+        // depending on iteration order or hashing.
+        let mut out = Vec::new();
+        out.push(self.inner.len().structure(state));
+
+        match self.inner.len() {
+            0 => {}
+            1 => {
+                out.push(self.inner.iter().next().unwrap().structure(state));
+            }
+            _ => {
+                // Aggregate counts by equality of structural representation.
+                let mut counts: Vec<(rmpv::Value, u64)> = Vec::new();
+                for item in self.inner.iter() {
+                    let key = item.structure(state);
+                    if let Some((_k, cnt)) = counts.iter_mut().find(|(k, _)| *k == key) {
+                        *cnt += 1;
+                    } else {
+                        counts.push((key, 1u64));
+                    }
+                }
+
+                let mut map = Vec::with_capacity(counts.len());
+                for (k, v) in counts.into_iter() {
+                    map.push((k, rmpv::Value::from(v)));
+                }
+
+                out.push(rmpv::Value::Map(map));
+            }
+        }
+
+        rmpv::Value::Array(out)
+    }
+
     #[inline]
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
         hash_iter_order_independent(self.inner.iter(), hcx, hasher);

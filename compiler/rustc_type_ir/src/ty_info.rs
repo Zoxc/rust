@@ -97,7 +97,9 @@ impl<T: Hash> Hash for WithCachedTypeInfo<T> {
 }
 
 #[cfg(feature = "nightly")]
+
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
+use rustc_data_structures::stable_hasher::{StructureState, rmpv};
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         if self.stable_hash == Fingerprint::ZERO || cfg!(debug_assertions) {
             // No cached hash available. This can only mean that incremental is disabled.
@@ -121,5 +123,14 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
         } else {
             self.stable_hash.hash_stable(hcx, hasher);
         }
+    }
+
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+        // Represent by internee's structure plus cached fingerprint when present.
+        let mut out = Vec::new();
+        out.push(self.internee.structure(state));
+        #[cfg(feature = "nightly")]
+        out.push(self.stable_hash.structure(state));
+        rmpv::Value::Array(out)
     }
 }

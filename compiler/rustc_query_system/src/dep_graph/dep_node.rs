@@ -60,7 +60,9 @@ use std::hash::Hash;
 
 use rustc_data_structures::AtomicRef;
 use rustc_data_structures::fingerprint::{Fingerprint, PackedFingerprint};
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StableOrd, ToStableHashKey};
+use rustc_data_structures::stable_hasher::{
+    HashStable, StableHasher, StableOrd, StructureState, ToStableHashKey, rmpv,
+};
 use rustc_hir::definitions::DefPathHash;
 use rustc_macros::{Decodable, Encodable};
 
@@ -307,6 +309,11 @@ impl<HCX> HashStable<HCX> for WorkProductId {
     #[inline]
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
         self.hash.hash_stable(hcx, hasher)
+    }
+
+    fn structure(&self, state: &mut StructureState<HCX>) -> rmpv::Value {
+        // Fingerprint already has a structure() impl that returns Binary(16)
+        self.hash.structure(state)
     }
 }
 impl<HCX> ToStableHashKey<HCX> for WorkProductId {

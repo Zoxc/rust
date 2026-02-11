@@ -34,6 +34,7 @@ use rustc_data_structures::assert_matches;
 use rustc_data_structures::fx::{FxHashSet, FxIndexMap, FxIndexSet};
 use rustc_data_structures::intern::Interned;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
+use rustc_data_structures::stable_hasher::{StructureState, rmpv};
 use rustc_data_structures::steal::Steal;
 use rustc_data_structures::unord::{UnordMap, UnordSet};
 use rustc_errors::{Diag, ErrorGuaranteed, LintBuffer};
@@ -539,6 +540,10 @@ impl<'tcx> From<Const<'tcx>> for Term<'tcx> {
 impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for Term<'tcx> {
     fn hash_stable(&self, hcx: &mut StableHashingContext<'a>, hasher: &mut StableHasher) {
         self.kind().hash_stable(hcx, hasher);
+    }
+
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+        self.kind().structure(state)
     }
 }
 
