@@ -6,11 +6,14 @@ LL |     require_send(send_fut);
    |
    = help: the trait `Sync` is not implemented for `RefCell<i32>`
    = note: if you want to do aliasing and mutation between multiple threads, use `std::sync::RwLock` instead
-note: future is not `Send` as it awaits another future which is not `Send`
-  --> $DIR/issue-68112.rs:31:17
+note: future is not `Send` as this value is used across an await
+  --> $DIR/issue-68112.rs:31:30
    |
 LL |         let _ = non_send_fut.await;
-   |                 ^^^^^^^^^^^^ await occurs here on type `impl Future<Output = Arc<RefCell<i32>>>`, which is not `Send`
+   |                 -------------^^^^^
+   |                 |            |
+   |                 |            await occurs here, with `non_send_fut.await` maybe used later
+   |                 has type `UnsafePinned<impl Future<Output = Arc<RefCell<i32>>>>` which is not `Send`
 note: required by a bound in `require_send`
   --> $DIR/issue-68112.rs:11:25
    |
@@ -25,11 +28,14 @@ LL |     require_send(send_fut);
    |
    = help: the trait `Sync` is not implemented for `RefCell<i32>`
    = note: if you want to do aliasing and mutation between multiple threads, use `std::sync::RwLock` instead
-note: future is not `Send` as it awaits another future which is not `Send`
-  --> $DIR/issue-68112.rs:40:17
+note: future is not `Send` as this value is used across an await
+  --> $DIR/issue-68112.rs:40:41
    |
 LL |         let _ = make_non_send_future1().await;
-   |                 ^^^^^^^^^^^^^^^^^^^^^^^ await occurs here on type `impl Future<Output = Arc<RefCell<i32>>>`, which is not `Send`
+   |                 ------------------------^^^^^
+   |                 |                       |
+   |                 |                       await occurs here, with `make_non_send_future1().await` maybe used later
+   |                 has type `UnsafePinned<impl Future<Output = Arc<RefCell<i32>>>>` which is not `Send`
 note: required by a bound in `require_send`
   --> $DIR/issue-68112.rs:11:25
    |
@@ -58,6 +64,10 @@ note: required because it appears within the type `impl Future<Output = Arc<RefC
    |
 LL | fn make_non_send_future2() -> impl Future<Output = Arc<RefCell<i32>>> {
    |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required because it appears within the type `UnsafeCell<impl Future<Output = Arc<RefCell<i32>>>>`
+  --> $SRC_DIR/core/src/cell.rs:LL:COL
+note: required because it appears within the type `UnsafePinned<impl Future<Output = Arc<RefCell<i32>>>>`
+  --> $SRC_DIR/core/src/pin/unsafe_pinned.rs:LL:COL
 note: required because it's used within this `async` block
   --> $DIR/issue-68112.rs:57:20
    |
