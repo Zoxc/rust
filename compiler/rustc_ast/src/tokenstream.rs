@@ -12,6 +12,7 @@ use std::{cmp, fmt, iter, mem};
 
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 use rustc_data_structures::sync;
+use rustc_data_structures::inspect;
 use rustc_macros::{Decodable, Encodable, HashStable_Generic, Walkable};
 use rustc_serialize::{Decodable, Encodable};
 use rustc_span::{DUMMY_SP, Span, SpanDecoder, SpanEncoder, Symbol, sym};
@@ -139,11 +140,9 @@ impl<D: SpanDecoder> Decodable<D> for LazyAttrTokenStream {
 }
 
 impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
-    fn structure(&self, _state: &mut StructureState<CTX>) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> inspect::Value {
         // No structural representation for lazy token streams; use Debug string.
-        ::rustc_data_structures::inspect::Value::String(
-            format!("LazyAttrTokenStream({:?})", self.to_attr_token_stream()).into(),
-        )
+        inspect::Value::String(format!("LazyAttrTokenStream({:?})", self.to_attr_token_stream()).into())
     }
 
     fn hash_stable(&self, _hcx: &mut CTX, _hasher: &mut StableHasher) {
@@ -835,12 +834,12 @@ impl<CTX> HashStable<CTX> for TokenStream
 where
     CTX: crate::HashStableContext,
 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, state: &mut StructureState<CTX>) -> inspect::Value {
         let mut out = Vec::new();
         for sub_tt in self.iter() {
-            out.push(::rustc_data_structures::inspect::Value::from(sub_tt.structure(state)));
+            out.push(inspect::Value::from(sub_tt.structure(state)));
         }
-        ::rustc_data_structures::inspect::Value::Array(out)
+        inspect::Value::Array(out)
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

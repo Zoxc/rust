@@ -7,6 +7,7 @@ use std::{fmt, str};
 
 use rustc_arena::DroplessArena;
 use rustc_data_structures::fx::{FxHashSet, FxIndexSet};
+use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
     HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey,
 };
@@ -2888,12 +2889,9 @@ impl fmt::Display for Symbol {
 
 impl<CTX> HashStable<CTX> for Symbol {
     #[inline]
-    fn structure(
-        &self,
-        _state: &mut StructureState<CTX>,
-    ) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> inspect::Value {
         // Represent a `Symbol` by its string contents.
-        ::rustc_data_structures::inspect::Value::String(self.as_str().to_string().into())
+        inspect::Value::String(self.as_str().to_string().into())
     }
 
     #[inline]
@@ -2957,12 +2955,9 @@ impl fmt::Debug for ByteSymbol {
 
 impl<CTX> HashStable<CTX> for ByteSymbol {
     #[inline]
-    fn structure(
-        &self,
-        _state: &mut StructureState<CTX>,
-    ) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> inspect::Value {
         // Represent a `ByteSymbol` as a binary with the original bytes.
-        ::rustc_data_structures::inspect::Value::Binary(self.as_byte_str().to_vec())
+        inspect::Value::Binary(self.as_byte_str().to_vec())
     }
 
     #[inline]

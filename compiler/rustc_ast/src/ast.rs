@@ -26,6 +26,7 @@ pub use UnsafeSource::*;
 pub use rustc_ast_ir::{FloatTy, IntTy, Movability, Mutability, Pinnedness, UintTy};
 use rustc_data_structures::packed::Pu128;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
+use rustc_data_structures::inspect;
 use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_data_structures::tagged_ptr::Tag;
 use rustc_macros::{Decodable, Encodable, HashStable_Generic, Walkable};
@@ -120,13 +121,13 @@ impl PartialEq<&[Symbol]> for Path {
 }
 
 impl<CTX: rustc_span::HashStableContext> HashStable<CTX> for Path {
-    fn structure(&self, state: &mut StructureState<CTX>) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, state: &mut StructureState<CTX>) -> inspect::Value {
         let mut out = Vec::new();
-        out.push(::rustc_data_structures::inspect::Value::UInt(self.segments.len() as u128));
+        out.push(inspect::Value::UInt(self.segments.len() as u128));
         for segment in &self.segments {
-            out.push(::rustc_data_structures::inspect::Value::from(segment.ident.structure(state)));
+            out.push(inspect::Value::from(segment.ident.structure(state)));
         }
-        ::rustc_data_structures::inspect::Value::Array(out)
+        inspect::Value::Array(out)
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

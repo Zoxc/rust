@@ -4,6 +4,7 @@ use std::num::NonZero;
 use rustc_abi::Size;
 use rustc_apfloat::Float;
 use rustc_apfloat::ieee::{Double, Half, Quad, Single};
+use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{StructureState, rmpv};
 use rustc_errors::{DiagArgValue, IntoDiagArg};
 use rustc_serialize::{Decodable, Decoder, Encodable, Encoder};
@@ -171,14 +172,9 @@ impl<CTX> crate::ty::HashStable<CTX> for ScalarInt {
         self.size.get().hash_stable(hcx, hasher);
     }
 
-    fn structure(
-        &self,
-        _state: &mut StructureState<CTX>,
-    ) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> inspect::Value {
         // Represent the raw bytes (little-endian) as binary per canonical representation
-        ::rustc_data_structures::inspect::Value::Binary(
-            self.to_bits_unchecked().to_le_bytes().to_vec(),
-        )
+        inspect::Value::Binary(self.to_bits_unchecked().to_le_bytes().to_vec())
     }
 }
 

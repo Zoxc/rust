@@ -6,6 +6,7 @@ use std::hash::Hash;
 
 use rustc_data_structures::fx::{FxIndexMap, IndexEntry};
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
+use rustc_data_structures::inspect;
 use rustc_hir::def::DefKind;
 use rustc_macros::HashStable;
 use rustc_query_system::ich::StableHashingContext;
@@ -279,8 +280,8 @@ impl<'a> HashStable<StableHashingContext<'a>> for EffectiveVisibilities {
         map.hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> inspect::Value {
         let EffectiveVisibilities { ref map } = *self;
-        ::rustc_data_structures::inspect::Value::from(map.structure(state))
+        inspect::Value::from(map.structure(state))
     }
 }

@@ -117,6 +117,8 @@ impl fmt::Debug for InferConst {
 }
 
 #[cfg(feature = "nightly")]
+use rustc_data_structures::inspect;
+#[cfg(feature = "nightly")]
 use rustc_data_structures::stable_hasher::{StructureState, rmpv};
 #[cfg(feature = "nightly")]
 impl<CTX> HashStable<CTX> for InferConst {
@@ -129,13 +131,10 @@ impl<CTX> HashStable<CTX> for InferConst {
         }
     }
 
-    fn structure(
-        &self,
-        _state: &mut StructureState<CTX>,
-    ) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> inspect::Value {
         match self {
-            InferConst::Var(_) => ::rustc_data_structures::inspect::Value::String("Var".into()),
-            InferConst::Fresh(i) => ::rustc_data_structures::inspect::Value::UInt(*i as u128),
+            InferConst::Var(_) => inspect::Value::String("Var".into()),
+            InferConst::Fresh(i) => inspect::Value::UInt(*i as u128),
         }
     }
 }

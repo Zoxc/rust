@@ -96,8 +96,8 @@ impl<T: Hash> Hash for WithCachedTypeInfo<T> {
     }
 }
 
-// Avoid importing `inspect::Value` as `Value` or `InspectValue` to prevent
-// name collisions with local types. Use fully-qualified paths where needed.
+use rustc_data_structures::inspect;
+// Use `inspect::Value` to refer to the compact inspect type.
 #[cfg(feature = "nightly")]
 use rustc_data_structures::stable_hasher::{StructureState, rmpv};
 #[cfg(feature = "nightly")]
@@ -127,12 +127,12 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
         }
     }
 
-    fn structure(&self, state: &mut StructureState<CTX>) -> rustc_data_structures::inspect::Value {
+    fn structure(&self, state: &mut StructureState<CTX>) -> inspect::Value {
         // Represent by internee's structure plus cached fingerprint when present.
         let mut out = Vec::new();
         out.push(self.internee.structure(state));
         #[cfg(feature = "nightly")]
         out.push(self.stable_hash.structure(state));
-        rustc_data_structures::inspect::Value::Array(out)
+        inspect::Value::Array(out)
     }
 }

@@ -10,6 +10,7 @@ use rustc_data_structures::intern::Interned;
 use rustc_data_structures::stable_hasher::{
     HashStable, HashingControls, StableHasher, StructureState, rmpv,
 };
+use rustc_data_structures::inspect;
 use rustc_errors::ErrorGuaranteed;
 use rustc_hir::attrs::AttributeKind;
 use rustc_hir::def::{CtorKind, DefKind, Res};
@@ -173,14 +174,14 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
         hash.hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> inspect::Value {
         // Represent ADT definition by its DefId and variant layout information which is
         // invariant across sessions.
         let mut out = Vec::new();
-        out.push(::rustc_data_structures::inspect::Value::from(self.did.structure(state)));
-        out.push(::rustc_data_structures::inspect::Value::from(self.flags.structure(state)));
-        out.push(::rustc_data_structures::inspect::Value::from(self.repr.discr_type().structure(state)));
-        ::rustc_data_structures::inspect::Value::Array(out)
+        out.push(inspect::Value::from(self.did.structure(state)));
+        out.push(inspect::Value::from(self.flags.structure(state)));
+        out.push(inspect::Value::from(self.repr.discr_type().structure(state)));
+        inspect::Value::Array(out)
     }
 }
 

@@ -3,6 +3,7 @@ use std::hash::{BuildHasherDefault, Hash, Hasher};
 
 use rustc_data_structures::AtomicRef;
 use rustc_data_structures::fingerprint::Fingerprint;
+use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
     HashStable, StableHasher, StableOrd, StructureState, ToStableHashKey,
 };
@@ -406,14 +407,11 @@ rustc_data_structures::define_id_collections!(
 
 impl<CTX: HashStableContext> HashStable<CTX> for DefId {
     #[inline]
-    fn structure(
-        &self,
-        _state: &mut StructureState<CTX>,
-    ) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> inspect::Value {
         // Represent a DefId structurally as [krate.structure, index].
-        ::rustc_data_structures::inspect::Value::Array(vec![
+        inspect::Value::Array(vec![
             self.krate.structure(_state),
-            ::rustc_data_structures::inspect::Value::UInt(self.index.as_u32() as u128),
+            inspect::Value::UInt(self.index.as_u32() as u128),
         ])
     }
 
@@ -425,10 +423,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for DefId {
 
 impl<CTX: HashStableContext> HashStable<CTX> for LocalDefId {
     #[inline]
-    fn structure(
-        &self,
-        state: &mut StructureState<CTX>,
-    ) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, state: &mut StructureState<CTX>) -> inspect::Value {
         self.to_def_id().structure(state)
     }
 
@@ -440,12 +435,9 @@ impl<CTX: HashStableContext> HashStable<CTX> for LocalDefId {
 
 impl<CTX: HashStableContext> HashStable<CTX> for CrateNum {
     #[inline]
-    fn structure(
-        &self,
-        _state: &mut StructureState<CTX>,
-    ) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> inspect::Value {
         // Represent CrateNum structurally as its u32 value.
-        ::rustc_data_structures::inspect::Value::UInt(self.as_u32() as u128)
+        inspect::Value::UInt(self.as_u32() as u128)
     }
 
     #[inline]

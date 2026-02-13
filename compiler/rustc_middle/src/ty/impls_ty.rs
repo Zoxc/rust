@@ -48,14 +48,9 @@ where
         hash.hash_stable(hcx, hasher);
     }
 
-    fn structure(
-        &self,
-        _state: &mut StructureState<StableHashingContext<'a>>,
-    ) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, _state: &mut StructureState<StableHashingContext<'a>>) -> inspect::Value {
         // Represent the list structurally as an array of its element structures.
-        ::rustc_data_structures::inspect::Value::Array(
-            self[..].iter().map(|e| e.structure(_state)).collect(),
-        )
+        inspect::Value::Array(self[..].iter().map(|e| e.structure(_state)).collect())
     }
 }
 
@@ -79,10 +74,7 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for ty::GenericArg<'tcx> {
         self.kind().hash_stable(hcx, hasher);
     }
 
-    fn structure(
-        &self,
-        state: &mut StructureState<StableHashingContext<'a>>,
-    ) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> inspect::Value {
         // Delegate to the kind's structural representation
         self.kind().structure(state)
     }
@@ -98,13 +90,10 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
         });
     }
 
-    fn structure(
-        &self,
-        _state: &mut StructureState<StableHashingContext<'a>>,
-    ) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, _state: &mut StructureState<StableHashingContext<'a>>) -> inspect::Value {
         // We cannot access tcx here; represent AllocId by its resolved allocation's structure when available.
         // Fall back to a tag indicating AllocId.
-        ::rustc_data_structures::inspect::Value::String("AllocId".into())
+        inspect::Value::String("AllocId".into())
     }
 }
 
@@ -113,17 +102,10 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance
         self.into_parts().hash_stable(hcx, hasher);
     }
 
-    fn structure(
-        &self,
-        state: &mut StructureState<StableHashingContext<'a>>,
-    ) -> ::rustc_data_structures::inspect::Value {
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> inspect::Value {
         // Represent by its decomposed parts
         let (alloc, a, b) = self.into_parts();
-        ::rustc_data_structures::inspect::Value::Array(vec![
-            alloc.structure(state),
-            a.structure(state),
-            b.structure(state),
-        ])
+        inspect::Value::Array(vec![alloc.structure(state), a.structure(state), b.structure(state)])
     }
 }
 

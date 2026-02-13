@@ -955,12 +955,12 @@ macro_rules! define_queries {
             /// MessagePack map of key -> value structures.
             pub(crate) fn collect_structures<'tcx>(tcx: TyCtxt<'tcx>) -> (
                 String,
-                ::rustc_data_structures::inspect::Value,
+                inspect::Value,
             ) {
                 use ::rustc_data_structures::stable_hasher::StructureState;
-                use ::rustc_data_structures::inspect::Value;
+                use rustc_data_structures::inspect;
 
-                let mut map: Vec<(Value, Value)> = Vec::new();
+                let mut map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
 
                 let query = QueryType::query_dispatcher(tcx);
                 let qcx = QueryCtxt::new(tcx);
@@ -990,14 +990,14 @@ macro_rules! define_queries {
                 let key_size = std::mem::size_of::<queries::$name::Key<'tcx>>();
                 let value_size = std::mem::size_of::<queries::$name::Value<'tcx>>();
 
-                let mut out_map: Vec<(Value, Value)> = Vec::new();
-                out_map.push((Value::String("entries".into()), Value::Map(map)));
-                out_map.push((Value::String("key_type".into()), Value::String(key_type_name.into())));
-                out_map.push((Value::String("value_type".into()), Value::String(value_type_name.into())));
-                out_map.push((Value::String("key_size".into()), Value::UInt(key_size as u128)));
-                out_map.push((Value::String("value_size".into()), Value::UInt(value_size as u128)));
+                let mut out_map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
+                out_map.push((inspect::Value::String("entries".into()), inspect::Value::Map(map)));
+                out_map.push((inspect::Value::String("key_type".into()), inspect::Value::String(key_type_name.into())));
+                out_map.push((inspect::Value::String("value_type".into()), inspect::Value::String(value_type_name.into())));
+                out_map.push((inspect::Value::String("key_size".into()), inspect::Value::UInt(key_size as u128)));
+                out_map.push((inspect::Value::String("value_size".into()), inspect::Value::UInt(value_size as u128)));
 
-                (stringify!($name).to_string(), Value::Map(out_map))
+                (stringify!($name).to_string(), inspect::Value::Map(out_map))
             }
         })*}
 
@@ -1059,8 +1059,9 @@ macro_rules! define_queries {
             for<'tcx> fn(TyCtxt<'tcx>)
         ] = &[$(query_impl::$name::query_key_hash_verify),*];
 
+        use rustc_data_structures::inspect;
         const PER_QUERY_COLLECT_STRUCTURES_FNS: &[
-            for<'tcx> fn(TyCtxt<'tcx>) -> (String, ::rustc_data_structures::inspect::Value)
+            for<'tcx> fn(TyCtxt<'tcx>) -> (String, inspect::Value)
         ] = &[$(query_impl::$name::collect_structures),*];
 
         /// Module containing a named function for each dep kind (including queries)
@@ -1181,18 +1182,18 @@ macro_rules! define_queries {
         /// Collects structural representations for all queries and returns
         /// them as an inspect::Value map: query_name -> { key -> value }
         pub fn collect_all_query_structures<'tcx>(tcx: TyCtxt<'tcx>)
-            -> ::rustc_data_structures::inspect::Value
+            -> inspect::Value
         {
-            use ::rustc_data_structures::inspect::Value;
+            use rustc_data_structures::inspect;
 
-            let mut out: Vec<(Value, Value)> = Vec::new();
+            let mut out: Vec<(inspect::Value, inspect::Value)> = Vec::new();
 
             for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
                 let (name, map) = f(tcx);
-                out.push((Value::String(name.into()), map));
+                out.push((inspect::Value::String(name.into()), map));
             }
 
-            Value::Map(out)
+            inspect::Value::Map(out)
         }
 
     // NOTE: export_queries_if_enabled used to be defined inside this macro,

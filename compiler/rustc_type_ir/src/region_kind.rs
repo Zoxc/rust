@@ -209,8 +209,9 @@ impl<I: Interner> fmt::Debug for RegionKind<I> {
     }
 }
 
-// Avoid aliasing `inspect::Value` to prevent conflicting with other local
-// `Value` types. Use fully-qualified paths in `structure()` implementations.
+use rustc_data_structures::inspect;
+// Use `inspect::Value` (via `inspect::Value`) to avoid bringing `Value` into
+// the local namespace and potentially shadowing other types named `Value`.
 #[cfg(feature = "nightly")]
 use rustc_data_structures::stable_hasher::{StructureState, rmpv};
 #[cfg(feature = "nightly")]
@@ -248,7 +249,7 @@ where
         }
     }
 
-    fn structure(&self, state: &mut StructureState<CTX>) -> rustc_data_structures::inspect::Value {
+    fn structure(&self, state: &mut StructureState<CTX>) -> inspect::Value {
         use RegionKind::*;
         let mut out = Vec::new();
         out.push(std::mem::discriminant(self).structure(state));
@@ -261,7 +262,7 @@ where
             ReEarlyParam(r) => out.push(r.structure(state)),
             ReLateParam(r) => out.push(r.structure(state)),
             RePlaceholder(r) => out.push(r.structure(state)),
-            ReVar(_) => out.push(rustc_data_structures::inspect::Value::String("Var".into())),
+            ReVar(_) => out.push(inspect::Value::String("Var".into())),
         }
         InspectValue::Array(out)
     }
