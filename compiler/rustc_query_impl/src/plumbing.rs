@@ -107,9 +107,10 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
                         if f.read_to_end(&mut existing).is_ok() {
                             if existing == bytes {
                                 if tcx.sess.verbose_internals() {
-                                    eprintln!(
-                                        "export-queries: identical file already exists: {}",
-                                        path.display()
+                                    tcx.sess.dcx().emit_note(
+                                        crate::error::ExportQueriesIdenticalFile {
+                                            path: path.as_path(),
+                                        },
                                     );
                                 }
                                 return;
@@ -141,7 +142,9 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         Ok(mut f) => match f.write_all(&bytes) {
             Ok(()) => {
                 if tcx.sess.verbose_internals() {
-                    eprintln!("export-queries: wrote file: {}", path.display());
+                    tcx.sess
+                        .dcx()
+                        .emit_note(crate::error::ExportQueriesWroteFile { path: path.as_path() });
                 }
             }
             Err(e) => {

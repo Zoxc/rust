@@ -95,3 +95,17 @@ pub(crate) struct ExportQueriesCreateDirFail<'a> {
     pub(crate) path: &'a std::path::Path,
     pub(crate) err: String,
 }
+
+// Diagnostic emitted when an identical exported queries file is found.
+#[derive(Diagnostic)]
+#[diag("export-queries: identical file already exists: {path}")]
+pub(crate) struct ExportQueriesIdenticalFile<'a> {
+    pub(crate) path: &'a std::path::Path,
+}
+
+// Diagnostic emitted when an exported queries file is written successfully.
+#[derive(Diagnostic)]
+#[diag("export-queries: wrote file: {path}")]
+pub(crate) struct ExportQueriesWroteFile<'a> {
+    pub(crate) path: &'a std::path::Path,
+}
