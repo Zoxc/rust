@@ -79,3 +79,11 @@ pub(crate) struct Cycle {
     )]
     pub note_span: (),
 }
+
+// Diagnostic emitted when exporting query data to disk fails due to IO errors.
+#[derive(Diagnostic)]
+#[diag("failed to write `{path}` due to error `{err}`")]
+pub(crate) struct ExportQueriesFileWriteFail<'a> {
+    pub(crate) path: &'a std::path::Path,
+    pub(crate) err: String,
+}

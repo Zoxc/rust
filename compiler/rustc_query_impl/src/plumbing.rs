@@ -129,12 +129,27 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
     let mut path = PathBuf::from(dir);
     path.push(filename);
 
-    // Try to write the file, ignore any errors. Print small messages when
-    // `-Z verbose-internals` is enabled so users can observe what happened.
-    if let Ok(mut f) = fs::File::create(&path) {
-        let _ = f.write_all(&bytes);
-        if tcx.sess.verbose_internals() {
-            eprintln!("export-queries: wrote file: {}", path.display());
+    // Try to write the file. If writing fails, emit a diagnostic (non-fatal
+    // warning) so users see the failure rather than silently ignoring it.
+    match fs::File::create(&path) {
+        Ok(mut f) => match f.write_all(&bytes) {
+            Ok(()) => {
+                if tcx.sess.verbose_internals() {
+                    eprintln!("export-queries: wrote file: {}", path.display());
+                }
+            }
+            Err(e) => {
+                tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+                    path: path.as_path(),
+                    err: e.to_string(),
+                });
+            }
+        },
+        Err(e) => {
+            tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+                path: path.as_path(),
+                err: e.to_string(),
+            });
         }
     }
 }
