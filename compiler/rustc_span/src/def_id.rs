@@ -408,11 +408,11 @@ impl<CTX: HashStableContext> HashStable<CTX> for DefId {
     #[inline]
     fn structure(
         &self,
-        state: &mut StructureState<CTX>,
+        _state: &mut StructureState<CTX>,
     ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
         // Represent a DefId structurally as [krate.structure, index].
         ::rustc_data_structures::stable_hasher::rmpv::Value::Array(vec![
-            self.krate.structure(state),
+            self.krate.structure(_state),
             ::rustc_data_structures::stable_hasher::rmpv::Value::from(self.index.as_u32()),
         ])
     }
@@ -442,7 +442,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for CrateNum {
     #[inline]
     fn structure(
         &self,
-        state: &mut StructureState<CTX>,
+        _state: &mut StructureState<CTX>,
     ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
         // Represent CrateNum structurally as its u32 value.
         ::rustc_data_structures::stable_hasher::rmpv::Value::from(self.as_u32())

@@ -87,7 +87,7 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
         });
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+    fn structure(&self, _state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
         // We cannot access tcx here; represent AllocId by its resolved allocation's structure when available.
         // Fall back to a tag indicating AllocId.
         rmpv::Value::String("AllocId".into())

@@ -969,13 +969,13 @@ macro_rules! define_queries {
                 // StructureState to call `structure()` on keys and values.
                 tcx.with_stable_hashing_context(|mut hcx| {
                     let mut state = StructureState::new(&mut hcx);
-                    cache.iter(&mut |key, value, _| {
+                    cache.iter(&mut |key, _value, _| {
                         let k = key.structure(&mut state);
                         let v = if_query_no_hash!(
                             [$($modifiers)*]
                             { rmpv::Value::Nil }
                             {
-                                let unerased = QueryType::restore_val(*value);
+                                let unerased = QueryType::restore_val(*_value);
                                 unerased.structure(&mut state)
                             }
                         );

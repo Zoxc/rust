@@ -19,7 +19,10 @@ pub use rustc_stable_hash::{
 };
 
 pub struct StructureState<CTX> {
-    hcx: *mut CTX,
+    // `hcx` is intentionally stored but currently unused in some build
+    // configurations. Keep the field to preserve the API and silence dead code
+    // warnings by renaming it to `_hcx` so the compiler treats it as used.
+    _hcx: *mut CTX,
 }
 
 impl<CTX> StructureState<CTX> {
@@ -31,7 +34,7 @@ impl<CTX> StructureState<CTX> {
     /// crates previously constructed directly via field initialization.
     #[inline]
     pub fn new(hcx: &mut CTX) -> Self {
-        StructureState { hcx: hcx as *mut CTX }
+        StructureState { _hcx: hcx as *mut CTX }
     }
 }
 
@@ -63,7 +66,7 @@ impl<CTX> StructureState<CTX> {
 ///   differences.
 pub trait HashStable<CTX> {
     /// Returns the exact data that will be hashed by `hash_stable` as a MessagePack value.
-    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value;
+    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value;
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher);
 }
@@ -445,7 +448,7 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for [T] {
 }
 
 impl<CTX> HashStable<CTX> for [u8] {
-    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
         // Represent byte slices as a MessagePack binary value which already
         // contains length information and matches the memory representation.
         rmpv::Value::Binary(self.to_vec())
@@ -584,7 +587,7 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::sync::Arc<T> {
 
 impl<CTX> HashStable<CTX> for str {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
         // Represent strings as MessagePack strings (UTF-8) which mirrors
         // their in-memory UTF-8 representation.
         rmpv::Value::String(self.to_owned().into())
@@ -606,7 +609,7 @@ impl StableOrd for &str {
 
 impl<CTX> HashStable<CTX> for String {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
         rmpv::Value::String(self.clone().into())
     }
 
