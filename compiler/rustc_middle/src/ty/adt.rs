@@ -7,7 +7,9 @@ use rustc_abi::{FIRST_VARIANT, ReprOptions, VariantIdx};
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::intern::Interned;
-use rustc_data_structures::stable_hasher::{HashStable, HashingControls, StableHasher, StructureState, rmpv};
+use rustc_data_structures::stable_hasher::{
+    HashStable, HashingControls, StableHasher, StructureState, rmpv,
+};
 use rustc_errors::ErrorGuaranteed;
 use rustc_hir::attrs::AttributeKind;
 use rustc_hir::def::{CtorKind, DefKind, Res};

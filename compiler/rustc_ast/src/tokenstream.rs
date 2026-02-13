@@ -141,7 +141,9 @@ impl<D: SpanDecoder> Decodable<D> for LazyAttrTokenStream {
 impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
     fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
         // No structural representation for lazy token streams; use Debug string.
-        rmpv::Value::String(format!("LazyAttrTokenStream({:?})", self.to_attr_token_stream()).into())
+        rmpv::Value::String(
+            format!("LazyAttrTokenStream({:?})", self.to_attr_token_stream()).into(),
+        )
     }
 
     fn hash_stable(&self, _hcx: &mut CTX, _hasher: &mut StableHasher) {

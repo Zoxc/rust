@@ -929,9 +929,18 @@ mod binding_form_impl {
             use super::BindingForm::*;
 
             match self {
-                Var(binding) => rmpv::Value::Array(vec![rmpv::Value::String("Var".into()), binding.structure(state)]),
-                ImplicitSelf(kind) => rmpv::Value::Array(vec![rmpv::Value::String("ImplicitSelf".into()), kind.structure(state)]),
-                RefForGuard(local) => rmpv::Value::Array(vec![rmpv::Value::String("RefForGuard".into()), local.structure(state)]),
+                Var(binding) => rmpv::Value::Array(vec![
+                    rmpv::Value::String("Var".into()),
+                    binding.structure(state),
+                ]),
+                ImplicitSelf(kind) => rmpv::Value::Array(vec![
+                    rmpv::Value::String("ImplicitSelf".into()),
+                    kind.structure(state),
+                ]),
+                RefForGuard(local) => rmpv::Value::Array(vec![
+                    rmpv::Value::String("RefForGuard".into()),
+                    local.structure(state),
+                ]),
             }
         }
     }

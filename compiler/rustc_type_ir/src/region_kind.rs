@@ -210,8 +210,9 @@ impl<I: Interner> fmt::Debug for RegionKind<I> {
 }
 
 #[cfg(feature = "nightly")]
+use rustc_data_structures::stable_hasher::{StructureState, rmpv};
+#[cfg(feature = "nightly")]
 // This is not a derived impl because a derive would require `I: HashStable`
-
 impl<CTX, I: Interner> HashStable<CTX> for RegionKind<I>
 where
     I::EarlyParamRegion: HashStable<CTX>,
@@ -219,7 +220,6 @@ where
     I::DefId: HashStable<CTX>,
     I::Symbol: HashStable<CTX>,
 {
-use rustc_data_structures::stable_hasher::{StructureState, rmpv};
     #[inline]
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
         std::mem::discriminant(self).hash_stable(hcx, hasher);

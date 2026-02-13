@@ -1518,15 +1518,19 @@ fn update_disambiguator(expn_data: &mut ExpnData, mut ctx: impl HashStableContex
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
-    fn structure(&self, _state: &mut StructureState<CTX>) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+    fn structure(
+        &self,
+        _state: &mut StructureState<CTX>,
+    ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
         // Represent SyntaxContext by either nil (root) or [expn_id.structure, transparency.structure]
         if self.is_root() {
             ::rustc_data_structures::stable_hasher::rmpv::Value::Nil
         } else {
             let (expn_id, transparency) = self.outer_mark();
-            ::rustc_data_structures::stable_hasher::rmpv::Value::Array(
-                vec![expn_id.structure(_state), transparency.structure(_state)],
-            )
+            ::rustc_data_structures::stable_hasher::rmpv::Value::Array(vec![
+                expn_id.structure(_state),
+                transparency.structure(_state),
+            ])
         }
     }
 
@@ -1546,7 +1550,10 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
-    fn structure(&self, _state: &mut StructureState<CTX>) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+    fn structure(
+        &self,
+        _state: &mut StructureState<CTX>,
+    ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
         // Represent ExpnId structurally as [krate.structure, local_id]
         ::rustc_data_structures::stable_hasher::rmpv::Value::Array(vec![
             self.krate.structure(_state),
