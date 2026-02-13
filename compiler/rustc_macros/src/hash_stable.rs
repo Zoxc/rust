@@ -1,6 +1,6 @@
-use proc_macro2::Ident;
+use proc_macro2::{Ident, Span};
 use quote::quote;
-use syn::parse_quote;
+use syn::{LitStr, parse_quote};
 
 struct Attributes {
     ignore: bool,
@@ -133,34 +133,54 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
     // push an optional discriminant for enums, then push structural
     // representations of each (non-ignored) field.
     s.each_variant(|vi| {
-        let pushes: proc_macro2::TokenStream = vi
+        // Build a map of field name -> structural representation.
+        let field_pushes: proc_macro2::TokenStream = vi
             .bindings()
             .iter()
-            .map(|binding| {
+            .enumerate()
+            .map(|(i, binding)| {
                 let attrs = parse_attributes(binding.ast());
                 let bind_ident = &binding.binding;
                 if attrs.ignore {
                     quote! {}
                 } else if let Some(project) = attrs.project {
+                    // Use the project's field for the structural representation.
+                    // Field key: either named ident or index for tuple fields.
+                    let key = match &binding.ast().ident {
+                        Some(ident) => LitStr::new(&ident.to_string(), Span::call_site()),
+                        None => LitStr::new(&i.to_string(), Span::call_site()),
+                    };
                     quote! {
-                        out.push((#bind_ident.#project).structure(__state));
+                        fields.push((::rustc_data_structures::stable_hasher::rmpv::Value::String(#key.into()), (#bind_ident.#project).structure(__state)));
                     }
                 } else {
+                    let key = match &binding.ast().ident {
+                        Some(ident) => LitStr::new(&ident.to_string(), Span::call_site()),
+                        None => LitStr::new(&i.to_string(), Span::call_site()),
+                    };
                     quote! {
-                        out.push(#bind_ident.structure(__state));
+                        fields.push((::rustc_data_structures::stable_hasher::rmpv::Value::String(#key.into()), #bind_ident.structure(__state)));
                     }
                 }
             })
             .collect();
 
+        // Variant ident for producing readable names.
+        let var_ident = &vi.ast().ident;
+
         quote! {
             {
-                let mut out = Vec::new();
+                let mut map = Vec::new();
+                // If this is an enum include the variant name as well.
                 if #is_enum {
-                    out.push(::std::mem::discriminant(self).structure(__state));
+                    map.push((::rustc_data_structures::stable_hasher::rmpv::Value::String("variant".into()), ::rustc_data_structures::stable_hasher::rmpv::Value::String(stringify!(#var_ident).to_string().into())));
                 }
-                #pushes
-                ::rustc_data_structures::stable_hasher::rmpv::Value::Array(out)
+
+                let mut fields = Vec::new();
+                #field_pushes
+
+                map.push((::rustc_data_structures::stable_hasher::rmpv::Value::String("fields".into()), ::rustc_data_structures::stable_hasher::rmpv::Value::Map(fields)));
+                ::rustc_data_structures::stable_hasher::rmpv::Value::Map(map)
             }
         }
     })
