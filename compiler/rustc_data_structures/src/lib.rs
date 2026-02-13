@@ -67,6 +67,7 @@ pub mod frozen;
 pub mod fx;
 pub mod graph;
 pub mod intern;
+pub mod inspect;
 pub mod jobserver;
 pub mod marker;
 pub mod memmap;
