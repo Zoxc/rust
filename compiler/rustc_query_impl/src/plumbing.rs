@@ -983,7 +983,20 @@ macro_rules! define_queries {
                     });
                 });
 
-                (stringify!($name).to_string(), rmpv::Value::Map(map))
+                // Record type names and sizes for this query's key and value.
+                let key_type_name = std::any::type_name::<queries::$name::Key<'tcx>>();
+                let value_type_name = std::any::type_name::<queries::$name::Value<'tcx>>();
+                let key_size = std::mem::size_of::<queries::$name::Key<'tcx>>();
+                let value_size = std::mem::size_of::<queries::$name::Value<'tcx>>();
+
+                let mut out_map: Vec<(rmpv::Value, rmpv::Value)> = Vec::new();
+                out_map.push((rmpv::Value::String("entries".into()), rmpv::Value::Map(map)));
+                out_map.push((rmpv::Value::String("key_type".into()), rmpv::Value::String(key_type_name.into())));
+                out_map.push((rmpv::Value::String("value_type".into()), rmpv::Value::String(value_type_name.into())));
+                out_map.push((rmpv::Value::String("key_size".into()), rmpv::Value::from(key_size as u64)));
+                out_map.push((rmpv::Value::String("value_size".into()), rmpv::Value::from(value_size as u64)));
+
+                (stringify!($name).to_string(), rmpv::Value::Map(out_map))
             }
         })*}
 
