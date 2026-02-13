@@ -8,7 +8,7 @@ use std::{fmt, str};
 use rustc_arena::DroplessArena;
 use rustc_data_structures::fx::{FxHashSet, FxIndexSet};
 use rustc_data_structures::stable_hasher::{
-    HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey, rmpv,
+    HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey,
 };
 use rustc_data_structures::sync::Lock;
 use rustc_macros::{Decodable, Encodable, HashStable_Generic, symbols};
