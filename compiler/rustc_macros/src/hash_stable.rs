@@ -171,16 +171,19 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
         quote! {
             {
                 let mut map = Vec::new();
-                // If this is an enum include the variant name as well.
-                if #is_enum {
-                    map.push((::rustc_data_structures::stable_hasher::rmpv::Value::String("variant".into()), ::rustc_data_structures::stable_hasher::rmpv::Value::String(stringify!(#var_ident).to_string().into())));
-                }
-
                 let mut fields = Vec::new();
                 #field_pushes
 
                 map.push((::rustc_data_structures::stable_hasher::rmpv::Value::String("fields".into()), ::rustc_data_structures::stable_hasher::rmpv::Value::Map(fields)));
-                ::rustc_data_structures::stable_hasher::rmpv::Value::Map(map)
+
+                if #is_enum {
+                    ::rustc_data_structures::stable_hasher::rmpv::Value::Array(vec![
+                        ::rustc_data_structures::stable_hasher::rmpv::Value::String(concat!("#", stringify!(#var_ident)).to_string().into()),
+                        ::rustc_data_structures::stable_hasher::rmpv::Value::Map(map),
+                    ])
+                } else {
+                    ::rustc_data_structures::stable_hasher::rmpv::Value::Map(map)
+                }
             }
         }
     })
