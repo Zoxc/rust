@@ -74,7 +74,7 @@ use rustc_middle::ty::{
 };
 use rustc_mir_dataflow::impls::always_storage_live_locals;
 use rustc_span::def_id::DefId;
-use rustc_span::{bug, span_bug};
+use rustc_span::{DUMMY_SP, bug, span_bug};
 use tracing::{debug, instrument};
 
 use crate::deref_separator::deref_finder;
@@ -199,6 +199,9 @@ struct TransformVisitor<'tcx> {
     old_yield_ty: Ty<'tcx>,
 
     old_ret_ty: Ty<'tcx>,
+
+    // Self-referential fields in the coroutine struct which gets wrapped in `UnsafePinned`.
+    wrap_in_unsafe_pinned: DenseBitSet<Local>,
 
     patch: Option<MirPatch<'tcx>>,
 }
@@ -352,6 +355,45 @@ impl<'tcx> TransformVisitor<'tcx> {
         Place { local: base.local, projection: self.tcx.mk_place_elems(&projection) }
     }
 
+    // Create a `Place` referencing a self-referential coroutine struct field.
+    // Self-referential coroutine struct fields are wrapped in `UnsafePinned`. This method
+    // creates the projections to get the `Place` behind `UnsafePinned`.
+    #[tracing::instrument(level = "trace", skip(self), ret)]
+    fn make_self_referential_field(
+        &self,
+        variant_index: VariantIdx,
+        idx: FieldIdx,
+        ty: Ty<'tcx>,
+    ) -> Place<'tcx> {
+        let self_place = Place::from(SELF_ARG);
+        let base = self.tcx.mk_place_downcast_unnamed(self_place, variant_index);
+
+        let ty::Adt(adt_def, args) = ty.kind() else {
+            bug!("expected self-referential field to be an ADT, but it is {:?}", ty);
+        };
+        assert_eq!(adt_def.did(), self.tcx.require_lang_item(LangItem::UnsafePinned, DUMMY_SP));
+        let original_ty = args.type_at(0);
+
+        let unsafe_cell_def_id = self.tcx.require_lang_item(LangItem::UnsafeCell, DUMMY_SP);
+        let unsafe_cell_ty = Ty::new_adt(
+            self.tcx,
+            self.tcx.adt_def(unsafe_cell_def_id),
+            self.tcx.mk_args(&[original_ty.into()]),
+        );
+
+        let mut projection = base.projection.to_vec();
+        // self.field (UnsafePinned<T>)
+        projection.push(ProjectionElem::Field(idx, ty));
+        // value (UnsafeCell<T>)
+        projection.push(ProjectionElem::Field(FieldIdx::from_u32(0), unsafe_cell_ty));
+        // value (T)
+        projection.push(ProjectionElem::Field(FieldIdx::from_u32(0), original_ty));
+
+        let place = Place { local: base.local, projection: self.tcx.mk_place_elems(&projection) };
+        debug!(?place);
+        place
+    }
+
     // Create a statement which changes the discriminant
     #[tracing::instrument(level = "trace", skip(self))]
     fn set_discr(&self, state_disc: VariantIdx, source_info: SourceInfo) -> Statement<'tcx> {
@@ -409,7 +451,15 @@ impl<'tcx> MutVisitor<'tcx> for TransformVisitor<'tcx> {
     fn visit_place(&mut self, place: &mut Place<'tcx>, _: PlaceContext, location: Location) {
         // Replace an Local in the remap with a coroutine struct access
         if let Some(&Some((ty, variant_index, idx))) = self.remap.get(place.local) {
-            replace_base(place, self.make_field(variant_index, idx, ty), self.tcx);
+            replace_base(
+                place,
+                if self.wrap_in_unsafe_pinned.contains(place.local) {
+                    self.make_self_referential_field(variant_index, idx, ty)
+                } else {
+                    self.make_field(variant_index, idx, ty)
+                },
+                self.tcx,
+            );
         }
         if let Some(new_projection) = self.process_projection(&place.projection, location) {
             place.projection = self.tcx.mk_place_elems(&new_projection);
@@ -1090,7 +1140,8 @@ impl<'tcx> crate::MirPass<'tcx> for StateTransform {
         // Extract locals which are live across suspension point into `layout`
         // `remap` gives a mapping from local indices onto coroutine struct indices
         // `storage_liveness` tells us which locals have live storage at suspension points
-        let (remap, layout, storage_liveness) = compute_layout(liveness_info, body);
+        let (remap, layout, storage_liveness, wrap_in_unsafe_pinned) =
+            compute_layout(tcx, liveness_info, body);
 
         let can_return = can_return(tcx, body, body.typing_env(tcx));
 
@@ -1115,6 +1166,7 @@ impl<'tcx> crate::MirPass<'tcx> for StateTransform {
             new_ret_local,
             old_ret_ty,
             old_yield_ty,
+            wrap_in_unsafe_pinned,
             patch: Some(MirPatch::new(body)),
         };
         transform.visit_body(body);
@@ -1130,7 +1182,13 @@ impl<'tcx> crate::MirPass<'tcx> for StateTransform {
             0..0,
             args_iter.filter_map(|local| {
                 let (ty, variant_index, idx) = transform.remap[local]?;
-                let lhs = transform.make_field(variant_index, idx, ty);
+
+                let lhs = if transform.wrap_in_unsafe_pinned.contains(local) {
+                    transform.make_self_referential_field(variant_index, idx, ty)
+                } else {
+                    transform.make_field(variant_index, idx, ty)
+                };
+
                 let rhs = Rvalue::Use(Operand::Move(local.into()), WithRetag::Yes);
                 let assign = StatementKind::Assign(Box::new((lhs, rhs)));
                 Some(Statement::new(source_info, assign))

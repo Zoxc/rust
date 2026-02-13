@@ -61,6 +61,9 @@ pub(super) struct LivenessInfo {
     /// Parallel vec to the above with SourceInfo for each yield terminator.
     source_info_at_suspension_points: Vec<SourceInfo>,
 
+    // Self-referential locals which gets wrapped in `UnsafePinned`.
+    wrap_in_unsafe_pinned: DenseBitSet<Local>,
+
     /// For every saved local, the set of other saved locals that are
     /// storage-live at the same time as this local. We cannot overlap locals in
     /// the layout which have conflicting storage.
@@ -110,6 +113,10 @@ pub(super) fn locals_live_across_suspend_points<'tcx>(
     let mut live_locals_at_any_suspension_point = DenseBitSet::new_empty(body.local_decls.len());
     let mut borrowed_locals_cursor = ResultsCursor::new_owning(body, borrowed_locals);
 
+    // Every Local that is live due to an outstanding borrow is a self-referential field of
+    // the coroutine struct.
+    let mut locals_live_due_to_borrow = DenseBitSet::new_empty(body.local_decls.len());
+
     for (block, data) in body.basic_blocks.iter_enumerated() {
         let TerminatorKind::Yield { .. } = data.terminator().kind else { continue };
 
@@ -117,6 +124,9 @@ pub(super) fn locals_live_across_suspend_points<'tcx>(
 
         liveness.seek_to_block_end(block);
         let mut live_locals = liveness.get().clone();
+
+        borrowed_locals_cursor.seek_before_primary_effect(loc);
+        locals_live_due_to_borrow.union(borrowed_locals_cursor.get());
 
         if !movable {
             // The `liveness` variable contains the liveness of MIR locals ignoring borrows.
@@ -129,7 +139,6 @@ pub(super) fn locals_live_across_suspend_points<'tcx>(
             // If a borrow is converted to a raw reference, we must also assume that it lives
             // forever. Note that the final liveness is still bounded by the storage liveness
             // of the local, which happens using the `intersect` operation below.
-            borrowed_locals_cursor.seek_before_primary_effect(loc);
             live_locals.union(borrowed_locals_cursor.get());
         }
 
@@ -157,7 +166,11 @@ pub(super) fn locals_live_across_suspend_points<'tcx>(
         source_info_at_suspension_points.push(data.terminator().source_info);
     }
 
+    debug!(?locals_live_due_to_borrow);
+    locals_live_due_to_borrow.intersect(&live_locals_at_any_suspension_point);
+
     debug!(?live_locals_at_any_suspension_point);
+
     let saved_locals = CoroutineSavedLocals(live_locals_at_any_suspension_point);
 
     // Renumber our liveness_map bitsets to include only the locals we are
@@ -178,6 +191,7 @@ pub(super) fn locals_live_across_suspend_points<'tcx>(
         saved_locals,
         live_locals_at_suspension_points,
         source_info_at_suspension_points,
+        wrap_in_unsafe_pinned: locals_live_due_to_borrow,
         storage_conflicts,
         storage_liveness: storage_liveness_map,
     }
@@ -340,19 +354,22 @@ impl StorageConflictVisitor<'_> {
     }
 }
 
-#[tracing::instrument(level = "trace", skip(liveness, body))]
+#[tracing::instrument(level = "trace", skip(tcx, liveness, body))]
 pub(super) fn compute_layout<'tcx>(
+    tcx: TyCtxt<'tcx>,
     liveness: LivenessInfo,
     body: &Body<'tcx>,
 ) -> (
     IndexVec<Local, Option<(Ty<'tcx>, VariantIdx, FieldIdx)>>,
     CoroutineLayout<'tcx>,
     IndexVec<BasicBlock, Option<DenseBitSet<Local>>>,
+    DenseBitSet<Local>,
 ) {
     let LivenessInfo {
         saved_locals,
         live_locals_at_suspension_points,
         source_info_at_suspension_points,
+        wrap_in_unsafe_pinned,
         storage_conflicts,
         storage_liveness,
     } = liveness;
@@ -381,8 +398,18 @@ pub(super) fn compute_layout<'tcx>(
                 _ => false,
             };
 
+            // Use `UnsafePinned` for self-referential fields
+            let local_ty = if wrap_in_unsafe_pinned.contains(local) {
+                let unsafe_pinned_did = tcx.require_lang_item(LangItem::UnsafePinned, body.span);
+                let unsafe_pinned_adt_def = tcx.adt_def(unsafe_pinned_did);
+                let args = tcx.mk_args(&[decl.ty.into()]);
+                Ty::new_adt(tcx, unsafe_pinned_adt_def, args)
+            } else {
+                decl.ty
+            };
+
             CoroutineSavedTy {
-                ty: decl.ty,
+                ty: local_ty,
                 source_info: decl.source_info,
                 ignore_for_traits,
                 // Will be set later when walking debuginfo.
@@ -449,7 +476,7 @@ pub(super) fn compute_layout<'tcx>(
     debug!(?layout);
     debug!(?storage_liveness);
 
-    (remap, layout, storage_liveness)
+    (remap, layout, storage_liveness, wrap_in_unsafe_pinned)
 }
 
 #[instrument(level = "debug", skip(tcx), ret)]
@@ -478,7 +505,7 @@ pub(crate) fn mir_coroutine_witnesses<'tcx>(
     // Extract locals which are live across suspension point into `layout`
     // `remap` gives a mapping from local indices onto coroutine struct indices
     // `storage_liveness` tells us which locals have live storage at suspension points
-    let (_, coroutine_layout, _) = compute_layout(liveness_info, body);
+    let (_, coroutine_layout, _, _) = compute_layout(tcx, liveness_info, body);
 
     check_suspend_tys(tcx, &coroutine_layout, body);
     check_field_tys_sized(tcx, &coroutine_layout, def_id);
@@ -600,6 +627,16 @@ fn check_must_not_suspend_ty<'tcx>(
                 allocator_ty,
                 hir_id,
                 SuspendCheckData { descr_pre: &format!("{}allocator ", data.descr_pre), ..data },
+            )
+        }
+        ty::Adt(def, args) if def.is_unsafe_pinned() => {
+            let inner_ty = args.type_at(0);
+            debug!(?inner_ty);
+            check_must_not_suspend_ty(
+                tcx,
+                inner_ty,
+                hir_id,
+                SuspendCheckData { descr_pre: &format!("{}boxed ", data.descr_pre), ..data },
             )
         }
         // FIXME(sized_hierarchy): This should be replaced with a requirement that types in

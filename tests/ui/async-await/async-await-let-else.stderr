@@ -38,6 +38,10 @@ LL |   async fn bar2<T>(_: T) -> ! {
 LL | |     panic!()
 LL | | }
    | |_^
+note: required because it appears within the type `UnsafeCell<impl Future<Output = !>>`
+  --> $SRC_DIR/core/src/cell.rs:LL:COL
+note: required because it appears within the type `UnsafePinned<impl Future<Output = !>>`
+  --> $SRC_DIR/core/src/pin/unsafe_pinned.rs:LL:COL
 note: required because it's used within this `async` fn body
   --> $DIR/async-await-let-else.rs:18:32
    |
