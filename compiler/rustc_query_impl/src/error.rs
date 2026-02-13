@@ -87,3 +87,11 @@ pub(crate) struct ExportQueriesFileWriteFail<'a> {
     pub(crate) path: &'a std::path::Path,
     pub(crate) err: String,
 }
+
+// Diagnostic emitted when creating the export directory fails.
+#[derive(Diagnostic)]
+#[diag("failed to create directory `{path}` due to error `{err}`")]
+pub(crate) struct ExportQueriesCreateDirFail<'a> {
+    pub(crate) path: &'a std::path::Path,
+    pub(crate) err: String,
+}

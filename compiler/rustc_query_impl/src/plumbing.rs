@@ -82,8 +82,14 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         "no-hash".to_string()
     };
 
-    // Ensure directory exists. Ignore errors.
-    let _ = fs::create_dir_all(&dir);
+    // Ensure directory exists; if creation fails, emit a warning diagnostic.
+    if let Err(e) = fs::create_dir_all(&dir) {
+        tcx.sess.dcx().emit_warn(crate::error::ExportQueriesCreateDirFail {
+            path: dir.as_path(),
+            err: e.to_string(),
+        });
+        return;
+    }
 
     // Scan existing files to see if an identical file (ignoring dedup
     // number) already exists and to determine the next dedup number.

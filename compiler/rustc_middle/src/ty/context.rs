@@ -1679,7 +1679,6 @@ impl<'tcx> TyCtxt<'tcx> {
         // We assume that no queries are run past here. If there are new queries
         // after this point, they'll show up as "<unknown>" in self-profiling data.
         self.alloc_self_profile_query_strings();
-
         self.save_dep_graph();
         self.query_key_hash_verify_all();
 

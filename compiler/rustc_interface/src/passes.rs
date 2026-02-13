@@ -1018,6 +1018,11 @@ pub fn create_and_enter_global_ctxt<T, F: for<'tcx> FnOnce(TyCtxt<'tcx>) -> T>(
                 let res = f(tcx);
                 // FIXME maybe run finish even when a fatal error occurred? or at least tcx.alloc_self_profile_query_strings()?
                 tcx.finish();
+
+
+                // Trigger export of the query structures here so the export runs at a
+                // consistent point after self-profile strings have been allocated.
+                rustc_query_impl::maybe_export_queries(tcx);
                 res
             },
         )
