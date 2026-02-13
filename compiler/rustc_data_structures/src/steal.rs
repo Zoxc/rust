@@ -1,3 +1,4 @@
+use crate::stable_hasher::rmpv;
 use crate::stable_hasher::{HashStable, StableHasher, StructureState};
 use crate::sync::{MappedReadGuard, MappedWriteGuard, ReadGuard, RwLock, WriteGuard};
 
@@ -73,7 +74,17 @@ impl<T> Steal<T> {
 
 impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
     fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
-        self.borrow().structure(state)
+        // Attempt to read the inner value without triggering the
+        // `borrow()` panic path. If the value has been stolen, return
+        // a placeholder so callers can still obtain a stable structural
+        // representation.
+        let guard = self.value.borrow();
+        if guard.is_none() {
+            rmpv::Value::String("<stolen>".into())
+        } else {
+            // SAFETY: we just checked that the option is `Some`.
+            guard.as_ref().unwrap().structure(state)
+        }
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
