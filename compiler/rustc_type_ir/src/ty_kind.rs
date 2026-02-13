@@ -3,6 +3,8 @@ use std::ops::Deref;
 
 use derive_where::derive_where;
 use rustc_ast_ir::Mutability;
+// Use fully-qualified `rustc_data_structures::inspect::Value` to avoid
+// name collisions with local `Value` types in other modules.
 #[cfg(feature = "nightly")]
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 #[cfg(feature = "nightly")]
@@ -683,13 +685,13 @@ impl<CTX> HashStable<CTX> for InferTy {
         }
     }
 
-    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> InspectValue {
         use InferTy::*;
         match self {
-            TyVar(_) => rmpv::Value::String("TyVar".into()),
-            IntVar(_) => rmpv::Value::String("IntVar".into()),
-            FloatVar(_) => rmpv::Value::String("FloatVar".into()),
-            FreshTy(v) | FreshIntTy(v) | FreshFloatTy(v) => rmpv::Value::from(*v),
+            TyVar(_) => rustc_data_structures::inspect::Value::String("TyVar".into()),
+            IntVar(_) => rustc_data_structures::inspect::Value::String("IntVar".into()),
+            FloatVar(_) => rustc_data_structures::inspect::Value::String("FloatVar".into()),
+            FreshTy(v) | FreshIntTy(v) | FreshFloatTy(v) => InspectValue::UInt((*v) as u128),
         }
     }
 }

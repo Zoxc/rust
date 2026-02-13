@@ -2,6 +2,9 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
+// Keep `inspect::Value` out of the default namespace to avoid name collisions
+// with other `Value` types used in the compiler. Use fully-qualified paths
+// when constructing inspect values inside `structure()`.
 #[cfg(feature = "nightly")]
 use rustc_data_structures::stable_hasher::{
     HashStable, StableHasher, StableOrd, StructureState, rmpv,
@@ -221,9 +224,9 @@ impl Hash for ExternAbi {
 #[cfg(feature = "nightly")]
 impl<C> HashStable<C> for ExternAbi {
     #[inline]
-    fn structure(&self, _state: &mut StructureState<C>) -> rmpv::Value {
+    fn structure(&self, _state: &mut StructureState<C>) -> Value {
         // Represent the ABI via its string form
-        rmpv::Value::String(self.as_str().to_string().into())
+        Value::String(self.as_str().to_string().into())
     }
 
     #[inline]

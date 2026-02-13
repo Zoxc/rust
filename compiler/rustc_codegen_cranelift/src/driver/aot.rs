@@ -13,6 +13,7 @@ use rustc_codegen_ssa::assert_module_sources::CguReuse;
 use rustc_codegen_ssa::back::write::{CompiledModules, produce_final_output_artifacts};
 use rustc_codegen_ssa::base::determine_cgu_reuse;
 use rustc_codegen_ssa::{CodegenResults, CompiledModule, CrateInfo, ModuleKind};
+// Avoid unqualified import of `inspect::Value` to prevent name collisions.
 use rustc_data_structures::profiling::SelfProfilerRef;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 use rustc_data_structures::sync::{IntoDynSyncSend, par_map};
@@ -50,9 +51,9 @@ impl<HCX> HashStable<HCX> for OngoingModuleCodegen {
         // do nothing
     }
 
-    fn structure(&self, _state: &mut StructureState<HCX>) -> rmpv::Value {
-        // OngoingModuleCodegen is transient/runtime-only; represent as Nil
-        rmpv::Value::Nil
+    fn structure(&self, _state: &mut StructureState<HCX>) -> Value {
+        // OngoingModuleCodegen is transient/runtime-only; represent as an empty array.
+        Value::Array(vec![])
     }
 }
 

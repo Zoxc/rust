@@ -118,7 +118,7 @@ fn hash_stable_derive_with_mode(
                 match *self { #body }
             }
             #[inline]
-            fn structure(&self, __state: &mut ::rustc_data_structures::stable_hasher::StructureState<#context>) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+            fn structure(&self, __state: &mut ::rustc_data_structures::stable_hasher::StructureState<#context>) -> ::rustc_data_structures::inspect::Value {
                 match *self { #structure }
             }
         },
@@ -133,56 +133,127 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
     // push an optional discriminant for enums, then push structural
     // representations of each (non-ignored) field.
     s.each_variant(|vi| {
-        // Build a map of field name -> structural representation.
-        let field_pushes: proc_macro2::TokenStream = vi
-            .bindings()
-            .iter()
-            .enumerate()
-            .map(|(i, binding)| {
-                let attrs = parse_attributes(binding.ast());
-                let bind_ident = &binding.binding;
-                if attrs.ignore {
-                    quote! {}
-                } else if let Some(project) = attrs.project {
-                    // Use the project's field for the structural representation.
-                    // Field key: either named ident or index for tuple fields.
-                    let key = match &binding.ast().ident {
-                        Some(ident) => LitStr::new(&ident.to_string(), Span::call_site()),
-                        None => LitStr::new(&i.to_string(), Span::call_site()),
-                    };
-                    quote! {
-                        fields.push((::rustc_data_structures::stable_hasher::rmpv::Value::String(#key.into()), (#bind_ident.#project).structure(__state)));
-                    }
-                } else {
-                    let key = match &binding.ast().ident {
-                        Some(ident) => LitStr::new(&ident.to_string(), Span::call_site()),
-                        None => LitStr::new(&i.to_string(), Span::call_site()),
-                    };
-                    quote! {
-                        fields.push((::rustc_data_structures::stable_hasher::rmpv::Value::String(#key.into()), #bind_ident.structure(__state)));
-                    }
-                }
-            })
-            .collect();
-
         // Variant ident for producing readable names.
         let var_ident = &vi.ast().ident;
 
-        quote! {
-            {
-                let mut map = Vec::new();
-                let mut fields = Vec::new();
-                #field_pushes
+        match &vi.ast().fields {
+            syn::Fields::Named(_) => {
+                let pushes = vi
+                    .bindings()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, binding)| {
+                        let attrs = parse_attributes(binding.ast());
+                        let bind_ident = &binding.binding;
+                        let key = match &binding.ast().ident {
+                            Some(ident) => LitStr::new(&ident.to_string(), Span::call_site()),
+                            None => LitStr::new(&i.to_string(), Span::call_site()),
+                        };
+                        if attrs.ignore {
+                            quote! {}
+                        } else if let Some(project) = attrs.project {
+                            quote! {
+                                fields.push((::std::borrow::Cow::Borrowed(#key), (#bind_ident.#project).structure(__state)));
+                            }
+                        } else {
+                            quote! {
+                                fields.push((::std::borrow::Cow::Borrowed(#key), #bind_ident.structure(__state)));
+                            }
+                        }
+                    })
+                    .collect::<proc_macro2::TokenStream>();
 
-                map.push((::rustc_data_structures::stable_hasher::rmpv::Value::String("fields".into()), ::rustc_data_structures::stable_hasher::rmpv::Value::Map(fields)));
-
-                if #is_enum {
-                    ::rustc_data_structures::stable_hasher::rmpv::Value::Array(vec![
-                        ::rustc_data_structures::stable_hasher::rmpv::Value::String(concat!("#", stringify!(#var_ident)).to_string().into()),
-                        ::rustc_data_structures::stable_hasher::rmpv::Value::Map(map),
-                    ])
+                if is_enum {
+                    quote! {
+                        {
+                            use ::std::borrow::Cow;
+                            let mut fields: Vec<(Cow<'static, str>, ::rustc_data_structures::inspect::Value)> = Vec::new();
+                            #pushes
+                            ::rustc_data_structures::inspect::Value::Enum {
+                                path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
+                                variant: ::rustc_data_structures::inspect::EnumVariant::Named(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident))), fields),
+                            }
+                        }
+                    }
                 } else {
-                    ::rustc_data_structures::stable_hasher::rmpv::Value::Map(map)
+                    quote! {
+                        {
+                            use ::std::borrow::Cow;
+                            let mut fields: Vec<(Cow<'static, str>, ::rustc_data_structures::inspect::Value)> = Vec::new();
+                            #pushes
+                            ::rustc_data_structures::inspect::Value::Struct {
+                                path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
+                                fields,
+                            }
+                        }
+                    }
+                }
+            }
+            syn::Fields::Unnamed(_) => {
+                let pushes = vi
+                    .bindings()
+                    .iter()
+                    .map(|binding| {
+                        let attrs = parse_attributes(binding.ast());
+                        let bind_ident = &binding.binding;
+                        if attrs.ignore {
+                            quote! {}
+                        } else if let Some(project) = attrs.project {
+                            quote! {
+                                fields.push((#bind_ident.#project).structure(__state));
+                            }
+                        } else {
+                            quote! {
+                                fields.push(#bind_ident.structure(__state));
+                            }
+                        }
+                    })
+                    .collect::<proc_macro2::TokenStream>();
+
+                if is_enum {
+                    quote! {
+                        {
+                            use ::std::borrow::Cow;
+                            let mut fields: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
+                            #pushes
+                            ::rustc_data_structures::inspect::Value::Enum {
+                                path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
+                                variant: ::rustc_data_structures::inspect::EnumVariant::Tuple(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident))), fields),
+                            }
+                        }
+                    }
+                } else {
+                    quote! {
+                        {
+                            use ::std::borrow::Cow;
+                            let mut fields: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
+                            #pushes
+                            ::rustc_data_structures::inspect::Value::StructTuple {
+                                path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
+                                fields,
+                            }
+                        }
+                    }
+                }
+            }
+            syn::Fields::Unit => {
+                if is_enum {
+                    quote! {
+                        {
+                            use ::std::borrow::Cow;
+                            ::rustc_data_structures::inspect::Value::Enum {
+                                path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
+                                variant: ::rustc_data_structures::inspect::EnumVariant::Unit(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident)))),
+                            }
+                        }
+                    }
+                } else {
+                    quote! {
+                        {
+                            use ::std::borrow::Cow;
+                            ::rustc_data_structures::inspect::Value::Struct { path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()), fields: Vec::new() }
+                        }
+                    }
                 }
             }
         }

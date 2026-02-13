@@ -34,14 +34,23 @@ pub enum Value {
     Map(Vec<(Value, Value)>),
 
     /// Named-field struct value.
-    Struct { path: Cow<'static, str>, fields: Vec<(Cow<'static, str>, Value)> },
+    Struct {
+        path: Cow<'static, str>,
+        fields: Vec<(Cow<'static, str>, Value)>,
+    },
 
     /// Tuple struct / tuple variant value.
-    StructTuple { path: Cow<'static, str>, fields: Vec<Value> },
+    StructTuple {
+        path: Cow<'static, str>,
+        fields: Vec<Value>,
+    },
 
     /// Enum value: `path` is the enum path and `variant` describes the
     /// active variant.
-    Enum { path: Cow<'static, str>, variant: EnumVariant },
+    Enum {
+        path: Cow<'static, str>,
+        variant: EnumVariant,
+    },
 }
 
 /// Describes a single enum variant instance.
@@ -98,6 +107,7 @@ impl Value {
             Value::Binary(b) => V::Binary(b),
             Value::String(s) => V::from(s.into_owned()),
             Value::Array(a) => V::Array(a.into_iter().map(Value::into_rmpv).collect()),
+            Value::Tuple(a) => V::Array(a.into_iter().map(Value::into_rmpv).collect()),
             Value::Map(m) => {
                 V::Map(m.into_iter().map(|(k, v)| (k.into_rmpv(), v.into_rmpv())).collect())
             }

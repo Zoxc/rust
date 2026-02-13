@@ -139,9 +139,9 @@ impl<D: SpanDecoder> Decodable<D> for LazyAttrTokenStream {
 }
 
 impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
-    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> ::rustc_data_structures::inspect::Value {
         // No structural representation for lazy token streams; use Debug string.
-        rmpv::Value::String(
+        ::rustc_data_structures::inspect::Value::String(
             format!("LazyAttrTokenStream({:?})", self.to_attr_token_stream()).into(),
         )
     }
@@ -835,12 +835,12 @@ impl<CTX> HashStable<CTX> for TokenStream
 where
     CTX: crate::HashStableContext,
 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<CTX>) -> ::rustc_data_structures::inspect::Value {
         let mut out = Vec::new();
         for sub_tt in self.iter() {
-            out.push(sub_tt.structure(state));
+            out.push(::rustc_data_structures::inspect::Value::from(sub_tt.structure(state)));
         }
-        rmpv::Value::Array(out)
+        ::rustc_data_structures::inspect::Value::Array(out)
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

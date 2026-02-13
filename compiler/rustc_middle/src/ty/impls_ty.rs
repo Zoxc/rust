@@ -6,6 +6,9 @@ use std::ptr;
 
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::FxHashMap;
+// Avoid importing `inspect::Value` unqualified to prevent collisions with
+// `ty::Value` / `valtree::Value` in other modules. Use fully-qualified paths
+// where the compact inspect `Value` is needed.
 use rustc_data_structures::stable_hasher::{
     HashStable, HashingControls, StableHasher, StructureState, ToStableHashKey, rmpv,
 };
@@ -45,9 +48,14 @@ where
         hash.hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, _state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+    fn structure(
+        &self,
+        _state: &mut StructureState<StableHashingContext<'a>>,
+    ) -> ::rustc_data_structures::inspect::Value {
         // Represent the list structurally as an array of its element structures.
-        rmpv::Value::Array(self[..].iter().map(|e| e.structure(_state)).collect())
+        ::rustc_data_structures::inspect::Value::Array(
+            self[..].iter().map(|e| e.structure(_state)).collect(),
+        )
     }
 }
 
@@ -71,7 +79,10 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for ty::GenericArg<'tcx> {
         self.kind().hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+    fn structure(
+        &self,
+        state: &mut StructureState<StableHashingContext<'a>>,
+    ) -> ::rustc_data_structures::inspect::Value {
         // Delegate to the kind's structural representation
         self.kind().structure(state)
     }
@@ -87,10 +98,13 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
         });
     }
 
-    fn structure(&self, _state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+    fn structure(
+        &self,
+        _state: &mut StructureState<StableHashingContext<'a>>,
+    ) -> ::rustc_data_structures::inspect::Value {
         // We cannot access tcx here; represent AllocId by its resolved allocation's structure when available.
         // Fall back to a tag indicating AllocId.
-        rmpv::Value::String("AllocId".into())
+        ::rustc_data_structures::inspect::Value::String("AllocId".into())
     }
 }
 
@@ -99,10 +113,17 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance
         self.into_parts().hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+    fn structure(
+        &self,
+        state: &mut StructureState<StableHashingContext<'a>>,
+    ) -> ::rustc_data_structures::inspect::Value {
         // Represent by its decomposed parts
         let (alloc, a, b) = self.into_parts();
-        rmpv::Value::Array(vec![alloc.structure(state), a.structure(state), b.structure(state)])
+        ::rustc_data_structures::inspect::Value::Array(vec![
+            alloc.structure(state),
+            a.structure(state),
+            b.structure(state),
+        ])
     }
 }
 

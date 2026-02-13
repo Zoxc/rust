@@ -71,7 +71,8 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
     // Serialize to MessagePack using the rmpv encode API that we already
     // re-export in `rustc_data_structures::stable_hasher::rmpv`.
     let mut bytes: Vec<u8> = Vec::new();
-    if rmpv::encode::write_value(&mut bytes, &value).is_err() {
+    let rmpv_value = value.into_rmpv();
+    if rmpv::encode::write_value(&mut bytes, &rmpv_value).is_err() {
         return;
     }
 
@@ -954,12 +955,12 @@ macro_rules! define_queries {
             /// MessagePack map of key -> value structures.
             pub(crate) fn collect_structures<'tcx>(tcx: TyCtxt<'tcx>) -> (
                 String,
-                ::rustc_data_structures::stable_hasher::rmpv::Value,
+                ::rustc_data_structures::inspect::Value,
             ) {
                 use ::rustc_data_structures::stable_hasher::StructureState;
-                use ::rustc_data_structures::stable_hasher::rmpv;
+                use ::rustc_data_structures::inspect::Value;
 
-                let mut map: Vec<(rmpv::Value, rmpv::Value)> = Vec::new();
+                let mut map: Vec<(Value, Value)> = Vec::new();
 
                 let query = QueryType::query_dispatcher(tcx);
                 let qcx = QueryCtxt::new(tcx);
@@ -973,7 +974,7 @@ macro_rules! define_queries {
                         let k = key.structure(&mut state);
                         let v = if_query_no_hash!(
                             [$($modifiers)*]
-                            { rmpv::Value::Nil }
+                            { Value::Array(vec![]) }
                             {
                                 let unerased = QueryType::restore_val(*_value);
                                 unerased.structure(&mut state)
@@ -989,14 +990,14 @@ macro_rules! define_queries {
                 let key_size = std::mem::size_of::<queries::$name::Key<'tcx>>();
                 let value_size = std::mem::size_of::<queries::$name::Value<'tcx>>();
 
-                let mut out_map: Vec<(rmpv::Value, rmpv::Value)> = Vec::new();
-                out_map.push((rmpv::Value::String("entries".into()), rmpv::Value::Map(map)));
-                out_map.push((rmpv::Value::String("key_type".into()), rmpv::Value::String(key_type_name.into())));
-                out_map.push((rmpv::Value::String("value_type".into()), rmpv::Value::String(value_type_name.into())));
-                out_map.push((rmpv::Value::String("key_size".into()), rmpv::Value::from(key_size as u64)));
-                out_map.push((rmpv::Value::String("value_size".into()), rmpv::Value::from(value_size as u64)));
+                let mut out_map: Vec<(Value, Value)> = Vec::new();
+                out_map.push((Value::String("entries".into()), Value::Map(map)));
+                out_map.push((Value::String("key_type".into()), Value::String(key_type_name.into())));
+                out_map.push((Value::String("value_type".into()), Value::String(value_type_name.into())));
+                out_map.push((Value::String("key_size".into()), Value::UInt(key_size as u128)));
+                out_map.push((Value::String("value_size".into()), Value::UInt(value_size as u128)));
 
-                (stringify!($name).to_string(), rmpv::Value::Map(out_map))
+                (stringify!($name).to_string(), Value::Map(out_map))
             }
         })*}
 
@@ -1059,7 +1060,7 @@ macro_rules! define_queries {
         ] = &[$(query_impl::$name::query_key_hash_verify),*];
 
         const PER_QUERY_COLLECT_STRUCTURES_FNS: &[
-            for<'tcx> fn(TyCtxt<'tcx>) -> (String, ::rustc_data_structures::stable_hasher::rmpv::Value)
+            for<'tcx> fn(TyCtxt<'tcx>) -> (String, ::rustc_data_structures::inspect::Value)
         ] = &[$(query_impl::$name::collect_structures),*];
 
         /// Module containing a named function for each dep kind (including queries)
@@ -1178,21 +1179,21 @@ macro_rules! define_queries {
         }
 
         /// Collects structural representations for all queries and returns
-        /// them as a MessagePack map: query_name -> { key -> value }
+        /// them as an inspect::Value map: query_name -> { key -> value }
         pub fn collect_all_query_structures<'tcx>(tcx: TyCtxt<'tcx>)
-            -> ::rustc_data_structures::stable_hasher::rmpv::Value
+            -> ::rustc_data_structures::inspect::Value
         {
-            use ::rustc_data_structures::stable_hasher::rmpv;
+            use ::rustc_data_structures::inspect::Value;
 
-            let mut out: Vec<(rmpv::Value, rmpv::Value)> = Vec::new();
+            let mut out: Vec<(Value, Value)> = Vec::new();
 
             for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
                 let (name, map) = f(tcx);
-                out.push((rmpv::Value::String(name.into()), map));
+                out.push((Value::String(name.into()), map));
             }
 
-        rmpv::Value::Map(out)
-    }
+            Value::Map(out)
+        }
 
     // NOTE: export_queries_if_enabled used to be defined inside this macro,
     // but that caused multiple-definition and hygiene issues because the

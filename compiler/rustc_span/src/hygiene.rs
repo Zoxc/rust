@@ -1521,16 +1521,16 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
     fn structure(
         &self,
         _state: &mut StructureState<CTX>,
-    ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+    ) -> ::rustc_data_structures::inspect::Value {
         // Represent SyntaxContext by either nil (root) or [expn_id.structure, transparency.structure]
         if self.is_root() {
-            ::rustc_data_structures::stable_hasher::rmpv::Value::Nil
+            ::rustc_data_structures::inspect::Value::Array(vec![])
         } else {
             let (expn_id, transparency) = self.outer_mark();
-            ::rustc_data_structures::stable_hasher::rmpv::Value::Array(vec![
-                expn_id.structure(_state),
-                transparency.structure(_state),
-            ])
+                ::rustc_data_structures::inspect::Value::Array(vec![
+                    expn_id.structure(_state),
+                    transparency.structure(_state),
+                ])
         }
     }
 
@@ -1553,12 +1553,12 @@ impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
     fn structure(
         &self,
         _state: &mut StructureState<CTX>,
-    ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+    ) -> ::rustc_data_structures::inspect::Value {
         // Represent ExpnId structurally as [krate.structure, local_id]
-        ::rustc_data_structures::stable_hasher::rmpv::Value::Array(vec![
-            self.krate.structure(_state),
-            ::rustc_data_structures::stable_hasher::rmpv::Value::from(self.local_id.as_u32()),
-        ])
+                ::rustc_data_structures::inspect::Value::Array(vec![
+                    self.krate.structure(_state),
+                    ::rustc_data_structures::inspect::Value::UInt(self.local_id.as_u32() as u128),
+                ])
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -1575,8 +1575,8 @@ impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for LocalExpnId {
-    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
-        self.to_expn_id().structure(state)
+    fn structure(&self, state: &mut StructureState<CTX>) -> ::rustc_data_structures::inspect::Value {
+        ::rustc_data_structures::inspect::Value::from(self.to_expn_id().structure(state))
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

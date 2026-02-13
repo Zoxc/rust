@@ -62,7 +62,7 @@ impl fmt::UpperHex for Pu128 {
 
 impl<CTX> HashStable<CTX> for Pu128 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<CTX>) -> crate::inspect::Value {
         { self.0 }.structure(state)
     }
 

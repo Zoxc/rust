@@ -1,3 +1,5 @@
+// Use fully-qualified `rustc_data_structures::inspect::Value` where needed to
+// avoid accidental shadowing of other `Value` symbols.
 use rustc_data_structures::stable_hasher::{
     HashStable, StableHasher, StructureState, ToStableHashKey, rmpv,
 };
@@ -79,11 +81,11 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for OwnerNodes<'
         opt_hash_including_bodies.unwrap().hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<HirCtx>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<HirCtx>) -> Value {
         // Represent by the cached hash including bodies which is the canonical representation
         // used above for hashing.
         let OwnerNodes { opt_hash_including_bodies, nodes: _, bodies: _ } = *self;
-        opt_hash_including_bodies.unwrap().structure(state)
+        Value::from(opt_hash_including_bodies.unwrap().structure(state))
     }
 }
 
@@ -93,9 +95,9 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for DelayedLints {
         opt_hash.unwrap().hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<HirCtx>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<HirCtx>) -> Value {
         let DelayedLints { opt_hash, .. } = *self;
-        opt_hash.unwrap().structure(state)
+        Value::from(opt_hash.unwrap().structure(state))
     }
 }
 
@@ -107,9 +109,9 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for AttributeMap
         opt_hash.unwrap().hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<HirCtx>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<HirCtx>) -> Value {
         let AttributeMap { opt_hash, define_opaque: _, map: _ } = *self;
-        opt_hash.unwrap().structure(state)
+        Value::from(opt_hash.unwrap().structure(state))
     }
 }
 
@@ -119,9 +121,9 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for Crate<'_> {
         opt_hir_hash.unwrap().hash_stable(hcx, hasher)
     }
 
-    fn structure(&self, state: &mut StructureState<HirCtx>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<HirCtx>) -> Value {
         let Crate { owners: _, opt_hir_hash } = self;
-        opt_hir_hash.unwrap().structure(state)
+        Value::from(opt_hir_hash.unwrap().structure(state))
     }
 }
 
@@ -130,8 +132,8 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for HashIgnoredAttrId 
         /* we don't hash HashIgnoredAttrId, we ignore them */
     }
 
-    fn structure(&self, _state: &mut StructureState<HirCtx>) -> rmpv::Value {
+    fn structure(&self, _state: &mut StructureState<HirCtx>) -> Value {
         // Represent as Nil since it is ignored for hashing
-        rmpv::Value::Nil
+        Value::Array(vec![])
     }
 }

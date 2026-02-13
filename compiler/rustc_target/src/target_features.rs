@@ -48,16 +48,21 @@ impl<CTX> HashStable<CTX> for Stability {
     }
 
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(
+        &self,
+        state: &mut StructureState<CTX>,
+    ) -> ::rustc_data_structures::inspect::Value {
         use Stability::*;
         let mut out = Vec::new();
         out.push(std::mem::discriminant(self).structure(state));
         match self {
             Stable => {}
             Unstable(nightly_feature) => out.push(nightly_feature.structure(state)),
-            Forbidden { reason } => out.push(rmpv::Value::from(*reason)),
+            Forbidden { reason } => {
+                out.push(::rustc_data_structures::inspect::Value::String((*reason).into()))
+            }
         }
-        rmpv::Value::Array(out)
+        ::rustc_data_structures::inspect::Value::Array(out)
     }
 }
 

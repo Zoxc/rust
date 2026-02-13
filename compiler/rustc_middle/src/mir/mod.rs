@@ -925,20 +925,20 @@ mod binding_form_impl {
             }
         }
 
-        fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
-            use super::BindingForm::*;
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> Value {
+        use super::BindingForm::*;
 
             match self {
-                Var(binding) => rmpv::Value::Array(vec![
-                    rmpv::Value::String("Var".into()),
+                Var(binding) => Value::Array(vec![
+                    Value::String("Var".into()),
                     binding.structure(state),
                 ]),
-                ImplicitSelf(kind) => rmpv::Value::Array(vec![
-                    rmpv::Value::String("ImplicitSelf".into()),
+                ImplicitSelf(kind) => Value::Array(vec![
+                    Value::String("ImplicitSelf".into()),
                     kind.structure(state),
                 ]),
-                RefForGuard(local) => rmpv::Value::Array(vec![
-                    rmpv::Value::String("RefForGuard".into()),
+                RefForGuard(local) => Value::Array(vec![
+                    Value::String("RefForGuard".into()),
                     local.structure(state),
                 ]),
             }

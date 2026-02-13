@@ -131,7 +131,7 @@ where
     K: HashStable<C>,
     V: HashStable<C>,
 {
-    fn structure(&self, state: &mut StructureState<C>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<C>) -> crate::inspect::Value {
         let SortedIndexMultiMap { items, idx_sorted_by_item_key: _ } = self;
         items.structure(state)
     }

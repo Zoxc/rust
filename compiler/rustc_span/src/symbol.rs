@@ -2891,11 +2891,9 @@ impl<CTX> HashStable<CTX> for Symbol {
     fn structure(
         &self,
         _state: &mut StructureState<CTX>,
-    ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
+    ) -> ::rustc_data_structures::inspect::Value {
         // Represent a `Symbol` by its string contents.
-        ::rustc_data_structures::stable_hasher::rmpv::Value::String(
-            self.as_str().to_string().into(),
-        )
+        ::rustc_data_structures::inspect::Value::String(self.as_str().to_string().into())
     }
 
     #[inline]
@@ -2962,9 +2960,9 @@ impl<CTX> HashStable<CTX> for ByteSymbol {
     fn structure(
         &self,
         _state: &mut StructureState<CTX>,
-    ) -> ::rustc_data_structures::stable_hasher::rmpv::Value {
-        // Represent a `ByteSymbol` as a MessagePack binary with the original bytes.
-        ::rustc_data_structures::stable_hasher::rmpv::Value::Binary(self.as_byte_str().to_vec())
+    ) -> ::rustc_data_structures::inspect::Value {
+        // Represent a `ByteSymbol` as a binary with the original bytes.
+        ::rustc_data_structures::inspect::Value::Binary(self.as_byte_str().to_vec())
     }
 
     #[inline]

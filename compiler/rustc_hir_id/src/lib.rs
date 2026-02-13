@@ -58,9 +58,12 @@ impl rustc_index::Idx for OwnerId {
 
 impl<CTX: HashStableContext> HashStable<CTX> for OwnerId {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(
+        &self,
+        state: &mut StructureState<CTX>,
+    ) -> ::rustc_data_structures::inspect::Value {
         // Represent OwnerId by its contained LocalDefId
-        self.def_id.structure(state)
+        ::rustc_data_structures::inspect::Value::from(self.def_id.structure(state))
     }
 
     #[inline]

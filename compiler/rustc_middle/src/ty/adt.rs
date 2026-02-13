@@ -173,14 +173,14 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
         hash.hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> ::rustc_data_structures::inspect::Value {
         // Represent ADT definition by its DefId and variant layout information which is
         // invariant across sessions.
         let mut out = Vec::new();
-        out.push(self.did.structure(state));
-        out.push(self.flags.structure(state));
-        out.push(self.repr.discr_type().structure(state));
-        rmpv::Value::Array(out)
+        out.push(::rustc_data_structures::inspect::Value::from(self.did.structure(state)));
+        out.push(::rustc_data_structures::inspect::Value::from(self.flags.structure(state)));
+        out.push(::rustc_data_structures::inspect::Value::from(self.repr.discr_type().structure(state)));
+        ::rustc_data_structures::inspect::Value::Array(out)
     }
 }
 

@@ -311,9 +311,12 @@ impl<HCX> HashStable<HCX> for WorkProductId {
         self.hash.hash_stable(hcx, hasher)
     }
 
-    fn structure(&self, state: &mut StructureState<HCX>) -> rmpv::Value {
+    fn structure(
+        &self,
+        state: &mut StructureState<HCX>,
+    ) -> ::rustc_data_structures::inspect::Value {
         // Fingerprint already has a structure() impl that returns Binary(16)
-        self.hash.structure(state)
+        ::rustc_data_structures::inspect::Value::from(self.hash.structure(state))
     }
 }
 impl<HCX> ToStableHashKey<HCX> for WorkProductId {

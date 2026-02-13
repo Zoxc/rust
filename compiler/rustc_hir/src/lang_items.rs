@@ -149,9 +149,12 @@ impl<CTX> HashStable<CTX> for LangItem {
         ::std::hash::Hash::hash(self, hasher);
     }
 
-    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(
+        &self,
+        _state: &mut StructureState<CTX>,
+    ) -> ::rustc_data_structures::inspect::Value {
         // Represent the variant by its discriminant (as an integer) for structure.
-        rmpv::Value::from(*self as u32)
+        ::rustc_data_structures::inspect::Value::UInt(*self as u32 as u128)
     }
 }
 

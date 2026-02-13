@@ -541,7 +541,7 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for Term<'tcx> {
         self.kind().hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> Value {
         self.kind().structure(state)
     }
 }

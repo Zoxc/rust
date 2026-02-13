@@ -129,10 +129,13 @@ impl<CTX> HashStable<CTX> for InferConst {
         }
     }
 
-    fn structure(&self, _state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(
+        &self,
+        _state: &mut StructureState<CTX>,
+    ) -> ::rustc_data_structures::inspect::Value {
         match self {
-            InferConst::Var(_) => rmpv::Value::String("Var".into()),
-            InferConst::Fresh(i) => rmpv::Value::from(*i),
+            InferConst::Var(_) => ::rustc_data_structures::inspect::Value::String("Var".into()),
+            InferConst::Fresh(i) => ::rustc_data_structures::inspect::Value::UInt(*i as u128),
         }
     }
 }

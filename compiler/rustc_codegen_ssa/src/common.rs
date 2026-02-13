@@ -98,6 +98,9 @@ pub enum TypeKind {
 //            for now we content ourselves with providing a no-op HashStable
 //            implementation for CGUs.
 mod temp_stable_hash_impls {
+    // Avoid unqualified import of `inspect::Value` to prevent shadowing other
+    // `Value` types used in codegen (e.g., IR `Value`). Use fully-qualified
+    // path when constructing inspect values.
     use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 
     use crate::ModuleCodegen;
@@ -106,9 +109,12 @@ mod temp_stable_hash_impls {
         fn hash_stable(&self, _: &mut HCX, _: &mut StableHasher) {
             // do nothing
         }
-        fn structure(&self, _state: &mut StructureState<HCX>) -> rmpv::Value {
-            // ModuleCodegen contents are transient for hashing; represent as Nil
-            rmpv::Value::Nil
+        fn structure(&self, _state: &mut StructureState<HCX>) -> Value {
+            // ModuleCodegen contents are transient for hashing; represent as an
+            // empty array in `inspect::Value`. This avoids returning
+            // `rmpv::Value` here and keeps the crate aligned with the
+            // inspect::Value-based structure API.
+            Value::Array(vec![])
         }
     }
 }

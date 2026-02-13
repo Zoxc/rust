@@ -1,4 +1,6 @@
 use rustc_data_structures::fx::FxIndexMap;
+// Avoid importing `inspect::Value` unqualified; prefer fully-qualified paths
+// to avoid conflicts with other `Value` types.
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 use rustc_span::Symbol;
 use rustc_span::def_id::DefIdMap;
@@ -17,8 +19,8 @@ impl<CTX: crate::HashStableContext> HashStable<CTX> for DiagnosticItems {
         self.name_to_id.hash_stable(ctx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
         // Represent by the name -> id mapping which is the primary data used for hashing.
-        self.name_to_id.structure(state)
+        Value::from(self.name_to_id.structure(state))
     }
 }

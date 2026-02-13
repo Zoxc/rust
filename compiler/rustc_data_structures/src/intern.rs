@@ -107,7 +107,7 @@ impl<T, CTX> HashStable<CTX> for Interned<'_, T>
 where
     T: HashStable<CTX>,
 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<CTX>) -> crate::inspect::Value {
         self.0.structure(state)
     }
 

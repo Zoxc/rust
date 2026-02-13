@@ -2678,8 +2678,8 @@ impl<D: Decoder> Decodable<D> for BytePos {
 }
 
 impl<H: HashStableContext> HashStable<H> for RelativeBytePos {
-    fn structure(&self, state: &mut StructureState<H>) -> rmpv::Value {
-        self.0.structure(state)
+    fn structure(&self, state: &mut StructureState<H>) -> ::rustc_data_structures::inspect::Value {
+        ::rustc_data_structures::inspect::Value::from(self.0.structure(state))
     }
 
     fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
@@ -2688,8 +2688,8 @@ impl<H: HashStableContext> HashStable<H> for RelativeBytePos {
 }
 
 impl<H: HashStableContext> HashStable<H> for BytePos {
-    fn structure(&self, state: &mut StructureState<H>) -> rmpv::Value {
-        self.0.structure(state)
+    fn structure(&self, state: &mut StructureState<H>) -> ::rustc_data_structures::inspect::Value {
+        ::rustc_data_structures::inspect::Value::from(self.0.structure(state))
     }
 
     fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
@@ -2698,8 +2698,8 @@ impl<H: HashStableContext> HashStable<H> for BytePos {
 }
 
 impl<H: HashStableContext> HashStable<H> for CharPos {
-    fn structure(&self, state: &mut StructureState<H>) -> rmpv::Value {
-        self.0.structure(state)
+    fn structure(&self, state: &mut StructureState<H>) -> ::rustc_data_structures::inspect::Value {
+        ::rustc_data_structures::inspect::Value::from(self.0.structure(state))
     }
 
     fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
@@ -2834,12 +2834,12 @@ impl<CTX> HashStable<CTX> for Span
 where
     CTX: HashStableContext,
 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> rmpv::Value {
+    fn structure(&self, state: &mut StructureState<CTX>) -> ::rustc_data_structures::inspect::Value {
         let mut out = Vec::new();
-        out.push(self.lo().structure(state));
-        out.push(self.hi().structure(state));
-        out.push(self.ctxt().structure(state));
-        rmpv::Value::Array(out)
+        out.push(::rustc_data_structures::inspect::Value::from(self.lo().structure(state)));
+        out.push(::rustc_data_structures::inspect::Value::from(self.hi().structure(state)));
+        out.push(::rustc_data_structures::inspect::Value::from(self.ctxt().structure(state)));
+        ::rustc_data_structures::inspect::Value::Array(out)
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
