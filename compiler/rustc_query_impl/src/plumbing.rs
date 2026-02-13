@@ -33,6 +33,10 @@ use rustc_query_system::query::{
 };
 use rustc_serialize::{Decodable, Encodable};
 use rustc_span::def_id::LOCAL_CRATE;
+use std::fs;
+use std::io::Read;
+use std::io::Write;
+use std::path::PathBuf;
 
 use crate::error::{QueryOverflow, QueryOverflowNote};
 use crate::execution::{all_inactive, force_query};
@@ -44,6 +48,95 @@ use crate::{QueryDispatcherUnerased, QueryFlags, SemiDynamicQueryDispatcher};
 #[derive(Copy, Clone)]
 pub struct QueryCtxt<'tcx> {
     pub tcx: TyCtxt<'tcx>,
+}
+
+// Module‑scope export helper. See comments in repo issue for rationale.
+pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
+    use rustc_data_structures::stable_hasher::rmpv;
+    use rustc_span::def_id::LOCAL_CRATE;
+
+    // Check option enablement on the unstable options struct.
+    if !tcx.sess.opts.unstable_opts.export_queries {
+        return;
+    }
+
+    let dir = match &tcx.sess.opts.unstable_opts.export_queries_dir {
+        Some(d) => d.clone(),
+        None => return,
+    };
+
+    // Collect the structure to write.
+    let value = crate::collect_all_query_structures(tcx);
+
+    // Serialize to MessagePack using the rmpv encode API that we already
+    // re-export in `rustc_data_structures::stable_hasher::rmpv`.
+    let mut bytes: Vec<u8> = Vec::new();
+    if rmpv::encode::write_value(&mut bytes, &value).is_err() {
+        return;
+    }
+
+    let crate_name = tcx.crate_name(LOCAL_CRATE).to_string();
+    let crate_hash = if tcx.needs_crate_hash() {
+        tcx.crate_hash(LOCAL_CRATE).to_hex()
+    } else {
+        "no-hash".to_string()
+    };
+
+    // Ensure directory exists. Ignore errors.
+    let _ = fs::create_dir_all(&dir);
+
+    // Scan existing files to see if an identical file (ignoring dedup
+    // number) already exists and to determine the next dedup number.
+    let mut max_dedup = 0usize;
+    if let Ok(read_dir) = fs::read_dir(&dir) {
+        for entry in read_dir.flatten() {
+            let path = entry.path();
+            if let Some(fname) = path.file_name().and_then(|s| s.to_str()) {
+                let prefix = format!("{}.{}.", crate_name, crate_hash);
+                if fname.starts_with(&prefix) {
+                    // Attempt to read and compare contents. If the file's
+                    // bytes match our bytes, we're done.
+                    if let Ok(mut f) = fs::File::open(&path) {
+                        let mut existing = Vec::new();
+                        if f.read_to_end(&mut existing).is_ok() {
+                            if existing == bytes {
+                                if tcx.sess.verbose_internals() {
+                                    eprintln!(
+                                        "export-queries: identical file already exists: {}",
+                                        path.display()
+                                    );
+                                }
+                                return;
+                            }
+                        }
+                    }
+
+                    // Try to parse the trailing dedup number.
+                    if let Some(s) = fname.rsplit('.').next() {
+                        if let Ok(n) = s.parse::<usize>() {
+                            if n >= max_dedup {
+                                max_dedup = n + 1
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let dedup = max_dedup;
+    let filename = format!("{}.{}.{}", crate_name, crate_hash, dedup);
+    let mut path = PathBuf::from(dir);
+    path.push(filename);
+
+    // Try to write the file, ignore any errors. Print small messages when
+    // `-Z verbose-internals` is enabled so users can observe what happened.
+    if let Ok(mut f) = fs::File::create(&path) {
+        let _ = f.write_all(&bytes);
+        if tcx.sess.verbose_internals() {
+            eprintln!("export-queries: wrote file: {}", path.display());
+        }
+    }
 }
 
 impl<'tcx> QueryCtxt<'tcx> {
@@ -1061,7 +1154,12 @@ macro_rules! define_queries {
                 out.push((rmpv::Value::String(name.into()), map));
             }
 
-            rmpv::Value::Map(out)
-        }
+        rmpv::Value::Map(out)
+    }
+
+    // NOTE: export_queries_if_enabled used to be defined inside this macro,
+    // but that caused multiple-definition and hygiene issues because the
+    // macro expands per-query. The actual implementation lives at module
+    // scope (see below) and is intentionally not emitted by the macro.
     }
 }

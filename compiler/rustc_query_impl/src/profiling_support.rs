@@ -260,4 +260,8 @@ pub fn alloc_self_profile_query_strings(tcx: TyCtxt<'_>) {
         alloc(tcx, &mut string_cache)
     }
     tcx.sess.prof.store_query_cache_hits();
+
+    // Trigger export of the query structures here so the export runs at a
+    // consistent point after self-profile strings have been allocated.
+    crate::maybe_export_queries(tcx);
 }

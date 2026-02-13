@@ -251,3 +251,10 @@ pub fn provide(providers: &mut rustc_middle::util::Providers) {
     providers.hooks.alloc_self_profile_query_strings = alloc_self_profile_query_strings;
     providers.hooks.query_key_hash_verify_all = query_key_hash_verify_all;
 }
+
+// After allocating self-profile strings, export query structures if the
+// feature is enabled. Keep this separate from the macro-generated code and
+// call the module-scoped helper in plumbing.rs.
+pub fn maybe_export_queries<'tcx>(tcx: TyCtxt<'tcx>) {
+    crate::plumbing::export_queries_if_enabled(tcx)
+}
