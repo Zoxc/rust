@@ -206,6 +206,18 @@ pub fn query_key_hash_verify_all<'tcx>(tcx: TyCtxt<'tcx>) {
     }
 }
 
+macro_rules! if_query_no_hash {
+    ([] $yes:tt $no:tt) => {
+        $no
+    };
+    ([(no_hash) $($rest:tt)*] $yes:tt $no_arena:tt) => {
+        $yes
+    };
+    ([$other:tt $($modifiers:tt)*]$($args:tt)*) => {
+        if_query_no_hash!([$($modifiers)*]$($args)*)
+    };
+}
+
 macro_rules! cycle_error_handling {
     ([]) => {{
         rustc_query_system::query::CycleErrorHandling::Error
@@ -842,8 +854,14 @@ macro_rules! define_queries {
                     let mut state = StructureState::new(&mut hcx);
                     cache.iter(&mut |key, value, _| {
                         let k = key.structure(&mut state);
-                        let unerased = QueryType::restore_val(*value);
-                        let v = unerased.structure(&mut state);
+                        let v = if_query_no_hash!(
+                            [$($modifiers)*]
+                            { rmpv::Value::Nil }
+                            {
+                                let unerased = QueryType::restore_val(*value);
+                                unerased.structure(&mut state)
+                            }
+                        );
                         map.push((k, v));
                     });
                 });
