@@ -29,6 +29,7 @@ pub enum Value {
     String(Cow<'static, str>),
     /// Array of values.
     Array(Vec<Value>),
+    Tuple(Vec<Value>),
     /// Map of key -> value.
     Map(Vec<(Value, Value)>),
 
