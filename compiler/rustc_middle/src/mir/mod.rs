@@ -926,20 +926,20 @@ mod binding_form_impl {
             }
         }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> Value {
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> inspect::Value {
         use super::BindingForm::*;
 
             match self {
-                Var(binding) => Value::Array(vec![
-                    Value::String("Var".into()),
+                Var(binding) => inspect::Value::Array(vec![
+                    inspect::Value::String("Var".into()),
                     binding.structure(state),
                 ]),
-                ImplicitSelf(kind) => Value::Array(vec![
-                    Value::String("ImplicitSelf".into()),
+                ImplicitSelf(kind) => inspect::Value::Array(vec![
+                    inspect::Value::String("ImplicitSelf".into()),
                     kind.structure(state),
                 ]),
-                RefForGuard(local) => Value::Array(vec![
-                    Value::String("RefForGuard".into()),
+                RefForGuard(local) => inspect::Value::Array(vec![
+                    inspect::Value::String("RefForGuard".into()),
                     local.structure(state),
                 ]),
             }
