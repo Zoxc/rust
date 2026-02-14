@@ -926,7 +926,7 @@ mod binding_form_impl {
             }
         }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> inspect::Value {
+    fn structure<'s>(&self, state: &mut StructureState<'s, StableHashingContext<'a>>) -> inspect::Value {
         use super::BindingForm::*;
 
             match self {

@@ -19,14 +19,16 @@ pub use rustc_stable_hash::{
 };
 use std::collections::BTreeMap;
 
-pub struct StructureState<CTX> {
+pub struct StructureState<'a, CTX> {
     // `hcx` is intentionally stored but currently unused in some build
-    // configurations. Keep the field to preserve the API and silence dead code
-    // warnings by renaming it to `_hcx` so the compiler treats it as used.
+    // configurations. Keep the field to preserve the API. Use a PhantomData
+    // marker to tie the state to the lifetime `'s` without creating a
+    // borrowed reference.
     _hcx: *mut CTX,
+    _marker: PhantomData<&'a CTX>,
 }
 
-impl<CTX> StructureState<CTX> {
+impl<'a, CTX> StructureState<'a, CTX> {
     // StructureState intentionally does not expose the internal CTX pointer
     // mutably. `structure()` implementations must not call into `hash_stable`
     // helpers and therefore do not need access to `&mut CTX`.
@@ -34,8 +36,8 @@ impl<CTX> StructureState<CTX> {
     /// hashing context. This provides the same (opaque) pointer that other
     /// crates previously constructed directly via field initialization.
     #[inline]
-    pub fn new(hcx: &mut CTX) -> Self {
-        StructureState { _hcx: hcx as *mut CTX }
+    pub fn new(hcx: &'a mut CTX) -> Self {
+        StructureState { _hcx: hcx as *mut CTX, _marker: PhantomData }
     }
 }
 
@@ -68,7 +70,7 @@ impl<CTX> StructureState<CTX> {
 pub trait HashStable<CTX> {
     /// Returns the exact data that will be hashed by `hash_stable` as an
     /// inspection `Value`.
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value;
+    fn structure<'a>(&self, state: &mut StructureState<'a, CTX>) -> Value;
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher);
 }
@@ -172,7 +174,7 @@ macro_rules! impl_stable_traits_for_trivial_type {
     ($t:ty, $structure_fn:expr) => {
         impl<CTX> $crate::stable_hasher::HashStable<CTX> for $t {
             #[inline]
-            fn structure(&self, _state: &mut StructureState<CTX>) -> Value {
+            fn structure<'s>(&self, _state: &mut StructureState<'s, CTX>) -> Value {
                 ($structure_fn)(self)
             }
 
@@ -222,7 +224,7 @@ impl_stable_traits_for_trivial_type!(Hash64, |h: &Hash64| Value::Binary(
 // hashing we want to hash the full 128-bit hash.
 impl<CTX> HashStable<CTX> for Hash128 {
     #[inline]
-    fn structure(&self, _: &mut StructureState<CTX>) -> Value {
+    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
         // Represent the 128-bit hash as a 16-byte binary.
         let bytes = self.as_u128().to_le_bytes();
         Value::Binary(bytes.to_vec())
@@ -243,7 +245,7 @@ impl StableOrd for Hash128 {
 }
 
 impl<CTX> HashStable<CTX> for ! {
-    fn structure(&self, _: &mut StructureState<CTX>) -> Value {
+    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
         unreachable!()
     }
 
@@ -253,7 +255,7 @@ impl<CTX> HashStable<CTX> for ! {
 }
 
 impl<CTX, T> HashStable<CTX> for PhantomData<T> {
-    fn structure(&self, _: &mut StructureState<CTX>) -> Value {
+    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
         Value::Array(vec![])
     }
 
@@ -262,7 +264,7 @@ impl<CTX, T> HashStable<CTX> for PhantomData<T> {
 
 impl<CTX> HashStable<CTX> for NonZero<u32> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure<'s>(&self, state: &mut StructureState<'s, CTX>) -> Value {
         self.get().structure(state)
     }
 
@@ -428,7 +430,7 @@ impl<T1: StableOrd, T2: StableOrd, T3: StableOrd, T4: StableOrd> StableOrd for (
 }
 
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for [T] {
-    default fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    default fn structure<'s>(&self, state: &mut StructureState<'s, CTX>) -> Value {
         // Represent slices/arrays using a MessagePack array that mirrors
         // the in-memory sequence of elements (no explicit length prefix).
         let mut out = Vec::with_capacity(self.len());
@@ -738,7 +740,7 @@ where
 
 impl<T, CTX> HashStable<CTX> for ::std::mem::Discriminant<T> {
     #[inline]
-    fn structure(&self, _: &mut StructureState<CTX>) -> Value {
+    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
         // Represent the discriminant structurally using its Debug
         // representation. This avoids hashing while still encoding which
         // variant is present. Note: this is a pragmatic choice; a more
@@ -814,7 +816,7 @@ where
 }
 
 impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
-    fn structure(&self, _: &mut StructureState<CTX>) -> Value {
+    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
         // Represent DenseBitSet structurally as [domain_size, [set_indices...]]
         // by listing the indices of set bits. This avoids accessing private
         // internals such as the word vector.
@@ -834,7 +836,7 @@ impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
 }
 
 impl<R: Idx, C: Idx, CTX> HashStable<CTX> for bit_set::BitMatrix<R, C> {
-    fn structure(&self, _: &mut StructureState<CTX>) -> Value {
+    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
         // Represent BitMatrix structurally as an array of rows, where each
         // row is an array of set column indices. This avoids reading private
         // fields while preserving the matrix contents.

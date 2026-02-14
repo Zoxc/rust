@@ -174,7 +174,7 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
         hash.hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> inspect::Value {
+    fn structure<'s>(&self, state: &mut StructureState<'s, StableHashingContext<'a>>) -> inspect::Value {
         // Represent ADT definition by its DefId and variant layout information which is
         // invariant across sessions.
         let mut out = Vec::new();

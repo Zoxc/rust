@@ -18,7 +18,7 @@ impl<'a> HashStable<StableHashingContext<'a>> for ast::NodeId {
         panic!("Node IDs should not appear in incremental state");
     }
 
-    fn structure(&self, _state: &mut StructureState<StableHashingContext<'a>>) -> Value {
+    fn structure<'s>(&self, _state: &mut StructureState<'s, StableHashingContext<'a>>) -> Value {
         // NodeIds are un-stable across sessions; represent as a tag struct so
         // the type name is preserved in inspection output.
         Value::Struct { path: Cow::Borrowed("NodeId"), fields: Vec::new() }
@@ -112,7 +112,7 @@ impl<'a> HashStable<StableHashingContext<'a>> for SourceFile {
         cnum.hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> Value {
+    fn structure<'s>(&self, state: &mut StructureState<'s, StableHashingContext<'a>>) -> Value {
         // Use the stable_id and other session-invariant fields as the structural representation.
         // Represent as a named struct so the type name is not lost.
         Value::Struct {
@@ -135,7 +135,7 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::Features {
         self.enabled_lib_features().hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'tcx>>) -> Value {
+    fn structure<'s>(&self, state: &mut StructureState<'s, StableHashingContext<'tcx>>) -> Value {
         Value::Struct {
             path: Cow::Borrowed("rustc_feature::Features"),
             fields: vec![
@@ -160,7 +160,7 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLang
         stable_since.hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'tcx>>) -> Value {
+    fn structure<'s>(&self, state: &mut StructureState<'s, StableHashingContext<'tcx>>) -> Value {
         let rustc_feature::EnabledLangFeature { gate_name, attr_sp, stable_since } = self;
         Value::Struct {
             path: Cow::Borrowed("rustc_feature::EnabledLangFeature"),
@@ -180,7 +180,7 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLibF
         attr_sp.hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'tcx>>) -> Value {
+    fn structure<'s>(&self, state: &mut StructureState<'s, StableHashingContext<'tcx>>) -> Value {
         let rustc_feature::EnabledLibFeature { gate_name, attr_sp } = self;
         Value::Struct {
             path: Cow::Borrowed("rustc_feature::EnabledLibFeature"),
