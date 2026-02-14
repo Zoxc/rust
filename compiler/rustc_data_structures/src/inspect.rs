@@ -24,7 +24,7 @@ pub enum Value {
     /// Unsigned integer.
     UInt(u128),
     /// Floating point.
-    F64(f64),
+    F64(OrderedFloat(f64)),
     /// Binary blob.
     Binary(Vec<u8>),
     /// String-like value.
