@@ -25,7 +25,7 @@ pub struct StructureState<'a, CTX> {
     // marker to tie the state to the lifetime `'s` without creating a
     // borrowed reference.
     _hcx: *mut CTX,
-    _marker: PhantomData<&'a CTX>,
+    def_path: &'a dyn Fn(crate_num: u32, def_id: u32) -> Value,
 }
 
 impl<'a, CTX> StructureState<'a, CTX> {
