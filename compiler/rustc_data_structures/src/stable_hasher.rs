@@ -23,11 +23,6 @@ pub use rustc_stable_hash::{
 use std::collections::BTreeMap;
 
 pub struct StructureState<'a, CTX> {
-    // `hcx` is intentionally stored but currently unused in some build
-    // configurations. Keep the field to preserve the API. Use a PhantomData
-    // marker to tie the state to the lifetime `'s` without creating a
-    // borrowed reference.
-    _hcx: *mut CTX,
     def_path: &'a dyn Fn(u32, u32) -> Value,
     _marker: PhantomData<&'a CTX>,
 }
@@ -40,10 +35,9 @@ impl<'a, CTX> StructureState<'a, CTX> {
     /// hashing context. This provides the same (opaque) pointer that other
     /// crates previously constructed directly via field initialization.
     #[inline]
-    pub fn new(hcx: &'a mut CTX) -> Self {
+    pub fn new(def_path: &'a dyn Fn(u32, u32) -> Value) -> Self {
         StructureState {
-            _hcx: hcx as *mut CTX,
-            def_path: &(|_, _| Value::Array(vec![])),
+            def_path,
             _marker: PhantomData,
         }
     }

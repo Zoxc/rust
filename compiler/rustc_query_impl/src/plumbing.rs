@@ -967,7 +967,16 @@ macro_rules! define_queries {
                 // Use the tcx's stable hashing context to obtain a
                 // StructureState to call `structure()` on keys and values.
                 tcx.with_stable_hashing_context(|mut hcx| {
-                    let mut state = StructureState::new(&mut hcx);
+                    let def_path_fn_closure = |crate_num: u32, index: u32| -> inspect::Value {
+                        // Construct a `DefId` from the supplied `u32` crate/def indices
+                        // and return an `inspect::Value::String` containing the def path.
+                        let def_id = rustc_span::def_id::DefId {
+                            krate: rustc_span::def_id::CrateNum::from_u32(crate_num),
+                            index: rustc_span::def_id::DefIndex::from_u32(index),
+                        };
+                        inspect::Value::String(tcx.def_path_str(def_id).into())
+                    };
+                    let mut state = StructureState::<'_, rustc_query_system::ich::StableHashingContext<'_>>::new(&def_path_fn_closure);
                     cache.iter(&mut |key, _value, _| {
                         let k = key.structure(&mut state);
                         let v = if_query_no_hash!(
