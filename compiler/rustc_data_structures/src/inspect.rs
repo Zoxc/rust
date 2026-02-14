@@ -15,7 +15,7 @@ use std::hash::{Hash, Hasher};
 ///
 /// Models scalars and Rust aggregate types: `Struct`, `StructTuple` and
 /// `Enum` (with `EnumVariant`).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Value {
     /// Boolean.
     Bool(bool),
