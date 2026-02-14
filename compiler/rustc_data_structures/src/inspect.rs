@@ -7,7 +7,8 @@
 //! variants for Rust ADTs.
 
 use crate::fx::FxHashMap;
-use serde::{Deserialize, Serialize};
+use ordered_float::OrderedFloat;
+use serde::{Deserialize, Serialize};use std::collections::BTreeMap;
 use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 
@@ -15,7 +16,7 @@ use std::hash::{Hash, Hasher};
 ///
 /// Models scalars and Rust aggregate types: `Struct`, `StructTuple` and
 /// `Enum` (with `EnumVariant`).
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq,Hash, Serialize, Deserialize)]
 pub enum Value {
     /// Boolean.
     Bool(bool),
@@ -24,7 +25,7 @@ pub enum Value {
     /// Unsigned integer.
     UInt(u128),
     /// Floating point.
-    F64(OrderedFloat(f64)),
+    F64(OrderedFloat<f64>),
     /// Binary blob.
     Binary(Vec<u8>),
     /// String-like value.
@@ -33,7 +34,7 @@ pub enum Value {
     Array(Vec<Value>),
     Tuple(Vec<Value>),
     /// Map of key -> value.
-    Map(FxHashMap<Value, Value>),
+    Map(BTreeMap<Value, Value>),
 
     /// Named-field struct value.
     Struct {
