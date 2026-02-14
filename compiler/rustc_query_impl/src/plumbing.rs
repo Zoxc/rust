@@ -964,35 +964,31 @@ macro_rules! define_queries {
                 let qcx = QueryCtxt::new(tcx);
                 let cache = query.query_cache(qcx);
 
-                // Use the tcx's stable hashing context to obtain a
-                // StructureState to call `structure()` on keys and values.
-                tcx.with_stable_hashing_context(|mut hcx| {
-                    let def_path_fn_closure = |crate_num: u32, index: u32| -> inspect::Value {
-                        // Construct a `DefId` from the supplied `u32` crate/def indices
-                        // and return an `inspect::Value::String` containing the def path.
-                        let def_id = rustc_span::def_id::DefId {
-                            krate: rustc_span::def_id::CrateNum::from_u32(crate_num),
-                            index: rustc_span::def_id::DefIndex::from_u32(index),
-                        };
-                        inspect::Value::String(tcx.def_path_str(def_id).into())
+                let def_path_fn_closure = |crate_num: u32, index: u32| -> inspect::Value {
+                    // Construct a `DefId` from the supplied `u32` crate/def indices
+                    // and return an `inspect::Value::String` containing the def path.
+                    let def_id = rustc_span::def_id::DefId {
+                        krate: rustc_span::def_id::CrateNum::from_u32(crate_num),
+                        index: rustc_span::def_id::DefIndex::from_u32(index),
                     };
-                    let mut state = StructureState::<'_, rustc_query_system::ich::StableHashingContext<'_>>::new(&def_path_fn_closure);
-                    cache.iter(&mut |key, _value, _| {
-                        let k = key.structure(&mut state);
-                        let v = if_query_no_hash!(
-                            [$($modifiers)*]
-                            { ::rustc_data_structures::inspect::Value::Array(vec![]) }
-                            {
-                                let unerased = QueryType::restore_val(*_value);
-                                // Ensure we return an inspect::Value here. The
-                                // domain value's `structure()` may return a local
-                                // `Value` type; call through and rely on its
-                                // implementation to produce the inspect::Value.
-                                unerased.structure(&mut state)
-                            }
-                        );
-                        map.push((k, v));
-                    });
+                    inspect::Value::String(tcx.def_path_str(def_id).into())
+                };
+                let mut state = StructureState::<'_, rustc_query_system::ich::StableHashingContext<'_>>::new(&def_path_fn_closure);
+                cache.iter(&mut |key, _value, _| {
+                    let k = key.structure(&mut state);
+                    let v = if_query_no_hash!(
+                        [$($modifiers)*]
+                        { ::rustc_data_structures::inspect::Value::Array(vec![]) }
+                        {
+                            let unerased = QueryType::restore_val(*_value);
+                            // Ensure we return an inspect::Value here. The
+                            // domain value's `structure()` may return a local
+                            // `Value` type; call through and rely on its
+                            // implementation to produce the inspect::Value.
+                            unerased.structure(&mut state)
+                        }
+                    );
+                    map.push((k, v));
                 });
 
                 // Record type names and sizes for this query's key and value.
