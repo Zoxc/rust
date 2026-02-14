@@ -111,7 +111,7 @@ mod temp_stable_hash_impls {
         }
         fn structure(
             &self,
-            _state: &mut StructureState<HCX>,
+            _state: &mut StructureState<'_, HCX>,
         ) -> ::rustc_data_structures::inspect::Value {
             // ModuleCodegen contents are transient for hashing; represent as an
             // empty array in `inspect::Value`.

@@ -53,7 +53,7 @@ impl<HCX> HashStable<HCX> for OngoingModuleCodegen {
 
     fn structure(
         &self,
-        _state: &mut StructureState<HCX>,
+        _state: &mut StructureState<'_, HCX>,
     ) -> ::rustc_data_structures::inspect::Value {
         // OngoingModuleCodegen is transient/runtime-only; represent as an
         // empty array in the inspect representation.

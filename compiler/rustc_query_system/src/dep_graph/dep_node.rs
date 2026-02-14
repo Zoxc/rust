@@ -312,7 +312,7 @@ impl<HCX> HashStable<HCX> for WorkProductId {
         self.hash.hash_stable(hcx, hasher)
     }
 
-    fn structure(&self, state: &mut StructureState<HCX>) -> inspect::Value {
+    fn structure(&self, state: &mut StructureState<'_, HCX>) -> inspect::Value {
         // Fingerprint already has a structure() impl that returns Binary(16)
         inspect::Value::from(self.hash.structure(state))
     }

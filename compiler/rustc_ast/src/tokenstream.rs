@@ -140,7 +140,7 @@ impl<D: SpanDecoder> Decodable<D> for LazyAttrTokenStream {
 }
 
 impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
-    fn structure(&self, _state: &mut StructureState<CTX>) -> inspect::Value {
+    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
         // No structural representation for lazy token streams; use Debug string.
         inspect::Value::String(format!("LazyAttrTokenStream({:?})", self.to_attr_token_stream()).into())
     }
@@ -834,7 +834,7 @@ impl<CTX> HashStable<CTX> for TokenStream
 where
     CTX: crate::HashStableContext,
 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> inspect::Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
         let mut out = Vec::new();
         for sub_tt in self.iter() {
             out.push(inspect::Value::from(sub_tt.structure(state)));

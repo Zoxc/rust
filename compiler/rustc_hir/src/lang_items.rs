@@ -150,7 +150,7 @@ impl<CTX> HashStable<CTX> for LangItem {
         ::std::hash::Hash::hash(self, hasher);
     }
 
-    fn structure(&self, _state: &mut StructureState<CTX>) -> inspect::Value {
+    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
         // Represent the variant by its discriminant (as an integer) for structure.
         inspect::Value::UInt(*self as u32 as u128)
     }

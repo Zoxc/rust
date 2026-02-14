@@ -171,7 +171,7 @@ use crate::stable_hasher::StableOrd;
 
 impl<CTX> HashStable<CTX> for Fingerprint {
     #[inline]
-    fn structure(&self, _state: &mut StructureState<CTX>) -> crate::inspect::Value {
+    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
         crate::inspect::Value::Binary(self.to_le_bytes().to_vec())
     }
 

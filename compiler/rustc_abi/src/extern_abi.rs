@@ -222,7 +222,10 @@ impl Hash for ExternAbi {
 #[cfg(feature = "nightly")]
 impl<C> HashStable<C> for ExternAbi {
     #[inline]
-    fn structure(&self, _state: &mut StructureState<C>) -> ::rustc_data_structures::inspect::Value {
+    fn structure(
+        &self,
+        _state: &mut StructureState<'_, C>,
+    ) -> ::rustc_data_structures::inspect::Value {
         // Represent the ABI via its string form
         ::rustc_data_structures::inspect::Value::String(self.as_str().to_string().into())
     }

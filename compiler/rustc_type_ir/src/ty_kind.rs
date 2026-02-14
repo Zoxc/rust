@@ -685,7 +685,7 @@ impl<CTX> HashStable<CTX> for InferTy {
         }
     }
 
-    fn structure(&self, _state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
         use InferTy::*;
         match self {
             TyVar(_) => inspect::Value::String("TyVar".into()),

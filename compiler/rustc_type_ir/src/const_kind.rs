@@ -131,7 +131,7 @@ impl<CTX> HashStable<CTX> for InferConst {
         }
     }
 
-    fn structure(&self, _state: &mut StructureState<CTX>) -> inspect::Value {
+    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
         match self {
             InferConst::Var(_) => inspect::Value::String("Var".into()),
             InferConst::Fresh(i) => inspect::Value::UInt(*i as u128),

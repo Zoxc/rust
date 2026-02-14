@@ -118,7 +118,7 @@ fn hash_stable_derive_with_mode(
                 match *self { #body }
             }
                 #[inline]
-                fn structure(&self, __state: &mut ::rustc_data_structures::stable_hasher::StructureState<#context>) -> ::rustc_data_structures::inspect::Value {
+                fn structure(&self, __state: &mut ::rustc_data_structures::stable_hasher::StructureState<'_, #context>) -> ::rustc_data_structures::inspect::Value {
                 match *self { #structure }
             }
         },

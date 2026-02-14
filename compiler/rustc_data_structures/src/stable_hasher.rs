@@ -11,6 +11,9 @@ use smallvec::SmallVec;
 mod tests;
 
 // Provide the inspection `Value` type for `HashStable::structure` implementations.
+// FxHashMap is referenced by some modules in this crate but not all build
+// configurations use it. Keep the import to avoid churn while some
+// refactorings complete; the unused-import warning can be addressed later.
 use crate::fx::FxHashMap;
 use crate::inspect::Value;
 use rustc_hashes::{Hash64, Hash128};
@@ -25,7 +28,8 @@ pub struct StructureState<'a, CTX> {
     // marker to tie the state to the lifetime `'s` without creating a
     // borrowed reference.
     _hcx: *mut CTX,
-    def_path: &'a dyn Fn(crate_num: u32, def_id: u32) -> Value,
+    def_path: &'a dyn Fn(u32, u32) -> Value,
+    _marker: PhantomData<&'a CTX>,
 }
 
 impl<'a, CTX> StructureState<'a, CTX> {
@@ -37,7 +41,20 @@ impl<'a, CTX> StructureState<'a, CTX> {
     /// crates previously constructed directly via field initialization.
     #[inline]
     pub fn new(hcx: &'a mut CTX) -> Self {
-        StructureState { _hcx: hcx as *mut CTX, _marker: PhantomData }
+        StructureState {
+            _hcx: hcx as *mut CTX,
+            def_path: &(|_, _| Value::Array(vec![])),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Helper to obtain a structural representation of a `DefPath`.
+    ///
+    /// Some callers previously accessed a `def_path` method on `StructureState`.
+    /// Provide that API surface so existing call sites work while the
+    /// `def_path` plumbing is reconciled.
+    pub fn def_path(&mut self, crate_num: u32, def_index: u32) -> Value {
+        (self.def_path)(crate_num, def_index)
     }
 }
 
@@ -276,7 +293,7 @@ impl<CTX> HashStable<CTX> for NonZero<u32> {
 
 impl<CTX> HashStable<CTX> for NonZero<usize> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         self.get().structure(state)
     }
 
@@ -287,7 +304,7 @@ impl<CTX> HashStable<CTX> for NonZero<usize> {
 }
 
 impl<CTX> HashStable<CTX> for f32 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let val: u32 = self.to_bits();
         val.structure(state)
     }
@@ -299,7 +316,7 @@ impl<CTX> HashStable<CTX> for f32 {
 }
 
 impl<CTX> HashStable<CTX> for f64 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let val: u64 = self.to_bits();
         val.structure(state)
     }
@@ -312,7 +329,7 @@ impl<CTX> HashStable<CTX> for f64 {
 
 impl<CTX> HashStable<CTX> for ::std::cmp::Ordering {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         (*self as i8).structure(state)
     }
 
@@ -324,7 +341,7 @@ impl<CTX> HashStable<CTX> for ::std::cmp::Ordering {
 
 impl<T1: HashStable<CTX>, CTX> HashStable<CTX> for (T1,) {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let (ref _0,) = *self;
         _0.structure(state)
     }
@@ -337,7 +354,7 @@ impl<T1: HashStable<CTX>, CTX> HashStable<CTX> for (T1,) {
 }
 
 impl<T1: HashStable<CTX>, T2: HashStable<CTX>, CTX> HashStable<CTX> for (T1, T2) {
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let (ref _0, ref _1) = *self;
         let mut out = Vec::new();
         out.push(_0.structure(state));
@@ -366,7 +383,7 @@ where
     T2: HashStable<CTX>,
     T3: HashStable<CTX>,
 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let (ref _0, ref _1, ref _2) = *self;
         let mut out = Vec::new();
         out.push(_0.structure(state));
@@ -399,7 +416,7 @@ where
     T3: HashStable<CTX>,
     T4: HashStable<CTX>,
 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let (ref _0, ref _1, ref _2, ref _3) = *self;
         let mut out = Vec::new();
         out.push(_0.structure(state));
@@ -449,7 +466,7 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for [T] {
 }
 
 impl<CTX> HashStable<CTX> for [u8] {
-    fn structure(&self, _state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
         // Represent byte slices as a binary value which already contains
         // length information and matches the memory representation.
         Value::Binary(self.to_vec())
@@ -463,7 +480,7 @@ impl<CTX> HashStable<CTX> for [u8] {
 
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for Vec<T> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         self[..].structure(state)
     }
 
@@ -475,7 +492,7 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for Vec<T> {
 
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for thin_vec::ThinVec<T> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         self[..].structure(state)
     }
 
@@ -492,7 +509,7 @@ where
     R: BuildHasher,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> crate::inspect::Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
         // Represent maps as MessagePack maps so the structure mirrors the
         // logical key->value relationship instead of a linear sequence.
         let mut map: BTreeMap<crate::inspect::Value, crate::inspect::Value> = BTreeMap::new();
@@ -517,7 +534,7 @@ where
     R: BuildHasher,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> crate::inspect::Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
         // Represent sets as arrays of elements (order preserved by IndexSet).
         let mut out = Vec::with_capacity(self.len());
         for key in self {
@@ -540,7 +557,7 @@ where
     A: HashStable<CTX>,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> crate::inspect::Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
         self[..].structure(state)
     }
 
@@ -552,7 +569,7 @@ where
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         (**self).structure(state)
     }
 
@@ -564,7 +581,7 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         (**self).structure(state)
     }
 
@@ -576,7 +593,7 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::sync::Arc<T> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         (**self).structure(state)
     }
 
@@ -588,7 +605,7 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::sync::Arc<T> {
 
 impl<CTX> HashStable<CTX> for str {
     #[inline]
-    fn structure(&self, _state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
         // Represent strings as UTF-8 strings which mirrors their in-memory
         // UTF-8 representation.
         Value::String(self.to_owned().into())
@@ -610,7 +627,7 @@ impl StableOrd for &str {
 
 impl<CTX> HashStable<CTX> for String {
     #[inline]
-    fn structure(&self, _state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
         Value::String(self.clone().into())
     }
 
@@ -646,7 +663,7 @@ impl<HCX, T1: ToStableHashKey<HCX>, T2: ToStableHashKey<HCX>> ToStableHashKey<HC
 
 impl<CTX> HashStable<CTX> for bool {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         (if *self { 1u8 } else { 0u8 }).structure(state)
     }
 
@@ -668,7 +685,7 @@ where
     T: HashStable<CTX>,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let mut out = Vec::new();
         if let Some(ref value) = *self {
             out.push(1u8.structure(state));
@@ -703,7 +720,7 @@ where
     T2: HashStable<CTX>,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let mut out = Vec::new();
         out.push(mem::discriminant(self).structure(state));
         match *self {
@@ -728,7 +745,7 @@ where
     T: HashStable<CTX> + ?Sized,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         (**self).structure(state)
     }
 
@@ -759,7 +776,7 @@ where
     T: HashStable<CTX>,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let mut out = Vec::new();
         out.push(self.start().structure(state));
         out.push(self.end().structure(state));
@@ -777,7 +794,7 @@ impl<I: Idx, T, CTX> HashStable<CTX> for IndexSlice<I, T>
 where
     T: HashStable<CTX>,
 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let mut out = Vec::new();
         out.push(self.len().structure(state));
         for v in &self.raw {
@@ -798,7 +815,7 @@ impl<I: Idx, T, CTX> HashStable<CTX> for IndexVec<I, T>
 where
     T: HashStable<CTX>,
 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let mut out = Vec::new();
         out.push(self.len().structure(state));
         for v in &self.raw {
@@ -860,7 +877,7 @@ impl<T, CTX> HashStable<CTX> for bit_set::FiniteBitSet<T>
 where
     T: HashStable<CTX> + bit_set::FiniteBitSetTy,
 {
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         self.0.structure(state)
     }
 
@@ -893,7 +910,7 @@ where
     K: HashStable<HCX> + StableOrd,
     V: HashStable<HCX>,
 {
-    fn structure(&self, state: &mut StructureState<HCX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, HCX>) -> Value {
         let mut out = Vec::new();
         out.push(self.len().structure(state));
         for (k, v) in self.iter() {
@@ -915,7 +932,7 @@ impl<K, HCX> HashStable<HCX> for ::std::collections::BTreeSet<K>
 where
     K: HashStable<HCX> + StableOrd,
 {
-    fn structure(&self, state: &mut StructureState<HCX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, HCX>) -> Value {
         let mut out = Vec::new();
         out.push(self.len().structure(state));
         for entry in self.iter() {

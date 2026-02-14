@@ -49,7 +49,7 @@ impl<CTX> HashStable<CTX> for Stability {
     }
 
     #[inline]
-    fn structure(&self, state: &mut StructureState<CTX>) -> inspect::Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
         use Stability::*;
         let mut out = Vec::new();
         out.push(std::mem::discriminant(self).structure(state));

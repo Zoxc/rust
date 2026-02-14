@@ -262,7 +262,7 @@ where
     P: HashStable<HCX> + Aligned + ?Sized,
     T: Tag + HashStable<HCX>,
 {
-    fn structure(&self, state: &mut StructureState<HCX>) -> crate::inspect::Value {
+    fn structure(&self, state: &mut StructureState<'_, HCX>) -> crate::inspect::Value {
         let mut out = Vec::new();
         // Keep the same order as `hash_stable`.
         out.push(self.pointer().structure(state));

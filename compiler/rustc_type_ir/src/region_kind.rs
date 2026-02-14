@@ -250,7 +250,7 @@ where
         }
     }
 
-    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         use RegionKind::*;
         let mut out = Vec::new();
         out.push(std::mem::discriminant(self).structure(state));

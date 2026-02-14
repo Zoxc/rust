@@ -175,7 +175,7 @@ impl<CTX> HashStable<CTX> for Cache {
     #[inline]
     fn hash_stable(&self, _: &mut CTX, _: &mut StableHasher) {}
 
-    fn structure(&self, _state: &mut StructureState<CTX>) -> rustc_data_structures::inspect::Value {
+    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> rustc_data_structures::inspect::Value {
         // Cache is transient and ignored for hashing; represent as an empty array.
         rustc_data_structures::inspect::Value::Array(vec![])
     }

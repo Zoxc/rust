@@ -144,7 +144,7 @@ impl LintExpectationId {
 
 impl<HCX: HashStableContext> HashStable<HCX> for LintExpectationId {
     #[inline]
-    fn structure(&self, state: &mut StructureState<HCX>) -> Value {
+    fn structure(&self, state: &mut StructureState<'_, HCX>) -> Value {
         match self {
             LintExpectationId::Stable { hir_id, attr_index, lint_index: Some(lint_index) } => {
                 let mut out = Vec::new();
@@ -648,7 +648,7 @@ impl<HCX> HashStable<HCX> for LintId {
     }
 
     #[inline]
-    fn structure(&self, _state: &mut StructureState<HCX>) -> Value {
+    fn structure(&self, _state: &mut StructureState<'_, HCX>) -> Value {
         // Represent LintId by its static name string.
         Value::String(self.lint_name_raw().into())
     }

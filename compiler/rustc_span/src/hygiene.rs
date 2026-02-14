@@ -1521,7 +1521,7 @@ fn update_disambiguator(expn_data: &mut ExpnData, mut ctx: impl HashStableContex
 impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
     fn structure(
         &self,
-        _state: &mut StructureState<CTX>,
+        _state: &mut StructureState<'_, CTX>,
     ) -> inspect::Value {
         // Represent SyntaxContext by either nil (root) or [expn_id.structure, transparency.structure]
         if self.is_root() {
@@ -1553,7 +1553,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
 impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
     fn structure(
         &self,
-        _state: &mut StructureState<CTX>,
+        _state: &mut StructureState<'_, CTX>,
     ) -> inspect::Value {
         // Represent ExpnId structurally as [krate.structure, local_id]
                 inspect::Value::Array(vec![
@@ -1576,7 +1576,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for LocalExpnId {
-    fn structure(&self, state: &mut StructureState<CTX>) -> inspect::Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
         inspect::Value::from(self.to_expn_id().structure(state))
     }
 

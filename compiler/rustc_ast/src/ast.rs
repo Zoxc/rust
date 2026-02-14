@@ -121,7 +121,7 @@ impl PartialEq<&[Symbol]> for Path {
 }
 
 impl<CTX: rustc_span::HashStableContext> HashStable<CTX> for Path {
-    fn structure(&self, state: &mut StructureState<CTX>) -> inspect::Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
         let mut out = Vec::new();
         out.push(inspect::Value::UInt(self.segments.len() as u128));
         for segment in &self.segments {

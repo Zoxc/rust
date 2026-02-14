@@ -22,7 +22,7 @@ impl<CTX: crate::HashStableContext> HashStable<CTX> for DiagnosticItems {
         self.name_to_id.hash_stable(ctx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<CTX>) -> inspect::Value {
+    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
         // Represent by the name -> id mapping which is the primary data used for hashing.
         inspect::Value::from(self.name_to_id.structure(state))
     }
