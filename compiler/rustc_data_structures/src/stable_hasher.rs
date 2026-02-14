@@ -17,6 +17,7 @@ use rustc_hashes::{Hash64, Hash128};
 pub use rustc_stable_hash::{
     FromStableHash, SipHasher128Hash as StableHasherHash, StableSipHasher128 as StableHasher,
 };
+use std::collections::BTreeMap;
 
 pub struct StructureState<CTX> {
     // `hcx` is intentionally stored but currently unused in some build
@@ -492,8 +493,7 @@ where
     fn structure(&self, state: &mut StructureState<CTX>) -> crate::inspect::Value {
         // Represent maps as MessagePack maps so the structure mirrors the
         // logical key->value relationship instead of a linear sequence.
-        let mut map: FxHashMap<crate::inspect::Value, crate::inspect::Value> =
-            FxHashMap::with_capacity_and_hasher(self.len(), Default::default());
+        let mut map: BTreeMap<crate::inspect::Value, crate::inspect::Value> = BTreeMap::new();
         for (k, v) in self.iter() {
             map.insert(k.structure(state), v.structure(state));
         }

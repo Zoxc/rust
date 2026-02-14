@@ -16,7 +16,7 @@ use std::hash::{Hash, Hasher};
 ///
 /// Models scalars and Rust aggregate types: `Struct`, `StructTuple` and
 /// `Enum` (with `EnumVariant`).
-#[derive(Clone, Debug, Eq, PartialEq,Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq,Hash, Ord,PartialOrd,Serialize, Deserialize)]
 pub enum Value {
     /// Boolean.
     Bool(bool),
@@ -57,7 +57,7 @@ pub enum Value {
 }
 
 /// Describes a single enum variant instance.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq,Ord,PartialOrd, Hash, Serialize, Deserialize)]
 pub enum EnumVariant {
     /// Unit variant (no fields).
     Unit(Cow<'static, str>),

@@ -993,9 +993,9 @@ macro_rules! define_queries {
                 let value_size = std::mem::size_of::<queries::$name::Value<'tcx>>();
 
                 let mut out_map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
-                // Convert entries Vec into an FxHashMap for Value::Map
-                let mut entries_map: ::rustc_data_structures::fx::FxHashMap<inspect::Value, inspect::Value> =
-                    ::rustc_data_structures::fx::FxHashMap::with_capacity_and_hasher(map.len(), Default::default());
+                // Convert entries Vec into a BTreeMap for Value::Map
+                let mut entries_map: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
+                    ::std::collections::BTreeMap::new();
                 for (k, v) in map.into_iter() {
                     entries_map.insert(k, v);
                 }
@@ -1005,9 +1005,9 @@ macro_rules! define_queries {
                 out_map.push((inspect::Value::String("key_size".into()), inspect::Value::UInt(key_size as u128)));
                 out_map.push((inspect::Value::String("value_size".into()), inspect::Value::UInt(value_size as u128)));
 
-                // Convert out_map Vec to FxHashMap before returning
-                let mut ret_map: ::rustc_data_structures::fx::FxHashMap<inspect::Value, inspect::Value> =
-                    ::rustc_data_structures::fx::FxHashMap::with_capacity_and_hasher(out_map.len(), Default::default());
+                // Convert out_map Vec to BTreeMap before returning
+                let mut ret_map: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
+                    ::std::collections::BTreeMap::new();
                 for (k, v) in out_map.into_iter() {
                     ret_map.insert(k, v);
                 }
@@ -1207,9 +1207,9 @@ macro_rules! define_queries {
                 out.push((inspect::Value::String(name.into()), map));
             }
 
-            // Convert Vec into FxHashMap for the Map variant
-            let mut entries_map: ::rustc_data_structures::fx::FxHashMap<inspect::Value, inspect::Value> =
-                ::rustc_data_structures::fx::FxHashMap::with_capacity_and_hasher(out.len(), Default::default());
+            // Convert Vec into BTreeMap for the Map variant
+            let mut entries_map: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
+                ::std::collections::BTreeMap::new();
             for (k, v) in out.into_iter() {
                 entries_map.insert(k, v);
             }

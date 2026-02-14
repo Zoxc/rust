@@ -431,10 +431,7 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
                 out.push(self.inner.iter().next().unwrap().structure(state));
             }
             _ => {
-                let mut map = crate::fx::FxHashMap::with_capacity_and_hasher(
-                    self.inner.len(),
-                    Default::default(),
-                );
+                let mut map = ::std::collections::BTreeMap::new();
                 for item in self.inner.iter() {
                     map.insert(item.structure(state), crate::inspect::Value::UInt(1u128));
                 }
@@ -680,10 +677,7 @@ impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> fo
                 out.push(self.inner.iter().next().unwrap().structure(state));
             }
             _ => {
-                let mut map = crate::fx::FxHashMap::with_capacity_and_hasher(
-                    self.inner.len(),
-                    Default::default(),
-                );
+                let mut map = ::std::collections::BTreeMap::new();
                 for (k, v) in self.inner.iter() {
                     map.insert(k.structure(state), v.structure(state));
                 }
@@ -781,10 +775,7 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
                     }
                 }
 
-                let mut map = crate::fx::FxHashMap::with_capacity_and_hasher(
-                    counts.len(),
-                    Default::default(),
-                );
+                let mut map = ::std::collections::BTreeMap::new();
                 for (k, v) in counts.into_iter() {
                     map.insert(k, crate::inspect::Value::UInt(v as u128));
                 }
