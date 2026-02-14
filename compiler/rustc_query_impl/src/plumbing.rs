@@ -971,16 +971,21 @@ macro_rules! define_queries {
                         krate: rustc_span::def_id::CrateNum::from_u32(crate_num),
                         index: rustc_span::def_id::DefIndex::from_u32(index),
                     };
-                    inspect::Value::String(tcx.def_path_str(def_id).into())
+                    inspect::Value::String(with_no_trimmed_paths!(tcx.def_path_str(def_id).into()))
                 };
                 let mut state = StructureState::<'_, rustc_query_system::ich::StableHashingContext<'_>>::new(&def_path_fn_closure);
-                cache.iter(&mut |key, _value, _| {
+                let mut cached = Vec::new();
+                cache.iter(&mut |k, v, _| {
+                    cached.push((*k, *v));
+                });
+
+                for (key,_value) in cached {
                     let k = key.structure(&mut state);
                     let v = if_query_no_hash!(
                         [$($modifiers)*]
                         { ::rustc_data_structures::inspect::Value::Array(vec![]) }
                         {
-                            let unerased = QueryType::restore_val(*_value);
+                            let unerased = QueryType::restore_val(_value);
                             // Ensure we return an inspect::Value here. The
                             // domain value's `structure()` may return a local
                             // `Value` type; call through and rely on its
@@ -989,7 +994,7 @@ macro_rules! define_queries {
                         }
                     );
                     map.push((k, v));
-                });
+                }
 
                 // Record type names and sizes for this query's key and value.
                 let key_type_name = std::any::type_name::<queries::$name::Key<'tcx>>();
