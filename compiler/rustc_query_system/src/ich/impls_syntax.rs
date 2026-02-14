@@ -7,6 +7,7 @@ use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_span::{SourceFile, Symbol, sym};
 use smallvec::SmallVec;
+use std::borrow::Cow;
 use {rustc_ast as ast, rustc_hir as hir};
 
 use crate::ich::StableHashingContext;
@@ -18,8 +19,9 @@ impl<'a> HashStable<StableHashingContext<'a>> for ast::NodeId {
     }
 
     fn structure(&self, _state: &mut StructureState<StableHashingContext<'a>>) -> Value {
-        // NodeIds are un-stable across sessions; represent as a tag string.
-        Value::String("NodeId".into())
+        // NodeIds are un-stable across sessions; represent as a tag struct so
+        // the type name is preserved in inspection output.
+        Value::Struct { path: Cow::Borrowed("NodeId"), fields: Vec::new() }
     }
 }
 
@@ -112,12 +114,16 @@ impl<'a> HashStable<StableHashingContext<'a>> for SourceFile {
 
     fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> Value {
         // Use the stable_id and other session-invariant fields as the structural representation.
-        let mut out = Vec::new();
-        out.push(Value::from(self.stable_id.structure(state)));
-        out.push(Value::from(self.src_hash.structure(state)));
-        out.push(Value::from(self.lines().len().structure(state)));
-        out.push(Value::from(self.cnum.structure(state)));
-        Value::Array(out)
+        // Represent as a named struct so the type name is not lost.
+        Value::Struct {
+            path: Cow::Borrowed("SourceFile"),
+            fields: vec![
+                (Cow::Borrowed("stable_id"), self.stable_id.structure(state)),
+                (Cow::Borrowed("src_hash"), self.src_hash.structure(state)),
+                (Cow::Borrowed("lines_len"), self.lines().len().structure(state)),
+                (Cow::Borrowed("cnum"), self.cnum.structure(state)),
+            ],
+        }
     }
 }
 
@@ -130,10 +136,19 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::Features {
     }
 
     fn structure(&self, state: &mut StructureState<StableHashingContext<'tcx>>) -> Value {
-        let mut out = Vec::new();
-        out.push(Value::from(self.enabled_lang_features().structure(state)));
-        out.push(Value::from(self.enabled_lib_features().structure(state)));
-        Value::Array(out)
+        Value::Struct {
+            path: Cow::Borrowed("rustc_feature::Features"),
+            fields: vec![
+                (
+                    Cow::Borrowed("enabled_lang_features"),
+                    self.enabled_lang_features().structure(state),
+                ),
+                (
+                    Cow::Borrowed("enabled_lib_features"),
+                    self.enabled_lib_features().structure(state),
+                ),
+            ],
+        }
     }
 }
 
@@ -147,11 +162,14 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLang
 
     fn structure(&self, state: &mut StructureState<StableHashingContext<'tcx>>) -> Value {
         let rustc_feature::EnabledLangFeature { gate_name, attr_sp, stable_since } = self;
-        let mut out = Vec::new();
-        out.push(Value::from(gate_name.structure(state)));
-        out.push(Value::from(attr_sp.structure(state)));
-        out.push(Value::from(stable_since.structure(state)));
-        Value::Array(out)
+        Value::Struct {
+            path: Cow::Borrowed("rustc_feature::EnabledLangFeature"),
+            fields: vec![
+                (Cow::Borrowed("gate_name"), gate_name.structure(state)),
+                (Cow::Borrowed("attr_sp"), attr_sp.structure(state)),
+                (Cow::Borrowed("stable_since"), stable_since.structure(state)),
+            ],
+        }
     }
 }
 
@@ -164,9 +182,12 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLibF
 
     fn structure(&self, state: &mut StructureState<StableHashingContext<'tcx>>) -> Value {
         let rustc_feature::EnabledLibFeature { gate_name, attr_sp } = self;
-        let mut out = Vec::new();
-        out.push(Value::from(gate_name.structure(state)));
-        out.push(Value::from(attr_sp.structure(state)));
-        Value::Array(out)
+        Value::Struct {
+            path: Cow::Borrowed("rustc_feature::EnabledLibFeature"),
+            fields: vec![
+                (Cow::Borrowed("gate_name"), gate_name.structure(state)),
+                (Cow::Borrowed("attr_sp"), attr_sp.structure(state)),
+            ],
+        }
     }
 }
