@@ -13,6 +13,10 @@
 
 use std::fmt;
 
+// Bring the `inspect` module into scope for derive macros that reference it.
+#[cfg(feature = "nightly")]
+use rustc_data_structures::inspect;
+
 #[cfg(feature = "nightly")]
 use rustc_macros::{Decodable_NoContext, Encodable_NoContext, HashStable_NoContext};
 #[cfg(feature = "nightly")]

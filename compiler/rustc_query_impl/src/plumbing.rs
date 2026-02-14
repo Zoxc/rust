@@ -52,7 +52,6 @@ pub struct QueryCtxt<'tcx> {
 
 // Module‑scope export helper. See comments in repo issue for rationale.
 pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
-    use rustc_data_structures::stable_hasher::rmpv;
     use rustc_span::def_id::LOCAL_CRATE;
 
     // Check option enablement on the unstable options struct.
@@ -68,13 +67,12 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
     // Collect the structure to write.
     let value = crate::collect_all_query_structures(tcx);
 
-    // Serialize to MessagePack using the rmpv encode API that we already
-    // re-export in `rustc_data_structures::stable_hasher::rmpv`.
-    let mut bytes: Vec<u8> = Vec::new();
-    let rmpv_value = value.into_rmpv();
-    if rmpv::encode::write_value(&mut bytes, &rmpv_value).is_err() {
-        return;
-    }
+    // Serialize using bincode (serde). If serialization fails, abort
+    // exporting for this run.
+    let bytes = match bincode::serialize(&value) {
+        Ok(b) => b,
+        Err(_) => return,
+    };
 
     let crate_name = tcx.crate_name(LOCAL_CRATE).to_string();
     let crate_hash = if tcx.needs_crate_hash() {

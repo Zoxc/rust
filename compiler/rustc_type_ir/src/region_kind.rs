@@ -264,6 +264,6 @@ where
             RePlaceholder(r) => out.push(r.structure(state)),
             ReVar(_) => out.push(inspect::Value::String("Var".into())),
         }
-        InspectValue::Array(out)
+        Value::Array(out)
     }
 }

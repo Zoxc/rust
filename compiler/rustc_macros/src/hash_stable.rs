@@ -117,8 +117,8 @@ fn hash_stable_derive_with_mode(
                 #discriminant
                 match *self { #body }
             }
-            #[inline]
-            fn structure(&self, __state: &mut ::rustc_data_structures::stable_hasher::StructureState<#context>) -> crate::inspect::Value {
+                #[inline]
+                fn structure(&self, __state: &mut ::rustc_data_structures::stable_hasher::StructureState<#context>) -> ::rustc_data_structures::inspect::Value {
                 match *self { #structure }
             }
         },
@@ -167,11 +167,11 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                             quote! {
                                 {
                                     use ::std::borrow::Cow;
-                                    let mut fields: Vec<(Cow<'static, str>, crate::inspect::Value)> = Vec::new();
+                                    let mut fields: Vec<(Cow<'static, str>, ::rustc_data_structures::inspect::Value)> = Vec::new();
                                     #pushes
-                                    crate::inspect::Value::Enum {
+                                    ::rustc_data_structures::inspect::Value::Enum {
                                         path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
-                                        variant: crate::inspect::EnumVariant::Named(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident))), fields),
+                                        variant: ::rustc_data_structures::inspect::EnumVariant::Named(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident))), fields),
                                     }
                                 }
                             }
@@ -179,9 +179,9 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                     quote! {
                         {
                             use ::std::borrow::Cow;
-                            let mut fields: Vec<(Cow<'static, str>, crate::inspect::Value)> = Vec::new();
+                            let mut fields: Vec<(Cow<'static, str>, ::rustc_data_structures::inspect::Value)> = Vec::new();
                             #pushes
-                            crate::inspect::Value::Struct {
+                            ::rustc_data_structures::inspect::Value::Struct {
                                 path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
                                 fields,
                             }
@@ -214,11 +214,11 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                     quote! {
                         {
                             use ::std::borrow::Cow;
-                            let mut fields: Vec<crate::inspect::Value> = Vec::new();
+                            let mut fields: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
                             #pushes
-                            crate::inspect::Value::Enum {
+                            ::rustc_data_structures::inspect::Value::Enum {
                                 path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
-                                variant: crate::inspect::EnumVariant::Tuple(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident))), fields),
+                                variant: ::rustc_data_structures::inspect::EnumVariant::Tuple(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident))), fields),
                             }
                         }
                     }
@@ -226,9 +226,9 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                     quote! {
                         {
                             use ::std::borrow::Cow;
-                            let mut fields: Vec<crate::inspect::Value> = Vec::new();
+                            let mut fields: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
                             #pushes
-                            crate::inspect::Value::StructTuple {
+                            ::rustc_data_structures::inspect::Value::StructTuple {
                                 path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
                                 fields,
                             }
@@ -241,9 +241,9 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                     quote! {
                         {
                             use ::std::borrow::Cow;
-                            crate::inspect::Value::Enum {
+                            ::rustc_data_structures::inspect::Value::Enum {
                                 path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
-                                variant: crate::inspect::EnumVariant::Unit(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident)))),
+                                variant: ::rustc_data_structures::inspect::EnumVariant::Unit(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident)))),
                             }
                         }
                     }
@@ -251,7 +251,7 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                     quote! {
                         {
                             use ::std::borrow::Cow;
-                            crate::inspect::Value::Struct { path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()), fields: Vec::new() }
+                            ::rustc_data_structures::inspect::Value::Struct { path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()), fields: Vec::new() }
                         }
                     }
                 }

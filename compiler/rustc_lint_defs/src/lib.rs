@@ -7,8 +7,10 @@ use rustc_data_structures::fx::FxIndexSet;
 // Avoid importing `inspect::Value` unqualified; use fully-qualified paths
 // to prevent collisions with other `Value` types.
 use rustc_data_structures::stable_hasher::{
-    HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey, rmpv,
+    HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey,
 };
+// Use fully-qualified path for the inspect Value to avoid importing the `Value` name.
+use rustc_data_structures::inspect::Value;
 use rustc_error_messages::{DiagArgValue, IntoDiagArg, MultiSpan};
 use rustc_hir_id::{HashStableContext, HirId, ItemLocalId};
 use rustc_macros::{Decodable, Encodable, HashStable_Generic};

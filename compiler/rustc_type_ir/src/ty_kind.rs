@@ -2,10 +2,9 @@ use std::fmt;
 use std::ops::Deref;
 
 use derive_where::derive_where;
+use inspect::Value;
 use rustc_ast_ir::Mutability;
 use rustc_data_structures::inspect;
-// Use `inspect::Value` to refer to the compact inspect value without
-// importing the `Value` identifier into the local namespace.
 #[cfg(feature = "nightly")]
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 #[cfg(feature = "nightly")]
@@ -686,13 +685,13 @@ impl<CTX> HashStable<CTX> for InferTy {
         }
     }
 
-    fn structure(&self, _state: &mut StructureState<CTX>) -> InspectValue {
+    fn structure(&self, _state: &mut StructureState<CTX>) -> Value {
         use InferTy::*;
         match self {
             TyVar(_) => inspect::Value::String("TyVar".into()),
             IntVar(_) => inspect::Value::String("IntVar".into()),
             FloatVar(_) => inspect::Value::String("FloatVar".into()),
-            FreshTy(v) | FreshIntTy(v) | FreshFloatTy(v) => InspectValue::UInt((*v) as u128),
+            FreshTy(v) | FreshIntTy(v) | FreshFloatTy(v) => Value::UInt((*v) as u128),
         }
     }
 }

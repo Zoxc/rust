@@ -2,8 +2,9 @@
 //! from various crates in no particular order.
 
 // Use fully-qualified paths for `inspect::Value` to avoid name collisions.
+use inspect::Value;
 use rustc_data_structures::inspect;
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_span::{SourceFile, Symbol, sym};
 use smallvec::SmallVec;
 use {rustc_ast as ast, rustc_hir as hir};
@@ -16,9 +17,9 @@ impl<'a> HashStable<StableHashingContext<'a>> for ast::NodeId {
         panic!("Node IDs should not appear in incremental state");
     }
 
-    fn structure(&self, _state: &mut StructureState<StableHashingContext<'a>>) -> inspect::Value {
+    fn structure(&self, _state: &mut StructureState<StableHashingContext<'a>>) -> Value {
         // NodeIds are un-stable across sessions; represent as a tag string.
-        inspect::Value::String("NodeId".into())
+        Value::String("NodeId".into())
     }
 }
 
@@ -109,14 +110,14 @@ impl<'a> HashStable<StableHashingContext<'a>> for SourceFile {
         cnum.hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> inspect::Value {
+    fn structure(&self, state: &mut StructureState<StableHashingContext<'a>>) -> Value {
         // Use the stable_id and other session-invariant fields as the structural representation.
         let mut out = Vec::new();
-        out.push(inspect::Value::from(self.stable_id.structure(state)));
-        out.push(inspect::Value::from(self.src_hash.structure(state)));
-        out.push(inspect::Value::from(self.lines().len().structure(state)));
-        out.push(inspect::Value::from(self.cnum.structure(state)));
-        inspect::Value::Array(out)
+        out.push(Value::from(self.stable_id.structure(state)));
+        out.push(Value::from(self.src_hash.structure(state)));
+        out.push(Value::from(self.lines().len().structure(state)));
+        out.push(Value::from(self.cnum.structure(state)));
+        Value::Array(out)
     }
 }
 

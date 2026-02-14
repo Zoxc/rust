@@ -1,7 +1,8 @@
 use rustc_data_structures::fx::FxIndexMap;
 // Avoid importing `inspect::Value` unqualified; prefer fully-qualified paths
 // to avoid conflicts with other `Value` types.
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
+use rustc_data_structures::inspect;
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_span::Symbol;
 use rustc_span::def_id::DefIdMap;
 
