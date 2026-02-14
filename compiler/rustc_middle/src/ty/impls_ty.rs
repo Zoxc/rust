@@ -9,6 +9,7 @@ use rustc_data_structures::fx::FxHashMap;
 // Avoid importing `inspect::Value` unqualified to prevent collisions with
 // `ty::Value` / `valtree::Value` in other modules. Use fully-qualified paths
 // where the compact inspect `Value` is needed.
+use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
     HashStable, HashingControls, StableHasher, StructureState, ToStableHashKey, rmpv,
 };

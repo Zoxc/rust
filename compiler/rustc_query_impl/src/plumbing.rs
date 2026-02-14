@@ -972,9 +972,13 @@ macro_rules! define_queries {
                         let k = key.structure(&mut state);
                         let v = if_query_no_hash!(
                             [$($modifiers)*]
-                            { Value::Array(vec![]) }
+                            { ::rustc_data_structures::inspect::Value::Array(vec![]) }
                             {
                                 let unerased = QueryType::restore_val(*_value);
+                                // Ensure we return an inspect::Value here. The
+                                // domain value's `structure()` may return a local
+                                // `Value` type; call through and rely on its
+                                // implementation to produce the inspect::Value.
                                 unerased.structure(&mut state)
                             }
                         );

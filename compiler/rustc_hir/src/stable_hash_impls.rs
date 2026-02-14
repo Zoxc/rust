@@ -1,5 +1,6 @@
 // Use fully-qualified `rustc_data_structures::inspect::Value` where needed to
 // avoid accidental shadowing of other `Value` symbols.
+use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
     HashStable, StableHasher, StructureState, ToStableHashKey, rmpv,
 };

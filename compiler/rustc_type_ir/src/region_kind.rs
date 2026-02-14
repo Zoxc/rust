@@ -209,6 +209,7 @@ impl<I: Interner> fmt::Debug for RegionKind<I> {
     }
 }
 
+use inspect::Value;
 use rustc_data_structures::inspect;
 // Use `inspect::Value` (via `inspect::Value`) to avoid bringing `Value` into
 // the local namespace and potentially shadowing other types named `Value`.
@@ -249,7 +250,7 @@ where
         }
     }
 
-    fn structure(&self, state: &mut StructureState<CTX>) -> inspect::Value {
+    fn structure(&self, state: &mut StructureState<CTX>) -> Value {
         use RegionKind::*;
         let mut out = Vec::new();
         out.push(std::mem::discriminant(self).structure(state));
@@ -262,7 +263,7 @@ where
             ReEarlyParam(r) => out.push(r.structure(state)),
             ReLateParam(r) => out.push(r.structure(state)),
             RePlaceholder(r) => out.push(r.structure(state)),
-            ReVar(_) => out.push(inspect::Value::String("Var".into())),
+            ReVar(_) => out.push(Value::String("Var".into())),
         }
         Value::Array(out)
     }

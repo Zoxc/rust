@@ -109,12 +109,13 @@ mod temp_stable_hash_impls {
         fn hash_stable(&self, _: &mut HCX, _: &mut StableHasher) {
             // do nothing
         }
-        fn structure(&self, _state: &mut StructureState<HCX>) -> Value {
+        fn structure(
+            &self,
+            _state: &mut StructureState<HCX>,
+        ) -> ::rustc_data_structures::inspect::Value {
             // ModuleCodegen contents are transient for hashing; represent as an
-            // empty array in `inspect::Value`. This avoids returning
-            // `rmpv::Value` here and keeps the crate aligned with the
-            // inspect::Value-based structure API.
-            Value::Array(vec![])
+            // empty array in `inspect::Value`.
+            ::rustc_data_structures::inspect::Value::Array(vec![])
         }
     }
 }

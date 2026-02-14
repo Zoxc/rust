@@ -9,6 +9,7 @@
 
 use rustc_ast::attr::AttributeExt;
 use rustc_data_structures::fx::FxIndexMap;
+use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
 use rustc_macros::{BlobDecodable, Encodable, HashStable_Generic};
 use rustc_span::{Span, Symbol, kw, sym};

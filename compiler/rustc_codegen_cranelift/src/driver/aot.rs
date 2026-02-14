@@ -51,9 +51,13 @@ impl<HCX> HashStable<HCX> for OngoingModuleCodegen {
         // do nothing
     }
 
-    fn structure(&self, _state: &mut StructureState<HCX>) -> Value {
-        // OngoingModuleCodegen is transient/runtime-only; represent as an empty array.
-        Value::Array(vec![])
+    fn structure(
+        &self,
+        _state: &mut StructureState<HCX>,
+    ) -> ::rustc_data_structures::inspect::Value {
+        // OngoingModuleCodegen is transient/runtime-only; represent as an
+        // empty array in the inspect representation.
+        ::rustc_data_structures::inspect::Value::Array(vec![])
     }
 }
 
