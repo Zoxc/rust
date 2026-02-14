@@ -948,7 +948,7 @@ macro_rules! define_queries {
                 )
             }
 
-            /// Collects the structural (rmpv) representation of all entries in
+            /// Collects the structural (inspect) representation of all entries in
             /// this query's cache. Returns a pair of the query name and a
             /// MessagePack map of key -> value structures.
             pub(crate) fn collect_structures<'tcx>(tcx: TyCtxt<'tcx>) -> (
@@ -993,13 +993,25 @@ macro_rules! define_queries {
                 let value_size = std::mem::size_of::<queries::$name::Value<'tcx>>();
 
                 let mut out_map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
-                out_map.push((inspect::Value::String("entries".into()), inspect::Value::Map(map)));
+                // Convert entries Vec into an FxHashMap for Value::Map
+                let mut entries_map: ::rustc_data_structures::fx::FxHashMap<inspect::Value, inspect::Value> =
+                    ::rustc_data_structures::fx::FxHashMap::with_capacity_and_hasher(map.len(), Default::default());
+                for (k, v) in map.into_iter() {
+                    entries_map.insert(k, v);
+                }
+                out_map.push((inspect::Value::String("entries".into()), inspect::Value::Map(entries_map)));
                 out_map.push((inspect::Value::String("key_type".into()), inspect::Value::String(key_type_name.into())));
                 out_map.push((inspect::Value::String("value_type".into()), inspect::Value::String(value_type_name.into())));
                 out_map.push((inspect::Value::String("key_size".into()), inspect::Value::UInt(key_size as u128)));
                 out_map.push((inspect::Value::String("value_size".into()), inspect::Value::UInt(value_size as u128)));
 
-                (stringify!($name).to_string(), inspect::Value::Map(out_map))
+                // Convert out_map Vec to FxHashMap before returning
+                let mut ret_map: ::rustc_data_structures::fx::FxHashMap<inspect::Value, inspect::Value> =
+                    ::rustc_data_structures::fx::FxHashMap::with_capacity_and_hasher(out_map.len(), Default::default());
+                for (k, v) in out_map.into_iter() {
+                    ret_map.insert(k, v);
+                }
+                (stringify!($name).to_string(), inspect::Value::Map(ret_map))
             }
         })*}
 
@@ -1195,7 +1207,14 @@ macro_rules! define_queries {
                 out.push((inspect::Value::String(name.into()), map));
             }
 
-            inspect::Value::Map(out)
+            // Convert Vec into FxHashMap for the Map variant
+            let mut entries_map: ::rustc_data_structures::fx::FxHashMap<inspect::Value, inspect::Value> =
+                ::rustc_data_structures::fx::FxHashMap::with_capacity_and_hasher(out.len(), Default::default());
+            for (k, v) in out.into_iter() {
+                entries_map.insert(k, v);
+            }
+
+            inspect::Value::Map(entries_map)
         }
 
     // NOTE: export_queries_if_enabled used to be defined inside this macro,

@@ -11,6 +11,7 @@ use smallvec::SmallVec;
 mod tests;
 
 // Provide the inspection `Value` type for `HashStable::structure` implementations.
+use crate::fx::FxHashMap;
 use crate::inspect::Value;
 use rustc_hashes::{Hash64, Hash128};
 pub use rustc_stable_hash::{
@@ -163,7 +164,7 @@ impl<T: StableOrd> StableCompare for T {
 #[macro_export]
 macro_rules! impl_stable_traits_for_trivial_type {
     // The macro accepts a type and an expression (closure) that takes `&T` and
-    // returns an `rmpv::Value`. It will call the expression with `self`.
+    // returns an `inspect::Value`. It will call the expression with `self`.
 
     // Structure function: the supplied expression is called with `&self` and
     // must return an `inspect::Value` directly.
@@ -491,9 +492,10 @@ where
     fn structure(&self, state: &mut StructureState<CTX>) -> crate::inspect::Value {
         // Represent maps as MessagePack maps so the structure mirrors the
         // logical key->value relationship instead of a linear sequence.
-        let mut map = Vec::with_capacity(self.len());
+        let mut map: FxHashMap<crate::inspect::Value, crate::inspect::Value> =
+            FxHashMap::with_capacity_and_hasher(self.len(), Default::default());
         for (k, v) in self.iter() {
-            map.push((k.structure(state), v.structure(state)));
+            map.insert(k.structure(state), v.structure(state));
         }
         crate::inspect::Value::Map(map)
     }

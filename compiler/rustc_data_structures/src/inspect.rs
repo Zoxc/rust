@@ -2,12 +2,14 @@
 //!
 //! This module provides a `Value` enum that can represent Rust-like
 //! data (enums/structs/tuple variants) as well as simple scalar values.
-//! It is intentionally small and serde-free; it mirrors the existing
-//! use of `rmpv::Value` across this crate but adds structured
+//! It is intentionally small and serde-free; it mirrors the previous
+//! use of a MessagePack `Value` in this crate but adds structured
 //! variants for Rust ADTs.
 
+use crate::fx::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::hash::{Hash, Hasher};
 
 /// A compact representation of values for inspection purposes.
 ///
@@ -31,7 +33,7 @@ pub enum Value {
     Array(Vec<Value>),
     Tuple(Vec<Value>),
     /// Map of key -> value.
-    Map(Vec<(Value, Value)>),
+    Map(FxHashMap<Value, Value>),
 
     /// Named-field struct value.
     Struct {
@@ -54,7 +56,7 @@ pub enum Value {
 }
 
 /// Describes a single enum variant instance.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EnumVariant {
     /// Unit variant (no fields).
     Unit(Cow<'static, str>),

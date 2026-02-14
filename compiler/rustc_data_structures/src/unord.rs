@@ -431,9 +431,12 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
                 out.push(self.inner.iter().next().unwrap().structure(state));
             }
             _ => {
-                let mut map = Vec::with_capacity(self.inner.len());
+                let mut map = crate::fx::FxHashMap::with_capacity_and_hasher(
+                    self.inner.len(),
+                    Default::default(),
+                );
                 for item in self.inner.iter() {
-                    map.push((item.structure(state), crate::inspect::Value::UInt(1u128)));
+                    map.insert(item.structure(state), crate::inspect::Value::UInt(1u128));
                 }
                 out.push(crate::inspect::Value::Map(map));
             }
@@ -677,9 +680,12 @@ impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> fo
                 out.push(self.inner.iter().next().unwrap().structure(state));
             }
             _ => {
-                let mut map = Vec::with_capacity(self.inner.len());
+                let mut map = crate::fx::FxHashMap::with_capacity_and_hasher(
+                    self.inner.len(),
+                    Default::default(),
+                );
                 for (k, v) in self.inner.iter() {
-                    map.push((k.structure(state), v.structure(state)));
+                    map.insert(k.structure(state), v.structure(state));
                 }
                 out.push(crate::inspect::Value::Map(map));
             }
@@ -775,9 +781,12 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
                     }
                 }
 
-                let mut map = Vec::with_capacity(counts.len());
+                let mut map = crate::fx::FxHashMap::with_capacity_and_hasher(
+                    counts.len(),
+                    Default::default(),
+                );
                 for (k, v) in counts.into_iter() {
-                    map.push((k, crate::inspect::Value::UInt(v as u128)));
+                    map.insert(k, crate::inspect::Value::UInt(v as u128));
                 }
 
                 out.push(crate::inspect::Value::Map(map));
