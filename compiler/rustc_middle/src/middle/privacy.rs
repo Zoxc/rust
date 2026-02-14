@@ -5,7 +5,7 @@
 use std::hash::Hash;
 
 use rustc_data_structures::fx::{FxIndexMap, IndexEntry};
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_data_structures::inspect;
 use rustc_hir::def::DefKind;
 use rustc_macros::HashStable;

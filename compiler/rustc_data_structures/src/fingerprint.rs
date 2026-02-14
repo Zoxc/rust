@@ -167,7 +167,7 @@ impl FromStableHash for Fingerprint {
     }
 }
 
-use crate::stable_hasher::{StableOrd, rmpv};
+use crate::stable_hasher::StableOrd;
 
 impl<CTX> HashStable<CTX> for Fingerprint {
     #[inline]

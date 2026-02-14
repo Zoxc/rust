@@ -11,7 +11,7 @@ use rustc_data_structures::fx::FxHashMap;
 // where the compact inspect `Value` is needed.
 use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
-    HashStable, HashingControls, StableHasher, StructureState, ToStableHashKey, rmpv,
+    HashStable, HashingControls, StableHasher, StructureState, ToStableHashKey,
 };
 use rustc_query_system::ich::StableHashingContext;
 use tracing::trace;

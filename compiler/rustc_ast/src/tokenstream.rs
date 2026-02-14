@@ -10,7 +10,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::{cmp, fmt, iter, mem};
 
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_data_structures::sync;
 use rustc_data_structures::inspect;
 use rustc_macros::{Decodable, Encodable, HashStable_Generic, Walkable};

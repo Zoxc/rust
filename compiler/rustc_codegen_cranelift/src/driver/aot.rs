@@ -15,7 +15,7 @@ use rustc_codegen_ssa::base::determine_cgu_reuse;
 use rustc_codegen_ssa::{CodegenResults, CompiledModule, CrateInfo, ModuleKind};
 // Avoid unqualified import of `inspect::Value` to prevent name collisions.
 use rustc_data_structures::profiling::SelfProfilerRef;
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_data_structures::sync::{IntoDynSyncSend, par_map};
 use rustc_hir::attrs::Linkage as RLinkage;
 use rustc_middle::dep_graph::{WorkProduct, WorkProductId};

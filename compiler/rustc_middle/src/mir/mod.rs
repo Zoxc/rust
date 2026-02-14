@@ -910,7 +910,7 @@ pub struct VarBindingIntroduction {
 }
 
 mod binding_form_impl {
-    use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
+    use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
     use rustc_data_structures::inspect;
     use rustc_query_system::ich::StableHashingContext;
 

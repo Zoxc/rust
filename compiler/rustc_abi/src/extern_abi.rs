@@ -6,9 +6,7 @@ use std::hash::{Hash, Hasher};
 // with other `Value` types used in the compiler. Use fully-qualified paths
 // when constructing inspect values inside `structure()`.
 #[cfg(feature = "nightly")]
-use rustc_data_structures::stable_hasher::{
-    HashStable, StableHasher, StableOrd, StructureState, rmpv,
-};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StableOrd, StructureState};
 #[cfg(feature = "nightly")]
 use rustc_macros::{Decodable, Encodable};
 #[cfg(feature = "nightly")]

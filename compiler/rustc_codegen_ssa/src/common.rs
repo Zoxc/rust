@@ -101,7 +101,7 @@ mod temp_stable_hash_impls {
     // Avoid unqualified import of `inspect::Value` to prevent shadowing other
     // `Value` types used in codegen (e.g., IR `Value`). Use fully-qualified
     // path when constructing inspect values.
-    use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
+    use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 
     use crate::ModuleCodegen;
 

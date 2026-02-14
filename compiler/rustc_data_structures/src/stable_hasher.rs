@@ -10,10 +10,8 @@ use smallvec::SmallVec;
 #[cfg(test)]
 mod tests;
 
-// Re-export the MessagePack value crate so other compiler crates can refer to
-// `rmpv::Value` when implementing `HashStable::structure`.
+// Provide the inspection `Value` type for `HashStable::structure` implementations.
 use crate::inspect::Value;
-pub use rmpv;
 use rustc_hashes::{Hash64, Hash128};
 pub use rustc_stable_hash::{
     FromStableHash, SipHasher128Hash as StableHasherHash, StableSipHasher128 as StableHasher,

@@ -119,7 +119,7 @@ impl fmt::Debug for InferConst {
 #[cfg(feature = "nightly")]
 use rustc_data_structures::inspect;
 #[cfg(feature = "nightly")]
-use rustc_data_structures::stable_hasher::{StructureState, rmpv};
+use rustc_data_structures::stable_hasher::StructureState;
 #[cfg(feature = "nightly")]
 impl<CTX> HashStable<CTX> for InferConst {
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

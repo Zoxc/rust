@@ -2,7 +2,7 @@
 // avoid accidental shadowing of other `Value` symbols.
 use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
-    HashStable, StableHasher, StructureState, ToStableHashKey, rmpv,
+    HashStable, StableHasher, StructureState, ToStableHashKey,
 };
 use rustc_span::def_id::DefPathHash;
 

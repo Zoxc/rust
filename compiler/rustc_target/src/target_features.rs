@@ -3,7 +3,7 @@
 //! and Rust adds some features that do not correspond to LLVM features at all.
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::inspect;
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_span::{Symbol, sym};
 
 use crate::spec::{Abi, Arch, FloatAbi, RustcAbi, Target};

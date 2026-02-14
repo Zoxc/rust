@@ -8,7 +8,7 @@ use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_data_structures::intern::Interned;
 use rustc_data_structures::stable_hasher::{
-    HashStable, HashingControls, StableHasher, StructureState, rmpv,
+    HashStable, HashingControls, StableHasher, StructureState,
 };
 use rustc_data_structures::inspect;
 use rustc_errors::ErrorGuaranteed;

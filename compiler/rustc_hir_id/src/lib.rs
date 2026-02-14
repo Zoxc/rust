@@ -8,7 +8,7 @@ use std::fmt::{self, Debug};
 
 use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
-    HashStable, StableHasher, StableOrd, StructureState, ToStableHashKey, rmpv,
+    HashStable, StableHasher, StableOrd, StructureState, ToStableHashKey,
 };
 use rustc_macros::{Decodable, Encodable, HashStable_Generic};
 pub use rustc_span::HashStableContext;

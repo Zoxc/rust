@@ -6,7 +6,7 @@ use inspect::Value;
 use rustc_ast_ir::Mutability;
 use rustc_data_structures::inspect;
 #[cfg(feature = "nightly")]
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState, rmpv};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 #[cfg(feature = "nightly")]
 use rustc_macros::{Decodable_NoContext, Encodable_NoContext, HashStable_NoContext};
 use rustc_type_ir::data_structures::{NoError, UnifyKey, UnifyValue};

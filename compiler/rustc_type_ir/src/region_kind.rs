@@ -214,7 +214,7 @@ use rustc_data_structures::inspect;
 // Use `inspect::Value` (via `inspect::Value`) to avoid bringing `Value` into
 // the local namespace and potentially shadowing other types named `Value`.
 #[cfg(feature = "nightly")]
-use rustc_data_structures::stable_hasher::{StructureState, rmpv};
+use rustc_data_structures::stable_hasher::StructureState;
 #[cfg(feature = "nightly")]
 // This is not a derived impl because a derive would require `I: HashStable`
 impl<CTX, I: Interner> HashStable<CTX> for RegionKind<I>

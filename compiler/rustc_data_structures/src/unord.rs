@@ -13,7 +13,7 @@ use rustc_macros::{Decodable_NoContext, Encodable_NoContext};
 use crate::fingerprint::Fingerprint;
 use crate::fx::{FxBuildHasher, FxHashMap, FxHashSet};
 use crate::stable_hasher::{
-    HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey, rmpv,
+    HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey,
 };
 
 /// `UnordItems` is the order-less version of `Iterator`. It only contains methods

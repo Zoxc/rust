@@ -99,7 +99,7 @@ impl<T: Hash> Hash for WithCachedTypeInfo<T> {
 use rustc_data_structures::inspect;
 // Use `inspect::Value` to refer to the compact inspect type.
 #[cfg(feature = "nightly")]
-use rustc_data_structures::stable_hasher::{StructureState, rmpv};
+use rustc_data_structures::stable_hasher::StructureState;
 #[cfg(feature = "nightly")]
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

@@ -62,7 +62,7 @@ use rustc_data_structures::AtomicRef;
 use rustc_data_structures::fingerprint::{Fingerprint, PackedFingerprint};
 use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
-    HashStable, StableHasher, StableOrd, StructureState, ToStableHashKey, rmpv,
+    HashStable, StableHasher, StableOrd, StructureState, ToStableHashKey,
 };
 use rustc_hir::definitions::DefPathHash;
 use rustc_macros::{Decodable, Encodable};

@@ -1,4 +1,4 @@
-use crate::stable_hasher::rmpv;
+// `rmpv` removed; use `inspect::Value` from the stable_hasher API when needed.
 use crate::stable_hasher::{HashStable, StableHasher, StructureState};
 use crate::sync::{MappedReadGuard, MappedWriteGuard, ReadGuard, RwLock, WriteGuard};
 
