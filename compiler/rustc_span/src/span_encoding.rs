@@ -84,6 +84,30 @@ pub struct Span {
     ctxt_or_parent_or_marker: u16,
 }
 
+impl<CTX> rustc_data_structures::stable_hasher::HashStable<CTX> for Span
+where
+    CTX: crate::HashStableContext,
+{
+    fn structure(
+        &self,
+        state: &mut rustc_data_structures::stable_hasher::StructureState<'_, CTX>,
+    ) -> rustc_data_structures::inspect::Value {
+        (state.span_value)(rustc_data_structures::stable_hasher::SpanArgs {
+            lo_or_index: self.lo_or_index,
+            len_with_tag_or_marker: self.len_with_tag_or_marker,
+            ctxt_or_parent_or_marker: self.ctxt_or_parent_or_marker,
+        })
+    }
+
+    fn hash_stable(
+        &self,
+        ctx: &mut CTX,
+        hasher: &mut rustc_data_structures::stable_hasher::StableHasher,
+    ) {
+        ctx.span_hash_stable(*self, hasher)
+    }
+}
+
 // Convenience structures for all span formats.
 #[derive(Clone, Copy)]
 struct InlineCtxt {
@@ -287,8 +311,6 @@ impl Span {
             len_with_tag_or_marker: args.len_with_tag_or_marker,
             ctxt_or_parent_or_marker: args.ctxt_or_parent_or_marker,
         }
-    }
-
     }
 
     #[inline]

@@ -2840,19 +2840,8 @@ pub trait HashStableContext {
     fn assert_default_hashing_controls(&self, msg: &str);
 }
 
-impl<CTX> HashStable<CTX> for Span
-where
-    CTX: HashStableContext,
-{
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        state.span_value(SpanArgs{lo_or_index:self.lo_or_index,self.len_with_tag_or_marker,self.ctxt_or_parent_or_marker})
-    }
-
-    fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
-        // `span_hash_stable` does all the work.
-        ctx.span_hash_stable(*self, hasher)
-    }
-}
+// HashStable impl for `Span` is implemented in `span_encoding.rs` where the
+// private compressed fields of `Span` are accessible.
 
 /// Useful type to use with `Result<>` indicate that an error has already
 /// been reported to the user, so no need to continue checking.

@@ -65,7 +65,8 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
     };
 
     // Collect the structure to write.
-    let value = crate::collect_all_query_structures(tcx);
+    use crate::export_queries::collect_all_query_structures;
+    let value = collect_all_query_structures(tcx);
 
     // Serialize using bincode (serde). If serialization fails, abort
     // exporting for this run.
@@ -1074,8 +1075,12 @@ macro_rules! define_queries {
         ] = &[$(query_impl::$name::query_key_hash_verify),*];
 
         use rustc_data_structures::inspect;
+        use ::rustc_data_structures::stable_hasher::StructureState;
         const PER_QUERY_COLLECT_STRUCTURES_FNS: &[
-            for<'tcx> fn(TyCtxt<'tcx>) -> (String, inspect::Value)
+            for<'tcx> fn(
+                TyCtxt<'tcx>,
+                &mut StructureState<'_, ()>,
+            ) -> (String, inspect::Value)
         ] = &[$(query_impl::$name::collect_structures),*];
 
         /// Module containing a named function for each dep kind (including queries)
