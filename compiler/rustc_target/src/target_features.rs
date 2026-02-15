@@ -50,15 +50,20 @@ impl<CTX> HashStable<CTX> for Stability {
 
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        use Stability::*;
-        let mut out = Vec::new();
-        out.push(std::mem::discriminant(self).structure(state));
-        match self {
-            Stable => {}
-            Unstable(nightly_feature) => out.push(nightly_feature.structure(state)),
-            Forbidden { reason } => out.push(inspect::Value::String((*reason).into())),
-        }
-        inspect::Value::Array(out)
+        use inspect::EnumVariant;
+
+        let variant = match self {
+            Stability::Stable => EnumVariant::Unit("Stable".into()),
+            Stability::Unstable(nightly_feature) => {
+                EnumVariant::Tuple("Unstable".into(), vec![nightly_feature.structure(state)])
+            }
+            Stability::Forbidden { reason } => EnumVariant::Named(
+                "Forbidden".into(),
+                vec![("reason".into(), inspect::Value::String((*reason).into()))],
+            ),
+        };
+
+        inspect::Value::Enum { path: std::any::type_name::<Self>().into(), variant }
     }
 }
 

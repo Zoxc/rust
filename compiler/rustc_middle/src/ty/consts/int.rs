@@ -174,7 +174,10 @@ impl<CTX> crate::ty::HashStable<CTX> for ScalarInt {
 
     fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
         // Represent the raw bytes (little-endian) as binary per canonical representation
-        inspect::Value::Binary(self.to_bits_unchecked().to_le_bytes().to_vec())
+        inspect::Value::StructTuple {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![inspect::Value::Binary(self.to_bits_unchecked().to_le_bytes().to_vec())],
+        }
     }
 }
 

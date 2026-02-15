@@ -1524,15 +1524,17 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
         _state: &mut StructureState<'_, CTX>,
     ) -> inspect::Value {
         // Represent SyntaxContext by either nil (root) or [expn_id.structure, transparency.structure]
-        if self.is_root() {
-            inspect::Value::Array(vec![])
+        let variant = if self.is_root() {
+            inspect::EnumVariant::Unit("Root".into())
         } else {
             let (expn_id, transparency) = self.outer_mark();
-                inspect::Value::Array(vec![
-                    expn_id.structure(_state),
-                    transparency.structure(_state),
-                ])
-        }
+            inspect::EnumVariant::Tuple(
+                "Mark".into(),
+                vec![expn_id.structure(_state), transparency.structure(_state)],
+            )
+        };
+
+        inspect::Value::Enum { path: std::any::type_name::<Self>().into(), variant }
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -1556,10 +1558,13 @@ impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
         _state: &mut StructureState<'_, CTX>,
     ) -> inspect::Value {
         // Represent ExpnId structurally as [krate.structure, local_id]
-                inspect::Value::Array(vec![
-                    self.krate.structure(_state),
-                    inspect::Value::UInt(self.local_id.as_u32() as u128),
-                ])
+        inspect::Value::Struct {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![
+                ("krate".into(), self.krate.structure(_state)),
+                ("local_id".into(), inspect::Value::UInt(self.local_id.as_u32() as u128)),
+            ],
+        }
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -1577,7 +1582,10 @@ impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
 
 impl<CTX: HashStableContext> HashStable<CTX> for LocalExpnId {
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        inspect::Value::from(self.to_expn_id().structure(state))
+        inspect::Value::StructTuple {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![self.to_expn_id().structure(state)],
+        }
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

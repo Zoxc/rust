@@ -147,11 +147,14 @@ impl<HCX: HashStableContext> HashStable<HCX> for LintExpectationId {
     fn structure(&self, state: &mut StructureState<'_, HCX>) -> Value {
         match self {
             LintExpectationId::Stable { hir_id, attr_index, lint_index: Some(lint_index) } => {
-                let mut out = Vec::new();
-                out.push(hir_id.structure(state));
-                out.push(Value::UInt(*attr_index as u128));
-                out.push(Value::UInt(*lint_index as u128));
-                Value::Array(out)
+                Value::Struct {
+                    path: Cow::Borrowed(std::any::type_name::<Self>()),
+                    fields: vec![
+                        (Cow::Borrowed("hir_id"), hir_id.structure(state)),
+                        (Cow::Borrowed("attr_index"), Value::UInt(*attr_index as u128)),
+                        (Cow::Borrowed("lint_index"), Value::UInt(*lint_index as u128)),
+                    ],
+                }
             }
             _ => unreachable!(
                 "HashStable should only be called for filled and stable `LintExpectationId`"
@@ -649,8 +652,14 @@ impl<HCX> HashStable<HCX> for LintId {
 
     #[inline]
     fn structure(&self, _state: &mut StructureState<'_, HCX>) -> Value {
-        // Represent LintId by its static name string.
-        Value::String(self.lint_name_raw().into())
+        // Represent `LintId` structurally to preserve the wrapper type.
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![(
+                std::borrow::Cow::Borrowed("name"),
+                Value::String(self.lint_name_raw().into()),
+            )],
+        }
     }
 }
 

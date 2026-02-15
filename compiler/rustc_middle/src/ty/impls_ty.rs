@@ -53,8 +53,14 @@ where
         &self,
         _state: &mut StructureState<'s, StableHashingContext<'a>>,
     ) -> inspect::Value {
-        // Represent the list structurally as a tuple of its element structures.
-        inspect::Value::Tuple(self[..].iter().map(|e| e.structure(_state)).collect())
+        use std::borrow::Cow;
+
+        // Preserve the `RawList` wrapper while still showing list semantics.
+        let items = inspect::Value::Array(self[..].iter().map(|e| e.structure(_state)).collect());
+        inspect::Value::Struct {
+            path: Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![(Cow::Borrowed("items"), items)],
+        }
     }
 }
 
@@ -121,7 +127,14 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance
     ) -> inspect::Value {
         // Represent by its decomposed parts
         let (alloc, a, b) = self.into_parts();
-        inspect::Value::Array(vec![alloc.structure(state), a.structure(state), b.structure(state)])
+        inspect::Value::Struct {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![
+                ("alloc".into(), alloc.structure(state)),
+                ("a".into(), a.structure(state)),
+                ("b".into(), b.structure(state)),
+            ],
+        }
     }
 }
 

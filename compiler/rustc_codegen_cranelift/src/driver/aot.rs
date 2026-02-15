@@ -56,8 +56,11 @@ impl<HCX> HashStable<HCX> for OngoingModuleCodegen {
         _state: &mut StructureState<'_, HCX>,
     ) -> ::rustc_data_structures::inspect::Value {
         // OngoingModuleCodegen is transient/runtime-only; represent as an
-        // empty array in the inspect representation.
-        ::rustc_data_structures::inspect::Value::Array(vec![])
+        // unit variant in the inspect representation.
+        ::rustc_data_structures::inspect::Value::Enum {
+            path: ::std::any::type_name::<Self>().into(),
+            variant: ::rustc_data_structures::inspect::EnumVariant::Unit("Transient".into()),
+        }
     }
 }
 

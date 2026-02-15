@@ -13,9 +13,7 @@
 
 use std::fmt;
 
-// Bring the `inspect` module into scope for derive macros that reference it.
-#[cfg(feature = "nightly")]
-use rustc_data_structures::inspect;
+// The `HashStable_*` derive macros refer to `rustc_data_structures::inspect` by absolute path.
 
 #[cfg(feature = "nightly")]
 use rustc_macros::{Decodable_NoContext, Encodable_NoContext, HashStable_NoContext};

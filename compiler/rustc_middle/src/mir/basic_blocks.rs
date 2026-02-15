@@ -175,8 +175,16 @@ impl<CTX> HashStable<CTX> for Cache {
     #[inline]
     fn hash_stable(&self, _: &mut CTX, _: &mut StableHasher) {}
 
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> rustc_data_structures::inspect::Value {
-        // Cache is transient and ignored for hashing; represent as an empty array.
-        rustc_data_structures::inspect::Value::Array(vec![])
+    fn structure(
+        &self,
+        _state: &mut StructureState<'_, CTX>,
+    ) -> rustc_data_structures::inspect::Value {
+        // Cache is transient and ignored for hashing; preserve wrapper type.
+        rustc_data_structures::inspect::Value::Enum {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            variant: rustc_data_structures::inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed(
+                "Transient",
+            )),
+        }
     }
 }

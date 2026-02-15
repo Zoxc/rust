@@ -61,7 +61,10 @@ impl<CTX: HashStableContext> HashStable<CTX> for OwnerId {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
         // Represent OwnerId by its contained LocalDefId
-        inspect::Value::from(self.def_id.structure(state))
+        inspect::Value::StructTuple {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![self.def_id.structure(state)],
+        }
     }
 
     #[inline]

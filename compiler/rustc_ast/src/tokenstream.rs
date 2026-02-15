@@ -141,8 +141,11 @@ impl<D: SpanDecoder> Decodable<D> for LazyAttrTokenStream {
 
 impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
     fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        // No structural representation for lazy token streams; use Debug string.
-        inspect::Value::String(format!("LazyAttrTokenStream({:?})", self.to_attr_token_stream()).into())
+        // Preserve wrapper type; avoid a Debug-only string representation.
+        inspect::Value::Enum {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("Opaque")),
+        }
     }
 
     fn hash_stable(&self, _hcx: &mut CTX, _hasher: &mut StableHasher) {
@@ -839,7 +842,10 @@ where
         for sub_tt in self.iter() {
             out.push(inspect::Value::from(sub_tt.structure(state)));
         }
-        inspect::Value::Array(out)
+        inspect::Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![(std::borrow::Cow::Borrowed("trees"), inspect::Value::Array(out))],
+        }
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

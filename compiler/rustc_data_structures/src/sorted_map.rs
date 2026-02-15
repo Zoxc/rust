@@ -350,7 +350,10 @@ impl<K: Ord, V> FromIterator<(K, V)> for SortedMap<K, V> {
 impl<K: HashStable<CTX> + StableOrd, V: HashStable<CTX>, CTX> HashStable<CTX> for SortedMap<K, V> {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
-        self.data.structure(state)
+        crate::inspect::Value::Struct {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![("data".into(), self.data.structure(state))],
+        }
     }
 
     #[inline]

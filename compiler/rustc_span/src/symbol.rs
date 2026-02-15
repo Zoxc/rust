@@ -2890,8 +2890,11 @@ impl fmt::Display for Symbol {
 impl<CTX> HashStable<CTX> for Symbol {
     #[inline]
     fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        // Represent a `Symbol` by its string contents.
-        inspect::Value::String(self.as_str().to_string().into())
+        // Preserve the `Symbol` wrapper in inspection output.
+        inspect::Value::StructTuple {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![inspect::Value::String(self.as_str().to_string().into())],
+        }
     }
 
     #[inline]
@@ -2956,8 +2959,11 @@ impl fmt::Debug for ByteSymbol {
 impl<CTX> HashStable<CTX> for ByteSymbol {
     #[inline]
     fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        // Represent a `ByteSymbol` as a binary with the original bytes.
-        inspect::Value::Binary(self.as_byte_str().to_vec())
+        // Preserve the `ByteSymbol` wrapper in inspection output.
+        inspect::Value::StructTuple {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![inspect::Value::Binary(self.as_byte_str().to_vec())],
+        }
     }
 
     #[inline]

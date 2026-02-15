@@ -114,8 +114,11 @@ mod temp_stable_hash_impls {
             _state: &mut StructureState<'_, HCX>,
         ) -> ::rustc_data_structures::inspect::Value {
             // ModuleCodegen contents are transient for hashing; represent as an
-            // empty array in `inspect::Value`.
-            ::rustc_data_structures::inspect::Value::Array(vec![])
+            // unit variant in `inspect::Value`.
+            ::rustc_data_structures::inspect::Value::Enum {
+                path: ::std::any::type_name::<Self>().into(),
+                variant: ::rustc_data_structures::inspect::EnumVariant::Unit("Transient".into()),
+            }
         }
     }
 }

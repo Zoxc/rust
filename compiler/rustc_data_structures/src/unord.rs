@@ -422,24 +422,28 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
         // Represent the set structurally in an order-independent way without
         // using hashing. Use a MessagePack map where each key is the
         // structural representation of an element and the value is `1`.
-        let mut out = Vec::new();
-        out.push(self.inner.len().structure(state));
-
-        match self.inner.len() {
-            0 => {}
+        let len = self.inner.len();
+        let entries = match len {
+            0 => crate::inspect::Value::Map(Default::default()),
             1 => {
-                out.push(self.inner.iter().next().unwrap().structure(state));
+                let mut map = ::std::collections::BTreeMap::new();
+                let item = self.inner.iter().next().unwrap();
+                map.insert(item.structure(state), crate::inspect::Value::UInt(1u128));
+                crate::inspect::Value::Map(map)
             }
             _ => {
                 let mut map = ::std::collections::BTreeMap::new();
                 for item in self.inner.iter() {
                     map.insert(item.structure(state), crate::inspect::Value::UInt(1u128));
                 }
-                out.push(crate::inspect::Value::Map(map));
+                crate::inspect::Value::Map(map)
             }
-        }
+        };
 
-        crate::inspect::Value::Array(out)
+        crate::inspect::Value::Struct {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![("len".into(), len.structure(state)), ("entries".into(), entries)],
+        }
     }
 
     #[inline]
@@ -668,24 +672,28 @@ impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> fo
     fn structure(&self, state: &mut StructureState<'_, HCX>) -> crate::inspect::Value {
         // Represent the map structurally as a MessagePack map of key->value
         // where both key and value are their structural representations.
-        let mut out = Vec::new();
-        out.push(self.inner.len().structure(state));
-
-        match self.inner.len() {
-            0 => {}
+        let len = self.inner.len();
+        let entries = match len {
+            0 => crate::inspect::Value::Map(Default::default()),
             1 => {
-                out.push(self.inner.iter().next().unwrap().structure(state));
+                let mut map = ::std::collections::BTreeMap::new();
+                let (k, v) = self.inner.iter().next().unwrap();
+                map.insert(k.structure(state), v.structure(state));
+                crate::inspect::Value::Map(map)
             }
             _ => {
                 let mut map = ::std::collections::BTreeMap::new();
                 for (k, v) in self.inner.iter() {
                     map.insert(k.structure(state), v.structure(state));
                 }
-                out.push(crate::inspect::Value::Map(map));
+                crate::inspect::Value::Map(map)
             }
-        }
+        };
 
-        crate::inspect::Value::Array(out)
+        crate::inspect::Value::Struct {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![("len".into(), len.structure(state)), ("entries".into(), entries)],
+        }
     }
 
     #[inline]
@@ -755,13 +763,14 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
         // Represent bag (multiset) structurally as a MessagePack map from
         // element-structure -> count. This encodes multiplicity without
         // depending on iteration order or hashing.
-        let mut out = Vec::new();
-        out.push(self.inner.len().structure(state));
-
-        match self.inner.len() {
-            0 => {}
+        let len = self.inner.len();
+        let counts = match len {
+            0 => crate::inspect::Value::Map(Default::default()),
             1 => {
-                out.push(self.inner.iter().next().unwrap().structure(state));
+                let mut map = ::std::collections::BTreeMap::new();
+                let item = self.inner.iter().next().unwrap();
+                map.insert(item.structure(state), crate::inspect::Value::UInt(1u128));
+                crate::inspect::Value::Map(map)
             }
             _ => {
                 // Aggregate counts by equality of structural representation.
@@ -779,12 +788,14 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
                 for (k, v) in counts.into_iter() {
                     map.insert(k, crate::inspect::Value::UInt(v as u128));
                 }
-
-                out.push(crate::inspect::Value::Map(map));
+                crate::inspect::Value::Map(map)
             }
-        }
+        };
 
-        crate::inspect::Value::Array(out)
+        crate::inspect::Value::Struct {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![("len".into(), len.structure(state)), ("counts".into(), counts)],
+        }
     }
 
     #[inline]

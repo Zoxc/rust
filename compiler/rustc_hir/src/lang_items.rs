@@ -151,8 +151,10 @@ impl<CTX> HashStable<CTX> for LangItem {
     }
 
     fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        // Represent the variant by its discriminant (as an integer) for structure.
-        inspect::Value::UInt(*self as u32 as u128)
+        inspect::Value::Enum {
+            path: std::any::type_name::<Self>().into(),
+            variant: inspect::EnumVariant::Unit(self.variant_name().into()),
+        }
     }
 }
 

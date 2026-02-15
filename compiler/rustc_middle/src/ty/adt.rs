@@ -175,13 +175,18 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
     }
 
     fn structure<'s>(&self, state: &mut StructureState<'s, StableHashingContext<'a>>) -> inspect::Value {
-        // Represent ADT definition by its DefId and variant layout information which is
-        // invariant across sessions.
-        let mut out = Vec::new();
-        out.push(inspect::Value::from(self.did.structure(state)));
-        out.push(inspect::Value::from(self.flags.structure(state)));
-        out.push(inspect::Value::from(self.repr.discr_type().structure(state)));
-        inspect::Value::Array(out)
+        // Represent ADT definition by its DefId and invariant layout information.
+        inspect::Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![
+                (std::borrow::Cow::Borrowed("did"), self.did.structure(state)),
+                (std::borrow::Cow::Borrowed("flags"), self.flags.structure(state)),
+                (
+                    std::borrow::Cow::Borrowed("discr_type"),
+                    self.repr.discr_type().structure(state),
+                ),
+            ],
+        }
     }
 }
 

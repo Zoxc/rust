@@ -172,7 +172,12 @@ use crate::stable_hasher::StableOrd;
 impl<CTX> HashStable<CTX> for Fingerprint {
     #[inline]
     fn structure(&self, _state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
-        crate::inspect::Value::Binary(self.to_le_bytes().to_vec())
+        // Preserve the `Fingerprint` type while still using its canonical
+        // 16-byte representation.
+        crate::inspect::Value::StructTuple {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![crate::inspect::Value::Binary(self.to_le_bytes().to_vec())],
+        }
     }
 
     #[inline]

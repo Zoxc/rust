@@ -23,7 +23,14 @@ impl<CTX: crate::HashStableContext> HashStable<CTX> for DiagnosticItems {
     }
 
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        // Represent by the name -> id mapping which is the primary data used for hashing.
-        inspect::Value::from(self.name_to_id.structure(state))
+        // Represent by the name -> id mapping which is the primary data used for hashing,
+        // but preserve the wrapper type.
+        inspect::Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![(
+                std::borrow::Cow::Borrowed("name_to_id"),
+                self.name_to_id.structure(state),
+            )],
+        }
     }
 }

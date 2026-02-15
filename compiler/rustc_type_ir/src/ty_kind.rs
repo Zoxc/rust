@@ -690,18 +690,38 @@ impl<CTX> HashStable<CTX> for InferTy {
         use InferTy::*;
         match self {
             TyVar(_) => inspect::Value::Enum {
-                path: Cow::Borrowed("InferTy"),
+                path: Cow::Borrowed(std::any::type_name::<Self>()),
                 variant: inspect::EnumVariant::Unit(Cow::Borrowed("TyVar")),
             },
             IntVar(_) => inspect::Value::Enum {
-                path: Cow::Borrowed("InferTy"),
+                path: Cow::Borrowed(std::any::type_name::<Self>()),
                 variant: inspect::EnumVariant::Unit(Cow::Borrowed("IntVar")),
             },
             FloatVar(_) => inspect::Value::Enum {
-                path: Cow::Borrowed("InferTy"),
+                path: Cow::Borrowed(std::any::type_name::<Self>()),
                 variant: inspect::EnumVariant::Unit(Cow::Borrowed("FloatVar")),
             },
-            FreshTy(v) | FreshIntTy(v) | FreshFloatTy(v) => Value::UInt((*v) as u128),
+            FreshTy(v) => inspect::Value::Enum {
+                path: Cow::Borrowed(std::any::type_name::<Self>()),
+                variant: inspect::EnumVariant::Tuple(
+                    Cow::Borrowed("FreshTy"),
+                    vec![Value::UInt((*v) as u128)],
+                ),
+            },
+            FreshIntTy(v) => inspect::Value::Enum {
+                path: Cow::Borrowed(std::any::type_name::<Self>()),
+                variant: inspect::EnumVariant::Tuple(
+                    Cow::Borrowed("FreshIntTy"),
+                    vec![Value::UInt((*v) as u128)],
+                ),
+            },
+            FreshFloatTy(v) => inspect::Value::Enum {
+                path: Cow::Borrowed(std::any::type_name::<Self>()),
+                variant: inspect::EnumVariant::Tuple(
+                    Cow::Borrowed("FreshFloatTy"),
+                    vec![Value::UInt((*v) as u128)],
+                ),
+            },
         }
     }
 }

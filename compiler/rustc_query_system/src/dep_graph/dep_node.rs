@@ -314,7 +314,10 @@ impl<HCX> HashStable<HCX> for WorkProductId {
 
     fn structure(&self, state: &mut StructureState<'_, HCX>) -> inspect::Value {
         // Fingerprint already has a structure() impl that returns Binary(16)
-        inspect::Value::from(self.hash.structure(state))
+        inspect::Value::StructTuple {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![self.hash.structure(state)],
+        }
     }
 }
 impl<HCX> ToStableHashKey<HCX> for WorkProductId {

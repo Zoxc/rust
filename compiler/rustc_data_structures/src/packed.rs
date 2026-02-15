@@ -63,7 +63,10 @@ impl fmt::UpperHex for Pu128 {
 impl<CTX> HashStable<CTX> for Pu128 {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
-        { self.0 }.structure(state)
+        crate::inspect::Value::StructTuple {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![{ self.0 }.structure(state)],
+        }
     }
 
     #[inline]

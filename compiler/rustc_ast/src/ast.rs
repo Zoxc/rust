@@ -122,12 +122,11 @@ impl PartialEq<&[Symbol]> for Path {
 
 impl<CTX: rustc_span::HashStableContext> HashStable<CTX> for Path {
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        let mut out = Vec::new();
-        out.push(inspect::Value::UInt(self.segments.len() as u128));
-        for segment in &self.segments {
-            out.push(inspect::Value::from(segment.ident.structure(state)));
+        let segments = self.segments.iter().map(|s| s.ident.structure(state)).collect();
+        inspect::Value::Struct {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![("segments".into(), inspect::Value::Array(segments))],
         }
-        inspect::Value::Array(out)
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

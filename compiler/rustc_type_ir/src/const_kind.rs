@@ -134,10 +134,16 @@ impl<CTX> HashStable<CTX> for InferConst {
     fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
         match self {
             InferConst::Var(_) => inspect::Value::Enum {
-                path: std::borrow::Cow::Borrowed("InferConst"),
+                path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
                 variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("Var")),
             },
-            InferConst::Fresh(i) => inspect::Value::UInt(*i as u128),
+            InferConst::Fresh(i) => inspect::Value::Enum {
+                path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+                variant: inspect::EnumVariant::Tuple(
+                    std::borrow::Cow::Borrowed("Fresh"),
+                    vec![inspect::Value::UInt(*i as u128)],
+                ),
+            },
         }
     }
 }

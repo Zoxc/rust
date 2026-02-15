@@ -84,9 +84,15 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for OwnerNodes<'
 
     fn structure(&self, state: &mut StructureState<'_, HirCtx>) -> inspect::Value {
         // Represent by the cached hash including bodies which is the canonical representation
-        // used above for hashing.
+        // used above for hashing, but preserve the wrapper type.
         let OwnerNodes { opt_hash_including_bodies, nodes: _, bodies: _ } = *self;
-        inspect::Value::from(opt_hash_including_bodies.unwrap().structure(state))
+        inspect::Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![(
+                std::borrow::Cow::Borrowed("hash"),
+                opt_hash_including_bodies.unwrap().structure(state),
+            )],
+        }
     }
 }
 
@@ -98,7 +104,10 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for DelayedLints {
 
     fn structure(&self, state: &mut StructureState<'_, HirCtx>) -> inspect::Value {
         let DelayedLints { opt_hash, .. } = *self;
-        inspect::Value::from(opt_hash.unwrap().structure(state))
+        inspect::Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![(std::borrow::Cow::Borrowed("hash"), opt_hash.unwrap().structure(state))],
+        }
     }
 }
 
@@ -112,7 +121,10 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for AttributeMap
 
     fn structure(&self, state: &mut StructureState<'_, HirCtx>) -> inspect::Value {
         let AttributeMap { opt_hash, define_opaque: _, map: _ } = *self;
-        inspect::Value::from(opt_hash.unwrap().structure(state))
+        inspect::Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![(std::borrow::Cow::Borrowed("hash"), opt_hash.unwrap().structure(state))],
+        }
     }
 }
 
@@ -124,7 +136,13 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for Crate<'_> {
 
     fn structure(&self, state: &mut StructureState<'_, HirCtx>) -> inspect::Value {
         let Crate { owners: _, opt_hir_hash } = self;
-        inspect::Value::from(opt_hir_hash.unwrap().structure(state))
+        inspect::Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![(
+                std::borrow::Cow::Borrowed("hash"),
+                opt_hir_hash.unwrap().structure(state),
+            )],
+        }
     }
 }
 
@@ -134,7 +152,10 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for HashIgnoredAttrId 
     }
 
     fn structure(&self, _state: &mut StructureState<'_, HirCtx>) -> inspect::Value {
-        // Represent as Nil since it is ignored for hashing
-        inspect::Value::Array(vec![])
+        // This value is ignored for hashing.
+        inspect::Value::Enum {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("Ignored")),
+        }
     }
 }

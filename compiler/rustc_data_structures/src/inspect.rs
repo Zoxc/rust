@@ -6,17 +6,17 @@
 //! use of a MessagePack `Value` in this crate but adds structured
 //! variants for Rust ADTs.
 
-use crate::fx::FxHashMap;
 use ordered_float::OrderedFloat;
-use serde::{Deserialize, Serialize};use std::collections::BTreeMap;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::hash::{Hash, Hasher};
+use std::collections::BTreeMap;
+use std::hash::Hash;
 
 /// A compact representation of values for inspection purposes.
 ///
 /// Models scalars and Rust aggregate types: `Struct`, `StructTuple` and
 /// `Enum` (with `EnumVariant`).
-#[derive(Clone, Debug, Eq, PartialEq,Hash, Ord,PartialOrd,Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum Value {
     /// Boolean.
     Bool(bool),
@@ -57,7 +57,7 @@ pub enum Value {
 }
 
 /// Describes a single enum variant instance.
-#[derive(Clone, Debug, PartialEq, Eq,Ord,PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum EnumVariant {
     /// Unit variant (no fields).
     Unit(Cow<'static, str>),

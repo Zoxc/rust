@@ -44,7 +44,10 @@ impl<T> stable_hasher::HashStable<T> for Svh {
     #[inline]
     fn structure(&self, state: &mut stable_hasher::StructureState<'_, T>) -> crate::inspect::Value {
         let Svh { hash } = *self;
-        hash.structure(state)
+        crate::inspect::Value::StructTuple {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![hash.structure(state)],
+        }
     }
 
     fn hash_stable(&self, ctx: &mut T, hasher: &mut stable_hasher::StableHasher) {

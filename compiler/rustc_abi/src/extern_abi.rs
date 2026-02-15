@@ -226,8 +226,13 @@ impl<C> HashStable<C> for ExternAbi {
         &self,
         _state: &mut StructureState<'_, C>,
     ) -> ::rustc_data_structures::inspect::Value {
-        // Represent the ABI via its string form
-        ::rustc_data_structures::inspect::Value::String(self.as_str().to_string().into())
+        // Preserve enum semantics in inspection output.
+        ::rustc_data_structures::inspect::Value::Enum {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            variant: ::rustc_data_structures::inspect::EnumVariant::Unit(
+                std::borrow::Cow::Borrowed(self.as_str()),
+            ),
+        }
     }
 
     #[inline]

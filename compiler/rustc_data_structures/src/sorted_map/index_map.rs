@@ -133,7 +133,10 @@ where
 {
     fn structure(&self, state: &mut StructureState<'_, C>) -> crate::inspect::Value {
         let SortedIndexMultiMap { items, idx_sorted_by_item_key: _ } = self;
-        items.structure(state)
+        crate::inspect::Value::Struct {
+            path: std::any::type_name::<Self>().into(),
+            fields: vec![("items".into(), items.structure(state))],
+        }
     }
 
     fn hash_stable(&self, ctx: &mut C, hasher: &mut StableHasher) {

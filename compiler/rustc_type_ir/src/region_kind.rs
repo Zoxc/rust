@@ -252,21 +252,22 @@ where
 
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         use RegionKind::*;
+        let path = std::borrow::Cow::Borrowed(std::any::type_name::<Self>());
         match self {
             ReErased => Value::Enum {
-                path: std::borrow::Cow::Borrowed("RegionKind"),
+                path: path.clone(),
                 variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("ReErased")),
             },
             ReStatic => Value::Enum {
-                path: std::borrow::Cow::Borrowed("RegionKind"),
+                path: path.clone(),
                 variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("ReStatic")),
             },
             ReError(_) => Value::Enum {
-                path: std::borrow::Cow::Borrowed("RegionKind"),
+                path: path.clone(),
                 variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("ReError")),
             },
             ReBound(d, r) => Value::Enum {
-                path: std::borrow::Cow::Borrowed("RegionKind"),
+                path: path.clone(),
                 variant: inspect::EnumVariant::Named(
                     std::borrow::Cow::Borrowed("ReBound"),
                     vec![
@@ -276,28 +277,28 @@ where
                 ),
             },
             ReEarlyParam(r) => Value::Enum {
-                path: std::borrow::Cow::Borrowed("RegionKind"),
+                path: path.clone(),
                 variant: inspect::EnumVariant::Named(
                     std::borrow::Cow::Borrowed("ReEarlyParam"),
                     vec![(std::borrow::Cow::Borrowed("param"), r.structure(state))],
                 ),
             },
             ReLateParam(r) => Value::Enum {
-                path: std::borrow::Cow::Borrowed("RegionKind"),
+                path: path.clone(),
                 variant: inspect::EnumVariant::Named(
                     std::borrow::Cow::Borrowed("ReLateParam"),
                     vec![(std::borrow::Cow::Borrowed("param"), r.structure(state))],
                 ),
             },
             RePlaceholder(r) => Value::Enum {
-                path: std::borrow::Cow::Borrowed("RegionKind"),
+                path: path.clone(),
                 variant: inspect::EnumVariant::Named(
                     std::borrow::Cow::Borrowed("RePlaceholder"),
                     vec![(std::borrow::Cow::Borrowed("placeholder"), r.structure(state))],
                 ),
             },
             ReVar(_) => Value::Enum {
-                path: std::borrow::Cow::Borrowed("RegionKind"),
+                path,
                 variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("ReVar")),
             },
         }

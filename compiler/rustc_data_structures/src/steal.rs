@@ -80,10 +80,16 @@ impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
         // representation.
         let guard = self.value.borrow();
         if guard.is_none() {
-            crate::inspect::Value::String("<stolen>".into())
+            crate::inspect::Value::Enum {
+                path: std::any::type_name::<Self>().into(),
+                variant: crate::inspect::EnumVariant::Unit("Stolen".into()),
+            }
         } else {
             // SAFETY: we just checked that the option is `Some`.
-            guard.as_ref().unwrap().structure(state)
+            crate::inspect::Value::StructTuple {
+                path: std::any::type_name::<Self>().into(),
+                fields: vec![guard.as_ref().unwrap().structure(state)],
+            }
         }
     }
 
