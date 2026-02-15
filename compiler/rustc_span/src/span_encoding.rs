@@ -281,6 +281,11 @@ impl Span {
     }
 
     #[inline]
+    pub fn from_args(args:SpanArgs) -> Span {
+
+    }
+
+    #[inline]
     pub fn data(self) -> SpanData {
         let data = self.data_untracked();
         if let Some(parent) = data.parent {

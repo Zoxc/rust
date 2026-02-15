@@ -2845,14 +2845,7 @@ where
     CTX: HashStableContext,
 {
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        inspect::Value::Struct {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![
-                ("lo".into(), self.lo().structure(state)),
-                ("hi".into(), self.hi().structure(state)),
-                ("ctxt".into(), self.ctxt().structure(state)),
-            ],
-        }
+        state.span_value(SpanArgs{lo_or_index:self.lo_or_index,self.len_with_tag_or_marker,self.ctxt_or_parent_or_marker})
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {

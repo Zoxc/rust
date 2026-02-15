@@ -21,23 +21,19 @@ pub use rustc_stable_hash::{
 };
 use std::collections::BTreeMap;
 
+pub struct SpanArgs {
+    lo_or_index: u32,
+    len_with_tag_or_marker: u16,
+    ctxt_or_parent_or_marker: u16,
+}
+
 pub struct StructureState<'a, CTX> {
-    def_path: &'a dyn Fn(u32, u32) -> Value,
+    pub span_value: &'a dyn Fn(SpanArgs) -> Value,
+    pub def_path: &'a dyn Fn(u32, u32) -> Value,
     _marker: PhantomData<&'a CTX>,
 }
 
 impl<'a, CTX> StructureState<'a, CTX> {
-    // StructureState intentionally does not expose the internal CTX pointer
-    // mutably. `structure()` implementations must not call into `hash_stable`
-    // helpers and therefore do not need access to `&mut CTX`.
-    /// Create a new `StructureState` from a mutable reference to the
-    /// hashing context. This provides the same (opaque) pointer that other
-    /// crates previously constructed directly via field initialization.
-    #[inline]
-    pub fn new(def_path: &'a dyn Fn(u32, u32) -> Value) -> Self {
-        StructureState { def_path, _marker: PhantomData }
-    }
-
     /// Helper to obtain a structural representation of a `DefPath`.
     ///
     /// Some callers previously accessed a `def_path` method on `StructureState`.
@@ -302,8 +298,8 @@ impl<CTX> HashStable<CTX> for NonZero<usize> {
 }
 
 impl<CTX> HashStable<CTX> for f32 {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        Value::F64(self as f64)
+    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
+        Value::F64(ordered_float::OrderedFloat(*self as f64))
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -313,8 +309,8 @@ impl<CTX> HashStable<CTX> for f32 {
 }
 
 impl<CTX> HashStable<CTX> for f64 {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        Value::F64(self)
+    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
+        Value::F64(ordered_float::OrderedFloat(*self))
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
