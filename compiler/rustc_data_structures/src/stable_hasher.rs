@@ -28,9 +28,9 @@ pub struct SpanArgs {
 }
 
 pub struct StructureState<'a, CTX> {
-    pub span_value: &'a dyn Fn(SpanArgs) -> Value,
+    pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_, CTX>) -> Value,
     pub def_path: &'a dyn Fn(u32, u32) -> Value,
-    _marker: PhantomData<&'a CTX>,
+    pub _marker: PhantomData<&'a CTX>,
 }
 
 impl<'a, CTX> StructureState<'a, CTX> {

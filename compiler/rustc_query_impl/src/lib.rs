@@ -12,6 +12,7 @@ use std::marker::ConstParamTy;
 
 use rustc_data_structures::sync::AtomicU64;
 use rustc_middle::arena::Arena;
+use rustc_query_system::ich::StableHashingContext;
 use rustc_middle::dep_graph::{self, DepKind, DepKindVTable, DepNode, DepNodeIndex};
 use rustc_middle::queries::{
     self, ExternProviders, Providers, QueryCaches, QueryEngine, QueryStates,
@@ -19,7 +20,7 @@ use rustc_middle::queries::{
 use rustc_middle::query::AsLocalKey;
 use rustc_middle::query::on_disk_cache::{CacheEncoder, EncodedDepNodeIndex, OnDiskCache};
 use rustc_middle::query::plumbing::{HashResult, QuerySystem, QuerySystemFns, QueryVTable};
-use rustc_middle::ty::TyCtxt;use rustc_middle::ty::print::{with_no_trimmed_paths};
+use rustc_middle::ty::TyCtxt;
 use rustc_query_system::dep_graph::SerializedDepNodeIndex;
 use rustc_query_system::query::{
     CycleError, CycleErrorHandling, QueryCache, QueryMode, QueryState,

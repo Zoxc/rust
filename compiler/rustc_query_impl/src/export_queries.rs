@@ -2,9 +2,11 @@ use rustc_data_structures::inspect::{self, EnumVariant, Value};
 use rustc_data_structures::stable_hasher::{SpanArgs, StructureState};
 use rustc_middle::ty::TyCtxt;
 use rustc_middle::ty::print::with_no_trimmed_paths;
+use rustc_span::Pos;use rustc_query_system::ich::StableHashingContext;
 use rustc_span::Span;
-use std::borrow::Cow;
-use std::hash::Hash;use crate::PER_QUERY_COLLECT_STRUCTURES_FNS;
+use std::borrow::Cow;use std::marker::PhantomData;
+
+use crate::PER_QUERY_COLLECT_STRUCTURES_FNS;
 
 fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32) -> inspect::Value {
     // Construct a `DefId` from the supplied `u32` crate/def indices
@@ -17,7 +19,7 @@ fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32) -> inspec
 }
 
 fn span_value(tcx: TyCtxt<'_>, span_args:SpanArgs, state:&StructureState::<'_, ()>){
-    let span = Span::from_ags(span_args);
+    let span = Span::from_args(span_args);
 
     let span = span.data_untracked();
     let ctx_val =  span.ctxt.structure(state);
@@ -26,7 +28,7 @@ fn span_value(tcx: TyCtxt<'_>, span_args:SpanArgs, state:&StructureState::<'_, (
     if span.is_dummy() {
         return Value::Enum {
             path: std::borrow::Cow::Borrowed("Span"),
-            variants: vec![EnumVariant::Unit (std::borrow::Cow::Borrowed("Dummy"))],
+            variant: vec![EnumVariant::Unit (std::borrow::Cow::Borrowed("Dummy"))],
         }
     }
 
@@ -59,7 +61,7 @@ fn span_value(tcx: TyCtxt<'_>, span_args:SpanArgs, state:&StructureState::<'_, (
     else {
         return Value::Enum {
             path: std::borrow::Cow::Borrowed("Span"),
-            variants: vec![EnumVariant::Unit (std::borrow::Cow::Borrowed("Dummy"))],
+            variant: vec![EnumVariant::Unit (std::borrow::Cow::Borrowed("Dummy"))],
         }
     };
 
@@ -95,7 +97,7 @@ fn span_value(tcx: TyCtxt<'_>, span_args:SpanArgs, state:&StructureState::<'_, (
 
     Value::Enum {
         path: Cow::Borrowed("Span"),
-        variant: EnumVariant::Named(Cow::Borrowed("Valid",
+        variant: EnumVariant::Named(Cow::Borrowed("Valid"),
             vec![
                 (Cow::Borrowed("ctxt"), ctx_val),
                 (Cow::Borrowed("parent"), parent_val),
@@ -106,7 +108,7 @@ fn span_value(tcx: TyCtxt<'_>, span_args:SpanArgs, state:&StructureState::<'_, (
                 (Cow::Borrowed("line_hi"), line_hi.structure(state)),
                 (Cow::Borrowed("len"), len.structure(state)),
             ]
-        )),
+        ),
     }
 }
 
@@ -115,15 +117,16 @@ fn span_value(tcx: TyCtxt<'_>, span_args:SpanArgs, state:&StructureState::<'_, (
 pub fn collect_all_query_structures<'tcx>(tcx: TyCtxt<'tcx>)
     -> inspect::Value
 {
-    let mut state = StructureState::<'_, ()> {
+    let mut state = StructureState::<'_, StableHashingContext<'_>> {
         def_path: &|crate_num, index| def_path_value(tcx,crate_num, index),
-        span_value: &|args| span_value(tcx,args),
+        span_value: &|args, state| span_value(tcx,args,state),
+        _marker:PhantomData,
     };
 
     let mut out: Vec<(inspect::Value, inspect::Value)> = Vec::new();
 
     for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
-        let (name, map) = f(tcx, state);
+        let (name, map) = f(tcx, &mut state);
         out.push((inspect::Value::String(name.into()), map));
     }
 

@@ -952,13 +952,10 @@ macro_rules! define_queries {
             /// Collects the structural (inspect) representation of all entries in
             /// this query's cache. Returns a pair of the query name and a
             /// MessagePack map of key -> value structures.
-            pub(crate) fn collect_structures<'tcx>(tcx: TyCtxt<'tcx>, state: &mut StructureState<'_, ()>) -> (
+            pub(crate) fn collect_structures<'tcx>(tcx: TyCtxt<'tcx>, state: &mut StructureState<'_, StableHashingContext<'_>>) -> (
                 String,
                 inspect::Value,
             ) {
-                use ::rustc_data_structures::stable_hasher::StructureState;
-                use rustc_data_structures::inspect;
-
                 let mut map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
 
                 let query = QueryType::query_dispatcher(tcx);
@@ -1079,7 +1076,7 @@ macro_rules! define_queries {
         const PER_QUERY_COLLECT_STRUCTURES_FNS: &[
             for<'tcx> fn(
                 TyCtxt<'tcx>,
-                &mut StructureState<'_, ()>,
+                &mut StructureState<'_, StableHashingContext<'_>>,
             ) -> (String, inspect::Value)
         ] = &[$(query_impl::$name::collect_structures),*];
 
