@@ -53,8 +53,8 @@ where
         &self,
         _state: &mut StructureState<'s, StableHashingContext<'a>>,
     ) -> inspect::Value {
-        // Represent the list structurally as an array of its element structures.
-        inspect::Value::Array(self[..].iter().map(|e| e.structure(_state)).collect())
+        // Represent the list structurally as a tuple of its element structures.
+        inspect::Value::Tuple(self[..].iter().map(|e| e.structure(_state)).collect())
     }
 }
 
@@ -103,7 +103,10 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
     ) -> inspect::Value {
         // We cannot access tcx here; represent AllocId by its resolved allocation's structure when available.
         // Fall back to a tag indicating AllocId.
-        inspect::Value::String("AllocId".into())
+        inspect::Value::Enum {
+            path: std::borrow::Cow::Borrowed("AllocId"),
+            variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("AllocId")),
+        }
     }
 }
 

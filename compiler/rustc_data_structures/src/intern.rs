@@ -108,7 +108,11 @@ where
     T: HashStable<CTX>,
 {
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
-        self.0.structure(state)
+        // Preserve the `Interned` wrapper to indicate this is an interned pointer.
+        crate::inspect::Value::Struct {
+            path: std::borrow::Cow::Borrowed("Interned"),
+            fields: vec![(std::borrow::Cow::Borrowed("value"), self.0.structure(state))],
+        }
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

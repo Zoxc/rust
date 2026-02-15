@@ -455,9 +455,9 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for [T] {
         for item in self {
             out.push(item.structure(state));
         }
-        // Represent slices/arrays as tuples to preserve sequence semantics
-        // while using the dedicated `Tuple` variant.
-        Value::Tuple(out)
+        // Represent slices/arrays as `Array` so the inspection output
+        // preserves that this is a sequence, not a Rust tuple.
+        Value::Array(out)
     }
 
     default fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -785,11 +785,18 @@ where
 impl<T, CTX> HashStable<CTX> for ::std::mem::Discriminant<T> {
     #[inline]
     fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
-        // Represent the discriminant structurally using its Debug
-        // representation. This avoids hashing while still encoding which
-        // variant is present. Note: this is a pragmatic choice; a more
-        // robust option would be per-enum variant-index encodings.
-        Value::String(format!("{:?}", self).into())
+        // Represent the discriminant structurally as an enum so the
+        // inspection output preserves that this is a discriminant and
+        // which variant it corresponds to. We use the `Debug` string as
+        // the variant name because we don't have a portable numeric index
+        // here. A more robust encoding would use per-enum variant indices.
+        Value::Enum {
+            path: std::borrow::Cow::Borrowed("Discriminant"),
+            variant: crate::inspect::EnumVariant::Unit(std::borrow::Cow::Owned(format!(
+                "{:?}",
+                self
+            ))),
+        }
     }
 
     #[inline]
@@ -807,7 +814,7 @@ where
         let mut out = Vec::new();
         out.push(self.start().structure(state));
         out.push(self.end().structure(state));
-        Value::Array(out)
+        Value::Tuple(out)
     }
 
     #[inline]
@@ -827,7 +834,7 @@ where
         for v in &self.raw {
             out.push(v.structure(state));
         }
-        Value::Array(out)
+        Value::Tuple(out)
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -848,7 +855,7 @@ where
         for v in &self.raw {
             out.push(v.structure(state));
         }
-        Value::Array(out)
+        Value::Tuple(out)
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -870,8 +877,8 @@ impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
         for idx in self.iter() {
             indices.push(Value::UInt(idx.index() as u128));
         }
-        out.push(Value::Array(indices));
-        Value::Array(out)
+        out.push(Value::Tuple(indices));
+        Value::Tuple(out)
     }
 
     fn hash_stable(&self, _ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -890,9 +897,9 @@ impl<R: Idx, C: Idx, CTX> HashStable<CTX> for bit_set::BitMatrix<R, C> {
             for c in self.iter(r) {
                 cols.push(Value::UInt(c.index() as u128));
             }
-            rows_out.push(Value::Array(cols));
+            rows_out.push(Value::Tuple(cols));
         }
-        Value::Array(rows_out)
+        Value::Tuple(rows_out)
     }
 
     fn hash_stable(&self, _ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -944,7 +951,7 @@ where
             out.push(k.structure(state));
             out.push(v.structure(state));
         }
-        Value::Array(out)
+        Value::Tuple(out)
     }
 
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
@@ -965,7 +972,7 @@ where
         for entry in self.iter() {
             out.push(entry.structure(state));
         }
-        Value::Array(out)
+        Value::Tuple(out)
     }
 
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
