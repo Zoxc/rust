@@ -971,7 +971,7 @@ macro_rules! define_queries {
                 });
 
                 for (key,_value) in cached {
-                    let k = key.structure(&mut state);
+                    let k = key.structure(state);
                     let v = if_query_no_hash!(
                         [$($modifiers)*]
                         { ::rustc_data_structures::inspect::Value::Array(vec![]) }
@@ -981,7 +981,7 @@ macro_rules! define_queries {
                             // domain value's `structure()` may return a local
                             // `Value` type; call through and rely on its
                             // implementation to produce the inspect::Value.
-                            unerased.structure(&mut state)
+                            unerased.structure(state)
                         }
                     );
                     map.push((k, v));

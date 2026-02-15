@@ -4,7 +4,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_middle::ty::print::with_no_trimmed_paths;
 use rustc_span::Span;
 use std::borrow::Cow;
-use std::hash::Hash;
+use std::hash::Hash;use crate::PER_QUERY_COLLECT_STRUCTURES_FNS;
 
 fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32) -> inspect::Value {
     // Construct a `DefId` from the supplied `u32` crate/def indices
@@ -14,9 +14,9 @@ fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32) -> inspec
         index: rustc_span::def_id::DefIndex::from_u32(index),
     };
     inspect::Value::String(with_no_trimmed_paths!(tcx.def_path_str(def_id).into()))
-};
+}
 
-fn span_value(span_args:SpanArgs, state:&StructureState::<'_, ()>){
+fn span_value(tcx: TyCtxt<'_>, span_args:SpanArgs, state:&StructureState::<'_, ()>){
     let span = Span::from_ags(span_args);
 
     let span = span.data_untracked();
@@ -116,8 +116,8 @@ pub fn collect_all_query_structures<'tcx>(tcx: TyCtxt<'tcx>)
     -> inspect::Value
 {
     let mut state = StructureState::<'_, ()> {
-        def_path: &|| def_path_value(tcx),
-        span_value: &|| span_value(tcx),
+        def_path: &|crate_num, index| def_path_value(tcx,crate_num, index),
+        span_value: &|args| span_value(tcx,args),
     };
 
     let mut out: Vec<(inspect::Value, inspect::Value)> = Vec::new();
