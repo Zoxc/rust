@@ -128,11 +128,15 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
     }
 
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        // Represent by internee's structure plus cached fingerprint when present.
-        let mut out = Vec::new();
-        out.push(self.internee.structure(state));
-        #[cfg(feature = "nightly")]
-        out.push(self.stable_hash.structure(state));
-        inspect::Value::Array(out)
+        use std::borrow::Cow;
+
+        inspect::Value::Struct {
+            path: Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![
+                (Cow::Borrowed("internee"), self.internee.structure(state)),
+                #[cfg(feature = "nightly")]
+                (Cow::Borrowed("stable_hash"), self.stable_hash.structure(state)),
+            ],
+        }
     }
 }

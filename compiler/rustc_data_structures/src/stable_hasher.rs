@@ -14,7 +14,6 @@ mod tests;
 // FxHashMap is referenced by some modules in this crate but not all build
 // configurations use it. Keep the import to avoid churn while some
 // refactorings complete; the unused-import warning can be addressed later.
-use crate::fx::FxHashMap;
 use crate::inspect::Value;
 use rustc_hashes::{Hash64, Hash128};
 pub use rustc_stable_hash::{
@@ -304,8 +303,7 @@ impl<CTX> HashStable<CTX> for NonZero<usize> {
 
 impl<CTX> HashStable<CTX> for f32 {
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        let val: u32 = self.to_bits();
-        val.structure(state)
+        Value::F64(self as f64)
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -316,8 +314,7 @@ impl<CTX> HashStable<CTX> for f32 {
 
 impl<CTX> HashStable<CTX> for f64 {
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        let val: u64 = self.to_bits();
-        val.structure(state)
+        Value::F64(self)
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -329,7 +326,17 @@ impl<CTX> HashStable<CTX> for f64 {
 impl<CTX> HashStable<CTX> for ::std::cmp::Ordering {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        (*self as i8).structure(state)
+        // Preserve enum semantics in inspection output.
+        let variant = match self {
+            std::cmp::Ordering::Less => std::borrow::Cow::Borrowed("Less"),
+            std::cmp::Ordering::Equal => std::borrow::Cow::Borrowed("Equal"),
+            std::cmp::Ordering::Greater => std::borrow::Cow::Borrowed("Greater"),
+        };
+        let _ = state;
+        Value::Enum {
+            path: std::borrow::Cow::Borrowed("Ordering"),
+            variant: crate::inspect::EnumVariant::Unit(variant),
+        }
     }
 
     #[inline]
@@ -677,7 +684,8 @@ impl<HCX, T1: ToStableHashKey<HCX>, T2: ToStableHashKey<HCX>> ToStableHashKey<HC
 impl<CTX> HashStable<CTX> for bool {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        (if *self { 1u8 } else { 0u8 }).structure(state)
+        let _ = state;
+        Value::Bool(*self)
     }
 
     #[inline]
@@ -811,10 +819,13 @@ where
 {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        let mut out = Vec::new();
-        out.push(self.start().structure(state));
-        out.push(self.end().structure(state));
-        Value::Tuple(out)
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed("RangeInclusive"),
+            fields: vec![
+                (std::borrow::Cow::Borrowed("start"), self.start().structure(state)),
+                (std::borrow::Cow::Borrowed("end"), self.end().structure(state)),
+            ],
+        }
     }
 
     #[inline]
@@ -829,12 +840,10 @@ where
     T: HashStable<CTX>,
 {
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        let mut out = Vec::new();
-        out.push(self.len().structure(state));
-        for v in &self.raw {
-            out.push(v.structure(state));
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![(std::borrow::Cow::Borrowed("raw"), self.raw[..].structure(state))],
         }
-        Value::Tuple(out)
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -850,12 +859,10 @@ where
     T: HashStable<CTX>,
 {
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        let mut out = Vec::new();
-        out.push(self.len().structure(state));
-        for v in &self.raw {
-            out.push(v.structure(state));
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![(std::borrow::Cow::Borrowed("raw"), self.raw[..].structure(state))],
         }
-        Value::Tuple(out)
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -871,14 +878,21 @@ impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
         // Represent DenseBitSet structurally as [domain_size, [set_indices...]]
         // by listing the indices of set bits. This avoids accessing private
         // internals such as the word vector.
-        let mut out = Vec::with_capacity(2);
-        out.push(Value::UInt(self.domain_size() as u128));
         let mut indices = Vec::new();
         for idx in self.iter() {
             indices.push(Value::UInt(idx.index() as u128));
         }
-        out.push(Value::Tuple(indices));
-        Value::Tuple(out)
+
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![
+                (
+                    std::borrow::Cow::Borrowed("domain_size"),
+                    Value::UInt(self.domain_size() as u128),
+                ),
+                (std::borrow::Cow::Borrowed("indices"), Value::Array(indices)),
+            ],
+        }
     }
 
     fn hash_stable(&self, _ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -897,9 +911,13 @@ impl<R: Idx, C: Idx, CTX> HashStable<CTX> for bit_set::BitMatrix<R, C> {
             for c in self.iter(r) {
                 cols.push(Value::UInt(c.index() as u128));
             }
-            rows_out.push(Value::Tuple(cols));
+            rows_out.push(Value::Array(cols));
         }
-        Value::Tuple(rows_out)
+
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![(std::borrow::Cow::Borrowed("rows"), Value::Array(rows_out))],
+        }
     }
 
     fn hash_stable(&self, _ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -912,7 +930,10 @@ where
     T: HashStable<CTX> + bit_set::FiniteBitSetTy,
 {
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        self.0.structure(state)
+        Value::StructTuple {
+            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
+            fields: vec![self.0.structure(state)],
+        }
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
@@ -923,14 +944,23 @@ where
 impl_stable_traits_for_trivial_type!(::std::ffi::OsStr, |s: &::std::ffi::OsStr| {
     // Ensure we produce an owned `String` so the `Cow<'static, str>` used by
     // `Value::String` does not borrow from local stack data.
-    Value::String(s.to_string_lossy().into_owned().into())
+    Value::StructTuple {
+        path: std::borrow::Cow::Borrowed(std::any::type_name::<::std::ffi::OsStr>()),
+        fields: vec![Value::String(s.to_string_lossy().into_owned().into())],
+    }
 });
 
 impl_stable_traits_for_trivial_type!(::std::path::Path, |p: &::std::path::Path| {
-    Value::String(p.to_string_lossy().into_owned().into())
+    Value::StructTuple {
+        path: std::borrow::Cow::Borrowed(std::any::type_name::<::std::path::Path>()),
+        fields: vec![Value::String(p.to_string_lossy().into_owned().into())],
+    }
 });
 impl_stable_traits_for_trivial_type!(::std::path::PathBuf, |p: &::std::path::PathBuf| {
-    Value::String(p.to_string_lossy().into_owned().into())
+    Value::StructTuple {
+        path: std::borrow::Cow::Borrowed(std::any::type_name::<::std::path::PathBuf>()),
+        fields: vec![Value::String(p.to_string_lossy().into_owned().into())],
+    }
 });
 
 // It is not safe to implement HashStable for HashSet, HashMap or any other collection type
@@ -945,13 +975,15 @@ where
     V: HashStable<HCX>,
 {
     fn structure(&self, state: &mut StructureState<'_, HCX>) -> Value {
-        let mut out = Vec::new();
-        out.push(self.len().structure(state));
+        let mut map: BTreeMap<crate::inspect::Value, crate::inspect::Value> = BTreeMap::new();
         for (k, v) in self.iter() {
-            out.push(k.structure(state));
-            out.push(v.structure(state));
+            map.insert(k.structure(state), v.structure(state));
         }
-        Value::Tuple(out)
+
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed("BTreeMap"),
+            fields: vec![(std::borrow::Cow::Borrowed("map"), Value::Map(map))],
+        }
     }
 
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
@@ -967,12 +999,15 @@ where
     K: HashStable<HCX> + StableOrd,
 {
     fn structure(&self, state: &mut StructureState<'_, HCX>) -> Value {
-        let mut out = Vec::new();
-        out.push(self.len().structure(state));
+        let mut entries = Vec::with_capacity(self.len());
         for entry in self.iter() {
-            out.push(entry.structure(state));
+            entries.push(entry.structure(state));
         }
-        Value::Tuple(out)
+
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed("BTreeSet"),
+            fields: vec![(std::borrow::Cow::Borrowed("entries"), Value::Array(entries))],
+        }
     }
 
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
