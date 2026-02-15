@@ -22,9 +22,9 @@ pub use rustc_stable_hash::{
 use std::collections::BTreeMap;
 
 pub struct SpanArgs {
-    lo_or_index: u32,
-    len_with_tag_or_marker: u16,
-    ctxt_or_parent_or_marker: u16,
+    pub lo_or_index: u32,
+    pub len_with_tag_or_marker: u16,
+    pub ctxt_or_parent_or_marker: u16,
 }
 
 pub struct StructureState<'a, CTX> {

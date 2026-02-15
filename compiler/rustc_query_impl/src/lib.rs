@@ -40,6 +40,7 @@ mod job;
 mod plumbing;
 mod profiling_support;
 mod values;
+mod export_queries;
 
 #[derive(ConstParamTy)] // Allow this struct to be used for const-generic values.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -281,7 +281,13 @@ impl Span {
     }
 
     #[inline]
-    pub fn from_args(args:SpanArgs) -> Span {
+    pub fn from_args(args: rustc_data_structures::stable_hasher::SpanArgs) -> Span {
+        Span {
+            lo_or_index: args.lo_or_index,
+            len_with_tag_or_marker: args.len_with_tag_or_marker,
+            ctxt_or_parent_or_marker: args.ctxt_or_parent_or_marker,
+        }
+    }
 
     }
 
