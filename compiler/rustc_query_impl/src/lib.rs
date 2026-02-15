@@ -12,7 +12,6 @@ use std::marker::ConstParamTy;
 
 use rustc_data_structures::sync::AtomicU64;
 use rustc_middle::arena::Arena;
-use rustc_query_system::ich::StableHashingContext;
 use rustc_middle::dep_graph::{self, DepKind, DepKindVTable, DepNode, DepNodeIndex};
 use rustc_middle::queries::{
     self, ExternProviders, Providers, QueryCaches, QueryEngine, QueryStates,
@@ -22,6 +21,7 @@ use rustc_middle::query::on_disk_cache::{CacheEncoder, EncodedDepNodeIndex, OnDi
 use rustc_middle::query::plumbing::{HashResult, QuerySystem, QuerySystemFns, QueryVTable};
 use rustc_middle::ty::TyCtxt;
 use rustc_query_system::dep_graph::SerializedDepNodeIndex;
+use rustc_query_system::ich::StableHashingContext;
 use rustc_query_system::query::{
     CycleError, CycleErrorHandling, QueryCache, QueryMode, QueryState,
 };
@@ -39,9 +39,9 @@ mod execution;
 mod job;
 #[macro_use]
 mod plumbing;
+mod export_queries;
 mod profiling_support;
 mod values;
-mod export_queries;
 
 #[derive(ConstParamTy)] // Allow this struct to be used for const-generic values.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

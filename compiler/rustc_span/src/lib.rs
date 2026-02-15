@@ -82,8 +82,8 @@ use std::sync::Arc;
 use std::{fmt, iter};
 
 use md5::{Digest, Md5};
-use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_data_structures::inspect;
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_data_structures::sync::{FreezeLock, FreezeWriteGuard, Lock};
 use rustc_data_structures::unord::UnordMap;
 use rustc_hashes::{Hash64, Hash128};

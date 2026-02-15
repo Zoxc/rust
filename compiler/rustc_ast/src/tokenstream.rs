@@ -11,8 +11,7 @@ use std::sync::Arc;
 use std::{cmp, fmt, iter, mem};
 
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
-use rustc_data_structures::sync;
-use rustc_data_structures::inspect;
+use rustc_data_structures::{inspect, sync};
 use rustc_macros::{Decodable, Encodable, HashStable_Generic, Walkable};
 use rustc_serialize::{Decodable, Encodable};
 use rustc_span::{DUMMY_SP, Span, SpanDecoder, SpanEncoder, Symbol, sym};

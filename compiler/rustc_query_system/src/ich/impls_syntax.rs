@@ -2,12 +2,13 @@
 //! from various crates in no particular order.
 
 // Use fully-qualified paths for `inspect::Value` to avoid name collisions.
+use std::borrow::Cow;
+
 use inspect::Value;
 use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_span::{SourceFile, Symbol, sym};
 use smallvec::SmallVec;
-use std::borrow::Cow;
 use {rustc_ast as ast, rustc_hir as hir};
 
 use crate::ich::StableHashingContext;

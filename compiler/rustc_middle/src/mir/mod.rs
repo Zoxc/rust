@@ -910,8 +910,8 @@ pub struct VarBindingIntroduction {
 }
 
 mod binding_form_impl {
-    use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
     use rustc_data_structures::inspect;
+    use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
     use rustc_query_system::ich::StableHashingContext;
 
     impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for super::BindingForm<'tcx> {
@@ -926,21 +926,33 @@ mod binding_form_impl {
             }
         }
 
-    fn structure<'s>(&self, state: &mut StructureState<'s, StableHashingContext<'a>>) -> inspect::Value {
-        use super::BindingForm::*;
+        fn structure<'s>(
+            &self,
+            state: &mut StructureState<'s, StableHashingContext<'a>>,
+        ) -> inspect::Value {
+            use super::BindingForm::*;
 
             match self {
                 Var(binding) => inspect::Value::Enum {
                     path: std::borrow::Cow::Borrowed("BindingForm"),
-                    variant: inspect::EnumVariant::Tuple(std::borrow::Cow::Borrowed("Var"), vec![binding.structure(state)]),
+                    variant: inspect::EnumVariant::Tuple(
+                        std::borrow::Cow::Borrowed("Var"),
+                        vec![binding.structure(state)],
+                    ),
                 },
                 ImplicitSelf(kind) => inspect::Value::Enum {
                     path: std::borrow::Cow::Borrowed("BindingForm"),
-                    variant: inspect::EnumVariant::Tuple(std::borrow::Cow::Borrowed("ImplicitSelf"), vec![kind.structure(state)]),
+                    variant: inspect::EnumVariant::Tuple(
+                        std::borrow::Cow::Borrowed("ImplicitSelf"),
+                        vec![kind.structure(state)],
+                    ),
                 },
                 RefForGuard(local) => inspect::Value::Enum {
                     path: std::borrow::Cow::Borrowed("BindingForm"),
-                    variant: inspect::EnumVariant::Tuple(std::borrow::Cow::Borrowed("RefForGuard"), vec![local.structure(state)]),
+                    variant: inspect::EnumVariant::Tuple(
+                        std::borrow::Cow::Borrowed("RefForGuard"),
+                        vec![local.structure(state)],
+                    ),
                 },
             }
         }

@@ -14,12 +14,14 @@ mod tests;
 // FxHashMap is referenced by some modules in this crate but not all build
 // configurations use it. Keep the import to avoid churn while some
 // refactorings complete; the unused-import warning can be addressed later.
-use crate::inspect::Value;
+use std::collections::BTreeMap;
+
 use rustc_hashes::{Hash64, Hash128};
 pub use rustc_stable_hash::{
     FromStableHash, SipHasher128Hash as StableHasherHash, StableSipHasher128 as StableHasher,
 };
-use std::collections::BTreeMap;
+
+use crate::inspect::Value;
 
 pub struct SpanArgs {
     pub lo_or_index: u32,

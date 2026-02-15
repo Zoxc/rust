@@ -92,11 +92,14 @@ where
         &self,
         state: &mut rustc_data_structures::stable_hasher::StructureState<'_, CTX>,
     ) -> rustc_data_structures::inspect::Value {
-        (state.span_value)(rustc_data_structures::stable_hasher::SpanArgs {
-            lo_or_index: self.lo_or_index,
-            len_with_tag_or_marker: self.len_with_tag_or_marker,
-            ctxt_or_parent_or_marker: self.ctxt_or_parent_or_marker,
-        },state)
+        (state.span_value)(
+            rustc_data_structures::stable_hasher::SpanArgs {
+                lo_or_index: self.lo_or_index,
+                len_with_tag_or_marker: self.len_with_tag_or_marker,
+                ctxt_or_parent_or_marker: self.ctxt_or_parent_or_marker,
+            },
+            state,
+        )
     }
 
     fn hash_stable(

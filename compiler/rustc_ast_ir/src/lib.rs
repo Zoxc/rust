@@ -14,7 +14,6 @@
 use std::fmt;
 
 // The `HashStable_*` derive macros refer to `rustc_data_structures::inspect` by absolute path.
-
 #[cfg(feature = "nightly")]
 use rustc_macros::{Decodable_NoContext, Encodable_NoContext, HashStable_NoContext};
 #[cfg(feature = "nightly")]

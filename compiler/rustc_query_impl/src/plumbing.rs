@@ -2,7 +2,10 @@
 //! generate the actual methods on tcx which find and execute the provider,
 //! manage the caches, and so forth.
 
+use std::fs;
+use std::io::{Read, Write};
 use std::num::NonZero;
+use std::path::PathBuf;
 
 use rustc_data_structures::jobserver::Proxy;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
@@ -33,10 +36,6 @@ use rustc_query_system::query::{
 };
 use rustc_serialize::{Decodable, Encodable};
 use rustc_span::def_id::LOCAL_CRATE;
-use std::fs;
-use std::io::Read;
-use std::io::Write;
-use std::path::PathBuf;
 
 use crate::error::{QueryOverflow, QueryOverflowNote};
 use crate::execution::{all_inactive, force_query};

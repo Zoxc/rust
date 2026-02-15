@@ -6,11 +6,12 @@
 //! use of a MessagePack `Value` in this crate but adds structured
 //! variants for Rust ADTs.
 
-use ordered_float::OrderedFloat;
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::hash::Hash;
+
+use ordered_float::OrderedFloat;
+use serde::{Deserialize, Serialize};
 
 /// A compact representation of values for inspection purposes.
 ///

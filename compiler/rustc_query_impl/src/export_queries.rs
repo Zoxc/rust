@@ -1,10 +1,12 @@
+use std::borrow::Cow;
+use std::marker::PhantomData;
+
 use rustc_data_structures::inspect::{self, EnumVariant, Value};
-use rustc_data_structures::stable_hasher::{SpanArgs, StructureState};
+use rustc_data_structures::stable_hasher::{HashStable, SpanArgs, StructureState};
 use rustc_middle::ty::TyCtxt;
 use rustc_middle::ty::print::with_no_trimmed_paths;
-use rustc_span::{CachingSourceMapView, Pos};use rustc_query_system::ich::StableHashingContext;use rustc_data_structures::stable_hasher::HashStable;
-use rustc_span::Span;
-use std::borrow::Cow;use std::marker::PhantomData;
+use rustc_query_system::ich::StableHashingContext;
+use rustc_span::{CachingSourceMapView, Pos, Span};
 
 use crate::PER_QUERY_COLLECT_STRUCTURES_FNS;
 
@@ -18,18 +20,22 @@ fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32) -> inspec
     inspect::Value::String(with_no_trimmed_paths!(tcx.def_path_str(def_id).into()))
 }
 
-fn span_value(tcx: TyCtxt<'_>, span_args:SpanArgs, state:&mut StructureState::<'_, StableHashingContext<'_>>)-> inspect::Value{
+fn span_value(
+    tcx: TyCtxt<'_>,
+    span_args: SpanArgs,
+    state: &mut StructureState<'_, StableHashingContext<'_>>,
+) -> inspect::Value {
     let span = Span::from_args(span_args);
 
     let span = span.data_untracked();
-    let ctx_val =  span.ctxt.structure(state);
+    let ctx_val = span.ctxt.structure(state);
     let parent_val = span.parent.structure(state);
 
     if span.is_dummy() {
         return Value::Enum {
             path: std::borrow::Cow::Borrowed("Span"),
-            variant: EnumVariant::Unit (std::borrow::Cow::Borrowed("Dummy")),
-        }
+            variant: EnumVariant::Unit(std::borrow::Cow::Borrowed("Dummy")),
+        };
     }
 
     let parent = span.parent.map(|parent| tcx.def_span(parent).data_untracked());
@@ -43,28 +49,28 @@ fn span_value(tcx: TyCtxt<'_>, span_args:SpanArgs, state:&mut StructureState::<'
         let hi = (span.hi - parent.lo).to_u32();
         return Value::Enum {
             path: Cow::Borrowed("Span"),
-            variant: EnumVariant::Named(Cow::Borrowed("Relative"),
+            variant: EnumVariant::Named(
+                Cow::Borrowed("Relative"),
                 vec![
                     (Cow::Borrowed("ctxt"), ctx_val),
                     (Cow::Borrowed("parent"), parent_val),
                     (Cow::Borrowed("lo"), lo.structure(state)),
                     (Cow::Borrowed("hi"), hi.structure(state)),
-                ]
+                ],
             ),
         };
     }
 
-let mut caching = CachingSourceMapView::new(tcx.sess.source_map());
+    let mut caching = CachingSourceMapView::new(tcx.sess.source_map());
 
     // If this is not an empty or invalid span, we want to hash the last position that belongs
     // to it, as opposed to hashing the first position past it.
-    let Some((file, line_lo, col_lo, line_hi, col_hi)) =
-        caching.span_data_to_lines_and_cols(&span)
+    let Some((file, line_lo, col_lo, line_hi, col_hi)) = caching.span_data_to_lines_and_cols(&span)
     else {
         return Value::Enum {
             path: std::borrow::Cow::Borrowed("Span"),
-            variant: EnumVariant::Unit (std::borrow::Cow::Borrowed("Dummy")),
-        }
+            variant: EnumVariant::Unit(std::borrow::Cow::Borrowed("Dummy")),
+        };
     };
 
     if let Some(parent) = parent
@@ -76,13 +82,14 @@ let mut caching = CachingSourceMapView::new(tcx.sess.source_map());
         let hi = span.hi.0.wrapping_sub(parent.lo.0);
         return Value::Enum {
             path: Cow::Borrowed("Span"),
-            variant: EnumVariant::Named(Cow::Borrowed("Relative"),
+            variant: EnumVariant::Named(
+                Cow::Borrowed("Relative"),
                 vec![
                     (Cow::Borrowed("ctxt"), ctx_val),
                     (Cow::Borrowed("parent"), parent_val),
                     (Cow::Borrowed("lo"), lo.structure(state)),
                     (Cow::Borrowed("hi"), hi.structure(state)),
-                ]
+                ],
             ),
         };
     }
@@ -98,7 +105,8 @@ let mut caching = CachingSourceMapView::new(tcx.sess.source_map());
 
     Value::Enum {
         path: Cow::Borrowed("Span"),
-        variant: EnumVariant::Named(Cow::Borrowed("Valid"),
+        variant: EnumVariant::Named(
+            Cow::Borrowed("Valid"),
             vec![
                 (Cow::Borrowed("ctxt"), ctx_val),
                 (Cow::Borrowed("parent"), parent_val),
@@ -108,20 +116,18 @@ let mut caching = CachingSourceMapView::new(tcx.sess.source_map());
                 (Cow::Borrowed("line_lo"), line_lo.structure(state)),
                 (Cow::Borrowed("line_hi"), line_hi.structure(state)),
                 (Cow::Borrowed("len"), len.structure(state)),
-            ]
+            ],
         ),
     }
 }
 
 /// Collects structural representations for all queries and returns
 /// them as an inspect::Value map: query_name -> { key -> value }
-pub(crate) fn collect_all_query_structures<'tcx>(tcx: TyCtxt<'tcx>)
-    -> inspect::Value
-{
+pub(crate) fn collect_all_query_structures<'tcx>(tcx: TyCtxt<'tcx>) -> inspect::Value {
     let mut state = StructureState::<'_, StableHashingContext<'_>> {
-        def_path: &|crate_num, index| def_path_value(tcx,crate_num, index),
-        span_value: &|args, state| span_value(tcx,args,state),
-        _marker:PhantomData,
+        def_path: &|crate_num, index| def_path_value(tcx, crate_num, index),
+        span_value: &|args, state| span_value(tcx, args, state),
+        _marker: PhantomData,
     };
 
     let mut out: Vec<(inspect::Value, inspect::Value)> = Vec::new();

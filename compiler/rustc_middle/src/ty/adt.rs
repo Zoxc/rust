@@ -6,11 +6,11 @@ use std::str;
 use rustc_abi::{FIRST_VARIANT, ReprOptions, VariantIdx};
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::inspect;
 use rustc_data_structures::intern::Interned;
 use rustc_data_structures::stable_hasher::{
     HashStable, HashingControls, StableHasher, StructureState,
 };
-use rustc_data_structures::inspect;
 use rustc_errors::ErrorGuaranteed;
 use rustc_hir::attrs::AttributeKind;
 use rustc_hir::def::{CtorKind, DefKind, Res};
@@ -174,17 +174,17 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
         hash.hash_stable(hcx, hasher);
     }
 
-    fn structure<'s>(&self, state: &mut StructureState<'s, StableHashingContext<'a>>) -> inspect::Value {
+    fn structure<'s>(
+        &self,
+        state: &mut StructureState<'s, StableHashingContext<'a>>,
+    ) -> inspect::Value {
         // Represent ADT definition by its DefId and invariant layout information.
         inspect::Value::Struct {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
             fields: vec![
                 (std::borrow::Cow::Borrowed("did"), self.did.structure(state)),
                 (std::borrow::Cow::Borrowed("flags"), self.flags.structure(state)),
-                (
-                    std::borrow::Cow::Borrowed("discr_type"),
-                    self.repr.discr_type().structure(state),
-                ),
+                (std::borrow::Cow::Borrowed("discr_type"), self.repr.discr_type().structure(state)),
             ],
         }
     }
