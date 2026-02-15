@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::ops::Deref;
 
@@ -688,9 +689,18 @@ impl<CTX> HashStable<CTX> for InferTy {
     fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
         use InferTy::*;
         match self {
-            TyVar(_) => inspect::Value::String("TyVar".into()),
-            IntVar(_) => inspect::Value::String("IntVar".into()),
-            FloatVar(_) => inspect::Value::String("FloatVar".into()),
+            TyVar(_) => inspect::Value::Enum {
+                path: Cow::Borrowed("InferTy"),
+                variant: inspect::EnumVariant::Unit(Cow::Borrowed("TyVar")),
+            },
+            IntVar(_) => inspect::Value::Enum {
+                path: Cow::Borrowed("InferTy"),
+                variant: inspect::EnumVariant::Unit(Cow::Borrowed("IntVar")),
+            },
+            FloatVar(_) => inspect::Value::Enum {
+                path: Cow::Borrowed("InferTy"),
+                variant: inspect::EnumVariant::Unit(Cow::Borrowed("FloatVar")),
+            },
             FreshTy(v) | FreshIntTy(v) | FreshFloatTy(v) => Value::UInt((*v) as u128),
         }
     }

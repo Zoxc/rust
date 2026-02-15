@@ -36,10 +36,7 @@ impl<'a, CTX> StructureState<'a, CTX> {
     /// crates previously constructed directly via field initialization.
     #[inline]
     pub fn new(def_path: &'a dyn Fn(u32, u32) -> Value) -> Self {
-        StructureState {
-            def_path,
-            _marker: PhantomData,
-        }
+        StructureState { def_path, _marker: PhantomData }
     }
 
     /// Helper to obtain a structural representation of a `DefPath`.
@@ -225,7 +222,7 @@ impl_stable_traits_for_trivial_type!(i128, |v: &i128| Value::Binary((*v).to_le_b
 
 impl_stable_traits_for_trivial_type!(char, |c: &char| Value::String((*c).to_string().into()));
 
-impl_stable_traits_for_trivial_type!((), |_: &()| Value::Array(vec![]));
+impl_stable_traits_for_trivial_type!((), |_: &()| Value::Tuple(vec![]));
 
 impl_stable_traits_for_trivial_type!(Hash64, |h: &Hash64| Value::Binary(
     h.as_u64().to_le_bytes().to_vec()
@@ -267,7 +264,8 @@ impl<CTX> HashStable<CTX> for ! {
 
 impl<CTX, T> HashStable<CTX> for PhantomData<T> {
     fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
-        Value::Array(vec![])
+        // Preserve the wrapper type in inspection output.
+        Value::Struct { path: std::borrow::Cow::Borrowed("PhantomData"), fields: Vec::new() }
     }
 
     fn hash_stable(&self, _ctx: &mut CTX, _hasher: &mut StableHasher) {}
@@ -276,7 +274,11 @@ impl<CTX, T> HashStable<CTX> for PhantomData<T> {
 impl<CTX> HashStable<CTX> for NonZero<u32> {
     #[inline]
     fn structure<'s>(&self, state: &mut StructureState<'s, CTX>) -> Value {
-        self.get().structure(state)
+        // Show the wrapper type so inspection output retains the fact this is a NonZero.
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed("NonZero<u32>"),
+            fields: vec![(std::borrow::Cow::Borrowed("value"), self.get().structure(state))],
+        }
     }
 
     #[inline]
@@ -288,7 +290,10 @@ impl<CTX> HashStable<CTX> for NonZero<u32> {
 impl<CTX> HashStable<CTX> for NonZero<usize> {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        self.get().structure(state)
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed("NonZero<usize>"),
+            fields: vec![(std::borrow::Cow::Borrowed("value"), self.get().structure(state))],
+        }
     }
 
     #[inline]
@@ -337,7 +342,8 @@ impl<T1: HashStable<CTX>, CTX> HashStable<CTX> for (T1,) {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
         let (ref _0,) = *self;
-        _0.structure(state)
+        // Preserve tuple semantics in inspection output.
+        Value::Tuple(vec![_0.structure(state)])
     }
 
     #[inline]
@@ -353,7 +359,8 @@ impl<T1: HashStable<CTX>, T2: HashStable<CTX>, CTX> HashStable<CTX> for (T1, T2)
         let mut out = Vec::new();
         out.push(_0.structure(state));
         out.push(_1.structure(state));
-        Value::Array(out)
+        // Represent tuples explicitly as `Tuple` so inspection preserves tuple semantics.
+        Value::Tuple(out)
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -383,7 +390,7 @@ where
         out.push(_0.structure(state));
         out.push(_1.structure(state));
         out.push(_2.structure(state));
-        Value::Array(out)
+        Value::Tuple(out)
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -417,7 +424,7 @@ where
         out.push(_1.structure(state));
         out.push(_2.structure(state));
         out.push(_3.structure(state));
-        Value::Array(out)
+        Value::Tuple(out)
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -448,7 +455,9 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for [T] {
         for item in self {
             out.push(item.structure(state));
         }
-        Value::Array(out)
+        // Represent slices/arrays as tuples to preserve sequence semantics
+        // while using the dedicated `Tuple` variant.
+        Value::Tuple(out)
     }
 
     default fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -564,7 +573,11 @@ where
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        (**self).structure(state)
+        // Preserve the `Box` wrapper in inspection output.
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed("Box"),
+            fields: vec![(std::borrow::Cow::Borrowed("value"), (**self).structure(state))],
+        }
     }
 
     #[inline]
@@ -576,7 +589,10 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        (**self).structure(state)
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed("Rc"),
+            fields: vec![(std::borrow::Cow::Borrowed("value"), (**self).structure(state))],
+        }
     }
 
     #[inline]
@@ -588,7 +604,10 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::sync::Arc<T> {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        (**self).structure(state)
+        Value::Struct {
+            path: std::borrow::Cow::Borrowed("Arc"),
+            fields: vec![(std::borrow::Cow::Borrowed("value"), (**self).structure(state))],
+        }
     }
 
     #[inline]
@@ -680,14 +699,19 @@ where
 {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        let mut out = Vec::new();
-        if let Some(ref value) = *self {
-            out.push(1u8.structure(state));
-            out.push(value.structure(state));
-        } else {
-            out.push(0u8.structure(state));
+        match *self {
+            Some(ref value) => Value::Enum {
+                path: std::borrow::Cow::Borrowed("Option"),
+                variant: crate::inspect::EnumVariant::Tuple(
+                    std::borrow::Cow::Borrowed("Some"),
+                    vec![value.structure(state)],
+                ),
+            },
+            None => Value::Enum {
+                path: std::borrow::Cow::Borrowed("Option"),
+                variant: crate::inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("None")),
+            },
         }
-        Value::Array(out)
     }
 
     #[inline]
@@ -715,13 +739,22 @@ where
 {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
-        let mut out = Vec::new();
-        out.push(mem::discriminant(self).structure(state));
         match *self {
-            Ok(ref x) => out.push(x.structure(state)),
-            Err(ref x) => out.push(x.structure(state)),
+            Ok(ref x) => Value::Enum {
+                path: std::borrow::Cow::Borrowed("Result"),
+                variant: crate::inspect::EnumVariant::Tuple(
+                    std::borrow::Cow::Borrowed("Ok"),
+                    vec![x.structure(state)],
+                ),
+            },
+            Err(ref x) => Value::Enum {
+                path: std::borrow::Cow::Borrowed("Result"),
+                variant: crate::inspect::EnumVariant::Tuple(
+                    std::borrow::Cow::Borrowed("Err"),
+                    vec![x.structure(state)],
+                ),
+            },
         }
-        Value::Array(out)
     }
 
     #[inline]
