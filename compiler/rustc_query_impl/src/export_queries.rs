@@ -12,10 +12,9 @@ use rustc_span::{CachingSourceMapView, Pos, Span};
 // macro into the plumbing module; do not import it here.
 use crate::PER_QUERY_COLLECT_STRUCTURES_FNS;
 use std::fs;
-use std::io::{Read, Write, Seek, SeekFrom};
+use std::io::{ Write, Seek, SeekFrom};
 use std::path::PathBuf;
 use rustc_span::def_id::LOCAL_CRATE;
-use rustc_serialize as _rustc_serialize; // ensure serde/bincode available via crate features
 use brotli::CompressorWriter;
 use brotli::enc::BrotliEncoderParams;
 

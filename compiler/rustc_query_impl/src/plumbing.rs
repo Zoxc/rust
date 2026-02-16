@@ -840,7 +840,7 @@ macro_rules! define_queries {
             // cache, then delegate assembling the final map to
             // `export_queries::assemble_query_structures` so the macro stays
             // smaller.
-            pub(crate) fn collect_structures<'tcx>(tcx: TyCtxt<'tcx>, state: &mut StructureState<'_, StableHashingContext<'_'>>) -> (
+            pub(crate) fn collect_structures<'tcx>(tcx: TyCtxt<'tcx>, state: &mut StructureState<'_, StableHashingContext<'_>>) -> (
                 String,
                 inspect::Value,
             ) {
