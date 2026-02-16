@@ -15,8 +15,8 @@ use std::fs;
 use std::io::{ Write, Seek, SeekFrom};
 use std::path::PathBuf;
 use rustc_span::def_id::LOCAL_CRATE;
-use brotli::CompressorWriter;
-use brotli::enc::BrotliEncoderParams;
+use snap::write::FrameEncoder;
+// Cursor was used in an earlier approach; no longer needed.
 
 fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32) -> inspect::Value {
     // Construct a `DefId` from the supplied `u32` crate/def indices
@@ -375,24 +375,35 @@ where
             Err(_) => return (name, inspect::Value::String("<serialize-failed>".into())),
         };
 
-        // Compress into memory
-        let mut compressed: Vec<u8> = Vec::new();
-        let params = BrotliEncoderParams::default();
-        {
-            let mut compressor = CompressorWriter::with_params(&mut compressed, 4096, &params);
-            if compressor.write_all(&ser).is_err() {
-                return (name, inspect::Value::String("<compress-failed>".into()));
-            }
-        }
 
-        // Obtain current offset in file and write compressed bytes.
+        // Stream-compress directly into the provided file using Snappy's
+        // FrameEncoder. Capture the file offset before writing so we can
+        // compute the compressed length as the difference in file position
+        // after writing.
         let offset = match file.seek(SeekFrom::Current(0)) {
             Ok(o) => o,
             Err(_) => return (name, inspect::Value::String("<seek-failed>".into())),
         };
-        if file.write_all(&compressed).is_err() {
-            return (name, inspect::Value::String("<write-failed>".into()));
+
+        let mut encoder = FrameEncoder::new(file);
+        if encoder.write_all(&ser).is_err() {
+            return (name, inspect::Value::String("<compress-failed>".into()));
         }
+        if encoder.flush().is_err() {
+            return (name, inspect::Value::String("<compress-failed>".into()));
+        }
+
+        // Query the underlying file position to compute compressed length.
+        let new_pos = match encoder.get_mut().seek(SeekFrom::Current(0)) {
+            Ok(p) => p,
+            Err(_) => return (name, inspect::Value::String("<seek-failed>".into())),
+        };
+        let compressed_len = (new_pos - offset) as u128;
+
+        // Drop the encoder to release the mutable borrow on the file. We
+        // explicitly discard the returned file handle since it's not needed
+        // here.
+        let _ = encoder.into_inner();
 
         // Store both offset and length of the compressed payload.
         let mut m: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
@@ -401,10 +412,7 @@ where
             inspect::Value::String("offset".into()),
             inspect::Value::UInt(offset as u128),
         );
-        m.insert(
-            inspect::Value::String("len".into()),
-            inspect::Value::UInt(compressed.len() as u128),
-        );
+        m.insert(inspect::Value::String("len".into()), inspect::Value::UInt(compressed_len));
 
         inspect::Value::Map(m)
     } else {
