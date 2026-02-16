@@ -600,7 +600,6 @@ macro_rules! define_queries {
             use super::super::*;
             use std::marker::PhantomData;
             use ::rustc_middle::query::erase::{self, Erased};
-            use rustc_data_structures::stable_hasher::HashStable;
 
             pub(crate) mod get_query_incr {
                 use super::*;
@@ -865,6 +864,7 @@ macro_rules! define_queries {
                         if_query_no_hash!([$($modifiers)*] {
                             ::rustc_data_structures::inspect::Value::Array(vec![])
                         } {
+                            use rustc_data_structures::stable_hasher::HashStable;
                             let unerased = QueryType::restore_val(*_value);
                             unerased.structure(_state)
                         })

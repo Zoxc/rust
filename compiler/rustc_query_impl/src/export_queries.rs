@@ -176,13 +176,13 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         None => return,
     };
 
-    // Determine crate name/hash early so the directory scanning can use them.
+    // Determine crate name and stable crate id early so the directory
+    // scanning can use them. Use the stable crate id (not the crate
+    // hash) in the filename to make the exported filename stable across
+    // builds where only the crate hash may differ.
     let crate_name = tcx.crate_name(LOCAL_CRATE).to_string();
-    let crate_hash = if tcx.needs_crate_hash() {
-        tcx.crate_hash(LOCAL_CRATE).to_hex()
-    } else {
-        "no-hash".to_string()
-    };
+    let crate_stable_id = tcx.stable_crate_id(LOCAL_CRATE).as_u64();
+    let crate_id_str = format!("{:08x}", crate_stable_id);
 
     // Ensure directory exists; if creation fails, emit a warning diagnostic.
     if let Err(e) = fs::create_dir_all(&dir) {
@@ -210,7 +210,7 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
     let h = hasher.finish::<Hash128>();
     let hex = format!("{:032x}", h.as_u128());
 
-    let filename = format!("{}.{}.{}.rcqe", crate_name, crate_hash, hex);
+    let filename = format!("{}.{}.content-{}.rcqe", crate_name, crate_id_str, hex);
     let mut path = PathBuf::from(&dir);
     path.push(&filename);
 
