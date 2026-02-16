@@ -9,6 +9,11 @@ use rustc_query_system::ich::StableHashingContext;
 use rustc_span::{CachingSourceMapView, Pos, Span};
 
 use crate::PER_QUERY_COLLECT_STRUCTURES_FNS;
+use std::fs;
+use std::io::{Read, Write};
+use std::path::PathBuf;
+use rustc_span::def_id::LOCAL_CRATE;
+use rustc_serialize as _rustc_serialize; // ensure serde/bincode available via crate features
 
 fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32) -> inspect::Value {
     // Construct a `DefId` from the supplied `u32` crate/def indices
@@ -145,4 +150,114 @@ pub(crate) fn collect_all_query_structures<'tcx>(tcx: TyCtxt<'tcx>) -> inspect::
     }
 
     inspect::Value::Map(entries_map)
+}
+
+// Module-scoped helper for exporting query structures when the feature is enabled.
+pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
+    // Check option enablement on the unstable options struct.
+    if !tcx.sess.opts.unstable_opts.export_queries {
+        return;
+    }
+
+    let dir = match &tcx.sess.opts.unstable_opts.export_queries_dir {
+        Some(d) => d.clone(),
+        None => return,
+    };
+
+    // Collect the structure to write.
+    let value = collect_all_query_structures(tcx);
+
+    // Serialize using bincode (serde). If serialization fails, abort
+    // exporting for this run.
+    let bytes = match bincode::serialize(&value) {
+        Ok(b) => b,
+        Err(_) => return,
+    };
+
+    let crate_name = tcx.crate_name(LOCAL_CRATE).to_string();
+    let crate_hash = if tcx.needs_crate_hash() {
+        tcx.crate_hash(LOCAL_CRATE).to_hex()
+    } else {
+        "no-hash".to_string()
+    };
+
+    // Ensure directory exists; if creation fails, emit a warning diagnostic.
+    if let Err(e) = fs::create_dir_all(&dir) {
+        tcx.sess.dcx().emit_warn(crate::error::ExportQueriesCreateDirFail {
+            path: dir.as_path(),
+            err: e.to_string(),
+        });
+        return;
+    }
+
+    // Scan existing files to see if an identical file (ignoring dedup
+    // number) already exists and to determine the next dedup number.
+    let mut max_dedup = 0usize;
+    if let Ok(read_dir) = fs::read_dir(&dir) {
+        for entry in read_dir.flatten() {
+            let path = entry.path();
+            if let Some(fname) = path.file_name().and_then(|s| s.to_str()) {
+                let prefix = format!("{}.{}.", crate_name, crate_hash);
+                if fname.starts_with(&prefix) {
+                    // Attempt to read and compare contents. If the file's
+                    // bytes match our bytes, we're done.
+                    if let Ok(mut f) = fs::File::open(&path) {
+                        let mut existing = Vec::new();
+                        if f.read_to_end(&mut existing).is_ok() {
+                            if existing == bytes {
+                                if tcx.sess.verbose_internals() {
+                                    tcx.sess.dcx().emit_note(
+                                        crate::error::ExportQueriesIdenticalFile {
+                                            path: path.as_path(),
+                                        },
+                                    );
+                                }
+                                return;
+                            }
+                        }
+                    }
+
+                    // Try to parse the trailing dedup number.
+                    if let Some(s) = fname.rsplit('.').next() {
+                        if let Ok(n) = s.parse::<usize>() {
+                            if n >= max_dedup {
+                                max_dedup = n + 1
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let dedup = max_dedup;
+    let filename = format!("{}.{}.{}", crate_name, crate_hash, dedup);
+    let mut path = PathBuf::from(dir);
+    path.push(filename);
+
+    // Try to write the file. If writing fails, emit a diagnostic (non-fatal
+    // warning) so users see the failure rather than silently ignoring it.
+    match fs::File::create(&path) {
+        Ok(mut f) => match f.write_all(&bytes) {
+            Ok(()) => {
+                if tcx.sess.verbose_internals() {
+                    tcx.sess
+                        .dcx()
+                        .emit_note(crate::error::ExportQueriesWroteFile { path: path.as_path() });
+                }
+            }
+            Err(e) => {
+                tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+                    path: path.as_path(),
+                    err: e.to_string(),
+                });
+            }
+        },
+        Err(e) => {
+            tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+                path: path.as_path(),
+                err: e.to_string(),
+            });
+        }
+    }
 }
