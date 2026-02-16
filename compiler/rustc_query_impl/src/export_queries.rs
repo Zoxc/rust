@@ -347,14 +347,31 @@ where
             return (name, inspect::Value::String("<write-failed>".into()));
         }
 
-        inspect::Value::UInt(offset as u128)
+        // Store both offset and length of the compressed payload.
+        let mut m: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
+            ::std::collections::BTreeMap::new();
+        m.insert(
+            inspect::Value::String("offset".into()),
+            inspect::Value::UInt(offset as u128),
+        );
+        m.insert(
+            inspect::Value::String("len".into()),
+            inspect::Value::UInt(compressed.len() as u128),
+        );
+
+        inspect::Value::Map(m)
     } else {
         // No file: keep the entries inline so callers can inspect them.
         entries_value
     };
 
     let mut out_map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
-    out_map.push((inspect::Value::String("entries".into()), stored_entries));
+    // Only include the `entries` field when we actually wrote a payload to a
+    // file; if no file was provided we skip the `entries` field and only
+    // provide the stable `value` hash so callers can still verify contents.
+    if file.is_some() {
+        out_map.push((inspect::Value::String("entries".into()), stored_entries));
+    }
     out_map.push((inspect::Value::String("value".into()), value_field));
     out_map.push((inspect::Value::String("key_type".into()), inspect::Value::String(key_type_name.into())));
     out_map.push((inspect::Value::String("value_type".into()), inspect::Value::String(value_type_name.into())));
