@@ -252,12 +252,7 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         Err(_) => return,
     };
 
-    // Now write the serialized top-level Value and footer.
-    let pos_main = match f.seek(SeekFrom::Current(0)) {
-        Ok(p) => p,
-        Err(_) => return,
-    };
-
+    // Now write the serialized top-level Value and footer length.
     let bytes = match bincode::serialize(&value) {
         Ok(b) => b,
         Err(_) => return,
@@ -270,11 +265,13 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         });
         return;
     }
-
-    if f.write_all(&pos_main.to_le_bytes()).is_err() {
+    // Store only the length of the serialized top-level value (u64 LE).
+    // Readers can use this length to locate and validate the footer.
+    let footer_len = bytes.len() as u64;
+    if f.write_all(&footer_len.to_le_bytes()).is_err() {
         tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
             path: path.as_path(),
-            err: "failed to write footer".to_string(),
+            err: "failed to write footer length".to_string(),
         });
         return;
     }
