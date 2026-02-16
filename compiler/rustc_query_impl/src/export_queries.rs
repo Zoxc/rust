@@ -307,12 +307,19 @@ where
     // 128-bit hash when no file is provided.
     let entries_value = inspect::Value::Map(entries_map);
 
-    // If a file handle is provided, serialize and compress the entries and
-    // stream them to the file, returning the offset. Otherwise store a stable
-    // hash of the entries.
+    // Always compute a stable hash for the entries; store it under the
+    // `value` field. If a file handle is provided, also serialize/compress
+    // and stream the entries to the file, returning the offset in the
+    // `entries` field. If no file is provided, keep the `entries` inline
+    // as a Map so consumers can inspect it directly.
     use std::hash::Hash;
     use rustc_hashes::Hash128;
     use rustc_data_structures::stable_hasher::StableHasher;
+
+    let mut hasher = StableHasher::new();
+    entries_value.hash(&mut hasher);
+    let h = hasher.finish::<Hash128>();
+    let value_field = inspect::Value::UInt(h.as_u128());
 
     let stored_entries = if let Some(file) = file.as_deref_mut() {
         // Serialize
@@ -342,16 +349,13 @@ where
 
         inspect::Value::UInt(offset as u128)
     } else {
-        // No file provided: compute a stable 128-bit hash of the entries map
-        // and store it as a UInt.
-        let mut hasher = StableHasher::new();
-        entries_value.hash(&mut hasher);
-        let h = hasher.finish::<Hash128>();
-        inspect::Value::UInt(h.as_u128())
+        // No file: keep the entries inline so callers can inspect them.
+        entries_value
     };
 
     let mut out_map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
     out_map.push((inspect::Value::String("entries".into()), stored_entries));
+    out_map.push((inspect::Value::String("value".into()), value_field));
     out_map.push((inspect::Value::String("key_type".into()), inspect::Value::String(key_type_name.into())));
     out_map.push((inspect::Value::String("value_type".into()), inspect::Value::String(value_type_name.into())));
     out_map.push((inspect::Value::String("key_size".into()), inspect::Value::UInt(key_size as u128)));
