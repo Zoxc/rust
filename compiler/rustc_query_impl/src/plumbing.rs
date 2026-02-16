@@ -3,7 +3,8 @@
 //! manage the caches, and so forth.
 
 use std::num::NonZero;
-use std::path::PathBuf;
+// PathBuf is only needed in other modules; avoid importing it here to prevent
+// unused-import warnings from the macro-generated code.
 
 use rustc_data_structures::jobserver::Proxy;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher};
@@ -835,14 +836,16 @@ macro_rules! define_queries {
                 )
             }
 
-            /// Collects the structural (inspect) representation of all entries in
-            /// this query's cache. Returns a pair of the query name and a
-            /// MessagePack map of key -> value structures.
-            pub(crate) fn collect_structures<'tcx>(tcx: TyCtxt<'tcx>, state: &mut StructureState<'_, StableHashingContext<'_>>) -> (
+            // Collect structural representations for entries in this query's
+            // cache, then delegate assembling the final map to
+            // `export_queries::assemble_query_structures` so the macro stays
+            // smaller.
+            pub(crate) fn collect_structures<'tcx>(tcx: TyCtxt<'tcx>, state: &mut StructureState<'_, StableHashingContext<'_'>>) -> (
                 String,
                 inspect::Value,
             ) {
-                let mut map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
+                let mut entries_k: Vec<inspect::Value> = Vec::new();
+                let mut entries_v: Vec<inspect::Value> = Vec::new();
 
                 let query = QueryType::query_dispatcher(tcx);
                 let qcx = QueryCtxt::new(tcx);
@@ -853,49 +856,27 @@ macro_rules! define_queries {
                     cached.push((*k, *v));
                 });
 
-                for (key,_value) in cached {
-                    let k = key.structure(state);
-                    let v = if_query_no_hash!(
-                        [$($modifiers)*]
-                        { ::rustc_data_structures::inspect::Value::Array(vec![]) }
-                        {
-                            let unerased = QueryType::restore_val(_value);
-                            // Ensure we return an inspect::Value here. The
-                            // domain value's `structure()` may return a local
-                            // `Value` type; call through and rely on its
-                            // implementation to produce the inspect::Value.
-                            unerased.structure(state)
-                        }
-                    );
-                    map.push((k, v));
+                for (key, _value) in cached {
+                    entries_k.push(key.structure(state));
+                    let v = if_query_no_hash!([$($modifiers)*] {
+                        ::rustc_data_structures::inspect::Value::Array(vec![])
+                    } {
+                        let unerased = QueryType::restore_val(_value);
+                        unerased.structure(state)
+                    });
+                    entries_v.push(v);
                 }
 
-                // Record type names and sizes for this query's key and value.
-                let key_type_name = std::any::type_name::<queries::$name::Key<'tcx>>();
-                let value_type_name = std::any::type_name::<queries::$name::Value<'tcx>>();
-                let key_size = std::mem::size_of::<queries::$name::Key<'tcx>>();
-                let value_size = std::mem::size_of::<queries::$name::Value<'tcx>>();
-
-                let mut out_map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
-                // Convert entries Vec into a BTreeMap for Value::Map
                 let mut entries_map: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
                     ::std::collections::BTreeMap::new();
-                for (k, v) in map.into_iter() {
+                for (k, v) in entries_k.into_iter().zip(entries_v.into_iter()) {
                     entries_map.insert(k, v);
                 }
-                out_map.push((inspect::Value::String("entries".into()), inspect::Value::Map(entries_map)));
-                out_map.push((inspect::Value::String("key_type".into()), inspect::Value::String(key_type_name.into())));
-                out_map.push((inspect::Value::String("value_type".into()), inspect::Value::String(value_type_name.into())));
-                out_map.push((inspect::Value::String("key_size".into()), inspect::Value::UInt(key_size as u128)));
-                out_map.push((inspect::Value::String("value_size".into()), inspect::Value::UInt(value_size as u128)));
 
-                // Convert out_map Vec to BTreeMap before returning
-                let mut ret_map: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
-                    ::std::collections::BTreeMap::new();
-                for (k, v) in out_map.into_iter() {
-                    ret_map.insert(k, v);
-                }
-                (stringify!($name).to_string(), inspect::Value::Map(ret_map))
+                crate::export_queries::assemble_query_structures::<queries::$name::Key<'tcx>, queries::$name::Value<'tcx>>(
+                    stringify!($name).to_string(),
+                    entries_map,
+                )
             }
         })*}
 
