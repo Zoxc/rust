@@ -294,6 +294,7 @@ pub(crate) fn assemble_query_structures<'tcx, K, QV, C, F>(
 ) -> (String, inspect::Value)
 where
     C: rustc_query_system::query::QueryCache<Key = K>,
+    K: Clone,
     for<'s> K: HashStable<StableHashingContext<'s>>,
     QV: Sized,
     C::Value: Copy,
@@ -305,11 +306,19 @@ where
     let mut entries_map: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
         ::std::collections::BTreeMap::new();
 
+    // Also capture the raw cached entries so consumers can access original
+    // keys/values without calling `structure`. We clone the keys rather
+    // than moving them out of the cache.
+    let mut cached: Vec<(K, C::Value)> = Vec::new();
     cache.iter(&mut |k, v, _| {
+        cached.push((k.clone(), *v));
+    });
+
+    for (k, v) in cached.iter() {
         let k_val = k.structure(state);
         let v_val = get_value(k, v, state);
         entries_map.insert(k_val, v_val);
-    });
+    }
 
     let key_type_name = std::any::type_name::<K>();
     let value_type_name = std::any::type_name::<QV>();
