@@ -176,6 +176,8 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         None => return,
     };
 
+    let _prof_timer = tcx.sess.prof.verbose_generic_activity("export_queries");
+
     // Determine crate name and stable crate id early so the directory
     // scanning can use them. Use the stable crate id (not the crate
     // hash) in the filename to make the exported filename stable across
