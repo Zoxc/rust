@@ -198,10 +198,13 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
     // Compute a stable hash of the top-level structures (no file) and use
     // that as the unique filename. If the file already exists, return
     // without error.
-    let top_no_file = match collect_all_query_structures(tcx, None) {
+    let top_no_file = {
+        let _prof_timer = tcx.sess.prof.verbose_generic_activity("export_queries_hash_pass");
+
+        match collect_all_query_structures(tcx, None) {
         Ok(v) => v,
         Err(_) => return,
-    };
+    }};
 
     use std::hash::Hash;
     use rustc_hashes::Hash128;
