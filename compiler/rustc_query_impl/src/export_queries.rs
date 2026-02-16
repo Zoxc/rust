@@ -10,10 +10,12 @@ use rustc_span::{CachingSourceMapView, Pos, Span};
 
 use crate::PER_QUERY_COLLECT_STRUCTURES_FNS;
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{Read, Write, Seek, SeekFrom};
 use std::path::PathBuf;
 use rustc_span::def_id::LOCAL_CRATE;
 use rustc_serialize as _rustc_serialize; // ensure serde/bincode available via crate features
+use brotli::CompressorWriter;
+use brotli::enc::BrotliEncoderParams;
 
 fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32) -> inspect::Value {
     // Construct a `DefId` from the supplied `u32` crate/def indices
@@ -128,7 +130,13 @@ fn span_value(
 
 /// Collects structural representations for all queries and returns
 /// them as an inspect::Value map: query_name -> { key -> value }
-pub(crate) fn collect_all_query_structures<'tcx>(tcx: TyCtxt<'tcx>) -> inspect::Value {
+pub(crate) fn collect_all_query_structures<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    // File to which per-query compressed payloads will be written as we
+    // iterate over PER_QUERY_COLLECT_STRUCTURES_FNS. We need Seek to obtain
+    // current offsets.
+    file: &mut fs::File,
+) -> Result<inspect::Value, ()> {
     let mut state = StructureState::<'_, StableHashingContext<'_>> {
         def_path: &|crate_num, index| def_path_value(tcx, crate_num, index),
         span_value: &|args, state| span_value(tcx, args, state),
@@ -139,7 +147,42 @@ pub(crate) fn collect_all_query_structures<'tcx>(tcx: TyCtxt<'tcx>) -> inspect::
 
     for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
         let (name, map) = f(tcx, &mut state);
-        out.push((inspect::Value::String(name.into()), map));
+        // If the map is a Map of entries for this query, serialize and
+        // compress it and write it to `file` now. Then replace the map value
+        // with a UInt offset pointing to where the compressed payload
+        // starts.
+        let value_to_store = if let inspect::Value::Map(_) = &map {
+            // Serialize
+            let ser = match bincode::serialize(&map) {
+                Ok(b) => b,
+                Err(_) => return Err(()),
+            };
+
+            // Compress into memory
+            let mut compressed: Vec<u8> = Vec::new();
+            let params = BrotliEncoderParams::default();
+            {
+                let mut compressor = CompressorWriter::with_params(&mut compressed, 4096, &params);
+                if compressor.write_all(&ser).is_err() {
+                    return Err(());
+                }
+            }
+
+            // Obtain current offset in file and write compressed bytes.
+            let offset = match file.seek(SeekFrom::Current(0)) {
+                Ok(o) => o,
+                Err(_) => return Err(()),
+            };
+            if file.write_all(&compressed).is_err() {
+                return Err(());
+            }
+
+            inspect::Value::UInt(offset as u128)
+        } else {
+            map
+        };
+
+        out.push((inspect::Value::String(name.into()), value_to_store));
     }
 
     // Convert Vec into BTreeMap for the Map variant
@@ -149,7 +192,7 @@ pub(crate) fn collect_all_query_structures<'tcx>(tcx: TyCtxt<'tcx>) -> inspect::
         entries_map.insert(k, v);
     }
 
-    inspect::Value::Map(entries_map)
+    Ok(inspect::Value::Map(entries_map))
 }
 
 // Module-scoped helper for exporting query structures when the feature is enabled.
@@ -164,16 +207,7 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         None => return,
     };
 
-    // Collect the structure to write.
-    let value = collect_all_query_structures(tcx);
-
-    // Serialize using bincode (serde). If serialization fails, abort
-    // exporting for this run.
-    let bytes = match bincode::serialize(&value) {
-        Ok(b) => b,
-        Err(_) => return,
-    };
-
+    // Determine crate name/hash early so the directory scanning can use them.
     let crate_name = tcx.crate_name(LOCAL_CRATE).to_string();
     let crate_hash = if tcx.needs_crate_hash() {
         tcx.crate_hash(LOCAL_CRATE).to_hex()
@@ -190,8 +224,7 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         return;
     }
 
-    // Scan existing files to see if an identical file (ignoring dedup
-    // number) already exists and to determine the next dedup number.
+    // Scan existing files to determine next dedup number.
     let mut max_dedup = 0usize;
     if let Ok(read_dir) = fs::read_dir(&dir) {
         for entry in read_dir.flatten() {
@@ -199,25 +232,6 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
             if let Some(fname) = path.file_name().and_then(|s| s.to_str()) {
                 let prefix = format!("{}.{}.", crate_name, crate_hash);
                 if fname.starts_with(&prefix) {
-                    // Attempt to read and compare contents. If the file's
-                    // bytes match our bytes, we're done.
-                    if let Ok(mut f) = fs::File::open(&path) {
-                        let mut existing = Vec::new();
-                        if f.read_to_end(&mut existing).is_ok() {
-                            if existing == bytes {
-                                if tcx.sess.verbose_internals() {
-                                    tcx.sess.dcx().emit_note(
-                                        crate::error::ExportQueriesIdenticalFile {
-                                            path: path.as_path(),
-                                        },
-                                    );
-                                }
-                                return;
-                            }
-                        }
-                    }
-
-                    // Try to parse the trailing dedup number.
                     if let Some(s) = fname.rsplit('.').next() {
                         if let Ok(n) = s.parse::<usize>() {
                             if n >= max_dedup {
@@ -232,32 +246,56 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
 
     let dedup = max_dedup;
     let filename = format!("{}.{}.{}", crate_name, crate_hash, dedup);
-    let mut path = PathBuf::from(dir);
-    path.push(filename);
+    let mut path = PathBuf::from(&dir);
+    path.push(&filename);
 
-    // Try to write the file. If writing fails, emit a diagnostic (non-fatal
-    // warning) so users see the failure rather than silently ignoring it.
-    match fs::File::create(&path) {
-        Ok(mut f) => match f.write_all(&bytes) {
-            Ok(()) => {
-                if tcx.sess.verbose_internals() {
-                    tcx.sess
-                        .dcx()
-                        .emit_note(crate::error::ExportQueriesWroteFile { path: path.as_path() });
-                }
-            }
-            Err(e) => {
-                tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
-                    path: path.as_path(),
-                    err: e.to_string(),
-                });
-            }
-        },
+    // Create the file to stream payloads into.
+    let mut f = match fs::File::create(&path) {
+        Ok(file) => file,
         Err(e) => {
             tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
                 path: path.as_path(),
                 err: e.to_string(),
             });
+            return;
         }
+    };
+
+    // Collect and stream per-query payloads into `f`. This will write the
+    // compressed per-query payloads and return a top-level `Value` where
+    // those entries have been replaced with their offsets.
+    let value = match collect_all_query_structures(tcx, &mut f) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+
+    // Now write the serialized top-level Value and footer.
+    let pos_main = match f.seek(SeekFrom::Current(0)) {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+
+    let bytes = match bincode::serialize(&value) {
+        Ok(b) => b,
+        Err(_) => return,
+    };
+
+    if f.write_all(&bytes).is_err() {
+        tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+            path: path.as_path(),
+            err: "failed to write top-level value".to_string(),
+        });
+        return;
     }
+
+    if f.write_all(&pos_main.to_le_bytes()).is_err() {
+        tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+            path: path.as_path(),
+            err: "failed to write footer".to_string(),
+        });
+        return;
+    }
+
+    // The remainder of the function finishes above (file creation, streaming,
+    // writing top-level value and footer). No further actions needed here.
 }
