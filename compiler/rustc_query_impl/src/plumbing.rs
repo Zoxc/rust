@@ -837,45 +837,37 @@ macro_rules! define_queries {
             }
 
             // Collect structural representations for entries in this query's
-            // cache, then delegate assembling the final map to
-            // `export_queries::assemble_query_structures` so the macro stays
-            // smaller.
-            pub(crate) fn collect_structures<'tcx>(tcx: TyCtxt<'tcx>, state: &mut StructureState<'_, StableHashingContext<'_>>) -> (
-                String,
-                inspect::Value,
-            ) {
-                let mut entries_k: Vec<inspect::Value> = Vec::new();
-                let mut entries_v: Vec<inspect::Value> = Vec::new();
-
+            // cache: pass the cache and a small closure to
+            // `export_queries::assemble_query_structures` so the assembly and
+            // metadata logic live in one place while the macro still provides
+            // the per-query way of obtaining values (and respects `no_hash`).
+            pub(crate) fn collect_structures<'tcx>(
+                tcx: TyCtxt<'tcx>,
+                state: &mut StructureState<'_, StableHashingContext<'_>>,
+            ) -> (String, inspect::Value) {
                 let query = QueryType::query_dispatcher(tcx);
                 let qcx = QueryCtxt::new(tcx);
                 let cache = query.query_cache(qcx);
 
-                let mut cached = Vec::new();
-                cache.iter(&mut |k, v, _| {
-                    cached.push((*k, *v));
-                });
-
-                for (key, _value) in cached {
-                    entries_k.push(key.structure(state));
-                    let v = if_query_no_hash!([$($modifiers)*] {
-                        ::rustc_data_structures::inspect::Value::Array(vec![])
-                    } {
-                        let unerased = QueryType::restore_val(_value);
-                        unerased.structure(state)
-                    });
-                    entries_v.push(v);
-                }
-
-                let mut entries_map: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
-                    ::std::collections::BTreeMap::new();
-                for (k, v) in entries_k.into_iter().zip(entries_v.into_iter()) {
-                    entries_map.insert(k, v);
-                }
-
-                crate::export_queries::assemble_query_structures::<queries::$name::Key<'tcx>, queries::$name::Value<'tcx>>(
+                crate::export_queries::assemble_query_structures::
+                    <
+                        queries::$name::Key<'tcx>,
+                        queries::$name::Value<'tcx>,
+                        queries::$name::Storage<'tcx>,
+                        _
+                    >(
+                    tcx,
                     stringify!($name).to_string(),
-                    entries_map,
+                    cache,
+                    state,
+                    |_key, _value, _state| {
+                        if_query_no_hash!([$($modifiers)*] {
+                            ::rustc_data_structures::inspect::Value::Array(vec![])
+                        } {
+                            let unerased = QueryType::restore_val(*_value);
+                            unerased.structure(_state)
+                        })
+                    }
                 )
             }
         })*}

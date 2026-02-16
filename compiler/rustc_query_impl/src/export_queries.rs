@@ -316,18 +316,36 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
 }
 
 /// Assemble the final per-query structure map from the entries and metadata.
-pub(crate) fn assemble_query_structures<K, V>(
+pub(crate) fn assemble_query_structures<'tcx, K, QV, C, F>(
+    _tcx: TyCtxt<'tcx>,
     name: String,
-    entries_map: ::std::collections::BTreeMap<inspect::Value, inspect::Value>,
+    cache: &C,
+    state: &mut StructureState<'_, StableHashingContext<'_>>,
+    mut get_value: F,
 ) -> (String, inspect::Value)
 where
-    K: Sized,
-    V: Sized,
+    C: rustc_query_system::query::QueryCache<Key = K>,
+    for<'s> K: HashStable<StableHashingContext<'s>>,
+    QV: Sized,
+    C::Value: Copy,
+    F: FnMut(&K, &C::Value, &mut StructureState<'_, StableHashingContext<'_>>) -> inspect::Value,
 {
+    // Build entries by iterating the cache and using the provided closure
+    // to obtain the value representation for each entry. The closure is
+    // responsible for honoring `no_hash` semantics when necessary.
+    let mut entries_map: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
+        ::std::collections::BTreeMap::new();
+
+    cache.iter(&mut |k, v, _| {
+        let k_val = k.structure(state);
+        let v_val = get_value(k, v, state);
+        entries_map.insert(k_val, v_val);
+    });
+
     let key_type_name = std::any::type_name::<K>();
-    let value_type_name = std::any::type_name::<V>();
+    let value_type_name = std::any::type_name::<QV>();
     let key_size = std::mem::size_of::<K>();
-    let value_size = std::mem::size_of::<V>();
+    let value_size = std::mem::size_of::<QV>();
 
     let mut out_map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
     out_map.push((inspect::Value::String("entries".into()), inspect::Value::Map(entries_map)));
