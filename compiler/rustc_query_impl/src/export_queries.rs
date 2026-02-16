@@ -132,10 +132,11 @@ fn span_value(
 /// them as an inspect::Value map: query_name -> { key -> value }
 pub(crate) fn collect_all_query_structures<'tcx>(
     tcx: TyCtxt<'tcx>,
-    // File to which per-query compressed payloads will be written as we
-    // iterate over PER_QUERY_COLLECT_STRUCTURES_FNS. We need Seek to obtain
-    // current offsets.
-    file: &mut fs::File,
+    // Optional file to which per-query compressed payloads will be written as
+    // we iterate over PER_QUERY_COLLECT_STRUCTURES_FNS. We need Seek to
+    // obtain current offsets. If `None` is passed, we will not write payloads
+    // but instead hash each per-query `Map` value and store that hash.
+    file: Option<&mut fs::File>,
 ) -> Result<inspect::Value, ()> {
     let mut state = StructureState::<'_, StableHashingContext<'_>> {
         def_path: &|crate_num, index| def_path_value(tcx, crate_num, index),
@@ -145,39 +146,52 @@ pub(crate) fn collect_all_query_structures<'tcx>(
 
     let mut out: Vec<(inspect::Value, inspect::Value)> = Vec::new();
 
+    use std::hash::Hash;
+    use rustc_hashes::Hash128;
+    use rustc_data_structures::stable_hasher::StableHasher;
+
     for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
         let (name, map) = f(tcx, &mut state);
-        // If the map is a Map of entries for this query, serialize and
-        // compress it and write it to `file` now. Then replace the map value
-        // with a UInt offset pointing to where the compressed payload
-        // starts.
+        // If the map is a Map of entries for this query, either serialize and
+        // compress it and write it to `file` (when file is Some) or compute a
+        // stable hash of the `map` (when file is None) and store that instead
+        // of the payload offset.
         let value_to_store = if let inspect::Value::Map(_) = &map {
-            // Serialize
-            let ser = match bincode::serialize(&map) {
-                Ok(b) => b,
-                Err(_) => return Err(()),
-            };
+            if let Some(file) = file.as_deref_mut() {
+                // Serialize
+                let ser = match bincode::serialize(&map) {
+                    Ok(b) => b,
+                    Err(_) => return Err(()),
+                };
 
-            // Compress into memory
-            let mut compressed: Vec<u8> = Vec::new();
-            let params = BrotliEncoderParams::default();
-            {
-                let mut compressor = CompressorWriter::with_params(&mut compressed, 4096, &params);
-                if compressor.write_all(&ser).is_err() {
+                // Compress into memory
+                let mut compressed: Vec<u8> = Vec::new();
+                let params = BrotliEncoderParams::default();
+                {
+                    let mut compressor = CompressorWriter::with_params(&mut compressed, 4096, &params);
+                    if compressor.write_all(&ser).is_err() {
+                        return Err(());
+                    }
+                }
+
+                // Obtain current offset in file and write compressed bytes.
+                let offset = match file.seek(SeekFrom::Current(0)) {
+                    Ok(o) => o,
+                    Err(_) => return Err(()),
+                };
+                if file.write_all(&compressed).is_err() {
                     return Err(());
                 }
-            }
 
-            // Obtain current offset in file and write compressed bytes.
-            let offset = match file.seek(SeekFrom::Current(0)) {
-                Ok(o) => o,
-                Err(_) => return Err(()),
-            };
-            if file.write_all(&compressed).is_err() {
-                return Err(());
+                inspect::Value::UInt(offset as u128)
+            } else {
+                // No file provided: compute a stable 128-bit hash of the
+                // inspect::Value map and store it as a UInt.
+                let mut hasher = StableHasher::new();
+                map.hash(&mut hasher);
+                let h = hasher.finish::<Hash128>();
+                inspect::Value::UInt(h.as_u128())
             }
-
-            inspect::Value::UInt(offset as u128)
         } else {
             map
         };
