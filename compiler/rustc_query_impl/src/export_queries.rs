@@ -231,6 +231,19 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         }
     };
 
+    // Write a fixed, constant 8-byte u64 header so tools can recognize
+    // this file format. The value is chosen to look random but remains
+    // constant across runs.
+    const MAGIC_HEADER_U64: u64 = 0x9e3793b97f4a7c15u64;
+    let header_bytes = MAGIC_HEADER_U64.to_le_bytes();
+    if f.write_all(&header_bytes).is_err() {
+        tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+            path: path.as_path(),
+            err: "failed to write header".to_string(),
+        });
+        return;
+    }
+
     // Collect and stream per-query payloads into `f`. This will write the
     // compressed per-query payloads and return a top-level `Value` where
     // those entries have been replaced with their offsets.
