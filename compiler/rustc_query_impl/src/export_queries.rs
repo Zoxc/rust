@@ -147,57 +147,11 @@ pub(crate) fn collect_all_query_structures<'tcx>(
 
     let mut out: Vec<(inspect::Value, inspect::Value)> = Vec::new();
 
-    use std::hash::Hash;
-    use rustc_hashes::Hash128;
-    use rustc_data_structures::stable_hasher::StableHasher;
+    // hashing/compression is handled per-query in `assemble_query_structures`
 
     for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
-        let (name, map) = f(tcx, &mut state);
-        // If the map is a Map of entries for this query, either serialize and
-        // compress it and write it to `file` (when file is Some) or compute a
-        // stable hash of the `map` (when file is None) and store that instead
-        // of the payload offset.
-        let value_to_store = if let inspect::Value::Map(_) = &map {
-            if let Some(file) = file.as_deref_mut() {
-                // Serialize
-                let ser = match bincode::serialize(&map) {
-                    Ok(b) => b,
-                    Err(_) => return Err(()),
-                };
-
-                // Compress into memory
-                let mut compressed: Vec<u8> = Vec::new();
-                let params = BrotliEncoderParams::default();
-                {
-                    let mut compressor = CompressorWriter::with_params(&mut compressed, 4096, &params);
-                    if compressor.write_all(&ser).is_err() {
-                        return Err(());
-                    }
-                }
-
-                // Obtain current offset in file and write compressed bytes.
-                let offset = match file.seek(SeekFrom::Current(0)) {
-                    Ok(o) => o,
-                    Err(_) => return Err(()),
-                };
-                if file.write_all(&compressed).is_err() {
-                    return Err(());
-                }
-
-                inspect::Value::UInt(offset as u128)
-            } else {
-                // No file provided: compute a stable 128-bit hash of the
-                // inspect::Value map and store it as a UInt.
-                let mut hasher = StableHasher::new();
-                map.hash(&mut hasher);
-                let h = hasher.finish::<Hash128>();
-                inspect::Value::UInt(h.as_u128())
-            }
-        } else {
-            map
-        };
-
-        out.push((inspect::Value::String(name.into()), value_to_store));
+        let (name, value) = f(tcx, &mut state, file.as_deref_mut());
+        out.push((inspect::Value::String(name.into()), value));
     }
 
     // Convert Vec into BTreeMap for the Map variant
@@ -321,6 +275,7 @@ pub(crate) fn assemble_query_structures<'tcx, K, QV, C, F>(
     name: String,
     cache: &C,
     state: &mut StructureState<'_, StableHashingContext<'_>>,
+    mut file: Option<&mut std::fs::File>,
     mut get_value: F,
 ) -> (String, inspect::Value)
 where
@@ -347,8 +302,56 @@ where
     let key_size = std::mem::size_of::<K>();
     let value_size = std::mem::size_of::<QV>();
 
+    // Decide how to store the entries: either inline as a Map, or as a
+    // compressed payload written into `file` (if provided), or as a stable
+    // 128-bit hash when no file is provided.
+    let entries_value = inspect::Value::Map(entries_map);
+
+    // If a file handle is provided, serialize and compress the entries and
+    // stream them to the file, returning the offset. Otherwise store a stable
+    // hash of the entries.
+    use std::hash::Hash;
+    use rustc_hashes::Hash128;
+    use rustc_data_structures::stable_hasher::StableHasher;
+
+    let stored_entries = if let Some(file) = file.as_deref_mut() {
+        // Serialize
+        let ser = match bincode::serialize(&entries_value) {
+            Ok(b) => b,
+            Err(_) => return (name, inspect::Value::String("<serialize-failed>".into())),
+        };
+
+        // Compress into memory
+        let mut compressed: Vec<u8> = Vec::new();
+        let params = BrotliEncoderParams::default();
+        {
+            let mut compressor = CompressorWriter::with_params(&mut compressed, 4096, &params);
+            if compressor.write_all(&ser).is_err() {
+                return (name, inspect::Value::String("<compress-failed>".into()));
+            }
+        }
+
+        // Obtain current offset in file and write compressed bytes.
+        let offset = match file.seek(SeekFrom::Current(0)) {
+            Ok(o) => o,
+            Err(_) => return (name, inspect::Value::String("<seek-failed>".into())),
+        };
+        if file.write_all(&compressed).is_err() {
+            return (name, inspect::Value::String("<write-failed>".into()));
+        }
+
+        inspect::Value::UInt(offset as u128)
+    } else {
+        // No file provided: compute a stable 128-bit hash of the entries map
+        // and store it as a UInt.
+        let mut hasher = StableHasher::new();
+        entries_value.hash(&mut hasher);
+        let h = hasher.finish::<Hash128>();
+        inspect::Value::UInt(h.as_u128())
+    };
+
     let mut out_map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
-    out_map.push((inspect::Value::String("entries".into()), inspect::Value::Map(entries_map)));
+    out_map.push((inspect::Value::String("entries".into()), stored_entries));
     out_map.push((inspect::Value::String("key_type".into()), inspect::Value::String(key_type_name.into())));
     out_map.push((inspect::Value::String("value_type".into()), inspect::Value::String(value_type_name.into())));
     out_map.push((inspect::Value::String("key_size".into()), inspect::Value::UInt(key_size as u128)));

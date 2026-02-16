@@ -844,11 +844,11 @@ macro_rules! define_queries {
             pub(crate) fn collect_structures<'tcx>(
                 tcx: TyCtxt<'tcx>,
                 state: &mut StructureState<'_, StableHashingContext<'_>>,
+                file: Option<&mut std::fs::File>,
             ) -> (String, inspect::Value) {
                 let query = QueryType::query_dispatcher(tcx);
                 let qcx = QueryCtxt::new(tcx);
                 let cache = query.query_cache(qcx);
-
                 crate::export_queries::assemble_query_structures::
                     <
                         queries::$name::Key<'tcx>,
@@ -860,6 +860,7 @@ macro_rules! define_queries {
                     stringify!($name).to_string(),
                     cache,
                     state,
+                    file,
                     |_key, _value, _state| {
                         if_query_no_hash!([$($modifiers)*] {
                             ::rustc_data_structures::inspect::Value::Array(vec![])
@@ -936,6 +937,7 @@ macro_rules! define_queries {
             for<'tcx> fn(
                 TyCtxt<'tcx>,
                 &mut StructureState<'_, StableHashingContext<'_>>,
+                Option<&mut std::fs::File>,
             ) -> (String, inspect::Value)
         ] = &[$(query_impl::$name::collect_structures),*];
 
