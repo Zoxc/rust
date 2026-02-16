@@ -276,6 +276,28 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         return;
     }
 
+    // Write a trailer magic so readers can quickly sanity-check that the
+    // file ended as expected, then flush the OS buffers. Emit a warning
+    // if either write or flush fails.
+    let trailer_bytes = MAGIC_HEADER_U64.to_le_bytes();
+    if f.write_all(&trailer_bytes).is_err() {
+        tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+            path: path.as_path(),
+            err: "failed to write trailer magic".to_string(),
+        });
+        return;
+    }
+
+    // Ensure all writes succeeded by flushing the OS buffers. If flush
+    // fails, emit a diagnostic so callers know the export may be incomplete.
+    if f.flush().is_err() {
+        tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+            path: path.as_path(),
+            err: "failed to flush output file".to_string(),
+        });
+        return;
+    }
+
     // The remainder of the function finishes above (file creation, streaming,
     // writing top-level value and footer). No further actions needed here.
 }
