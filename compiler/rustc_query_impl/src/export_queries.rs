@@ -193,30 +193,31 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         return;
     }
 
-    // Scan existing files to determine next dedup number.
-    let mut max_dedup = 0usize;
-    if let Ok(read_dir) = fs::read_dir(&dir) {
-        for entry in read_dir.flatten() {
-            let path = entry.path();
-            if let Some(fname) = path.file_name().and_then(|s| s.to_str()) {
-                let prefix = format!("{}.{}.", crate_name, crate_hash);
-                if fname.starts_with(&prefix) {
-                    if let Some(s) = fname.rsplit('.').next() {
-                        if let Ok(n) = s.parse::<usize>() {
-                            if n >= max_dedup {
-                                max_dedup = n + 1
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // Compute a stable hash of the top-level structures (no file) and use
+    // that as the unique filename. If the file already exists, return
+    // without error.
+    let top_no_file = match collect_all_query_structures(tcx, None) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
 
-    let dedup = max_dedup;
-    let filename = format!("{}.{}.{}", crate_name, crate_hash, dedup);
+    use std::hash::Hash;
+    use rustc_hashes::Hash128;
+    use rustc_data_structures::stable_hasher::StableHasher;
+
+    let mut hasher = StableHasher::new();
+    top_no_file.hash(&mut hasher);
+    let h = hasher.finish::<Hash128>();
+    let hex = format!("{:032x}", h.as_u128());
+
+    let filename = format!("{}.{}.{}.rcqe", crate_name, crate_hash, hex);
     let mut path = PathBuf::from(&dir);
     path.push(&filename);
+
+    if path.exists() {
+        // File with identical exported content already exists; nothing to do.
+        return;
+    }
 
     // Create the file to stream payloads into.
     let mut f = match fs::File::create(&path) {
@@ -233,10 +234,10 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
     // Collect and stream per-query payloads into `f`. This will write the
     // compressed per-query payloads and return a top-level `Value` where
     // those entries have been replaced with their offsets.
-        let value = match collect_all_query_structures(tcx, Some(&mut f)) {
-            Ok(v) => v,
-            Err(_) => return,
-        };
+    let value = match collect_all_query_structures(tcx, Some(&mut f)) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
 
     // Now write the serialized top-level Value and footer.
     let pos_main = match f.seek(SeekFrom::Current(0)) {
