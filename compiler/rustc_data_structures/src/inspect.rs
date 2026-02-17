@@ -9,6 +9,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::hash::Hash;
+use std::marker::PhantomData;
 
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
@@ -73,4 +74,35 @@ impl Value {
     pub fn from_static_str(s: &'static str) -> Self {
         Value::String(Cow::Borrowed(s))
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+pub enum Schema {
+    Struct { path: Cow<'static, str>, fields: Vec<(Cow<'static, str>, Schema)> },
+    StructTuple { path: Cow<'static, str>, fields: Vec<Schema> },
+    Enum { path: Cow<'static, str>, variants: Vec<(Cow<'static, str>, Schema)> },
+}
+
+pub struct FileOffset(pub u64);
+
+pub struct SchemaId(UnsafeCell<u8>);
+
+impl SchemaId {
+    pub const fn new() {
+        SchemaId(UnsafeCell::new(0))
+    }
+}
+
+pub struct SpanArgs {
+    pub lo_or_index: u32,
+    pub len_with_tag_or_marker: u16,
+    pub ctxt_or_parent_or_marker: u16,
+}
+
+pub struct StructureState<'a, CTX> {
+    schema_list: FxHashMap<Schema, FileOffset>,
+    pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_, CTX>) -> Value,
+    pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_, CTX>) -> Value,
+    pub crate_num: &'a dyn Fn(u32, &mut StructureState<'_, CTX>) -> Value,
+    pub _marker: PhantomData<&'a CTX>,
 }

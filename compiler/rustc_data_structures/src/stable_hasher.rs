@@ -23,18 +23,7 @@ pub use rustc_stable_hash::{
 
 use crate::inspect::Value;
 
-pub struct SpanArgs {
-    pub lo_or_index: u32,
-    pub len_with_tag_or_marker: u16,
-    pub ctxt_or_parent_or_marker: u16,
-}
-
-pub struct StructureState<'a, CTX> {
-    pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_, CTX>) -> Value,
-    pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_, CTX>) -> Value,
-    pub crate_num: &'a dyn Fn(u32, &mut StructureState<'_, CTX>) -> Value,
-    pub _marker: PhantomData<&'a CTX>,
-}
+pub use crate::inspect::{SpanArgs, StructureState};
 
 /// Something that implements `HashStable<CTX>` can be hashed in a way that is
 /// stable across multiple compilation sessions.
