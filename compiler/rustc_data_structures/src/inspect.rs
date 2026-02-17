@@ -9,11 +9,13 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::hash::Hash;
+use std::io::Write;
 use std::marker::PhantomData;
 
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 
+use crate::fx::FxHashMap;
 /// A compact representation of values for inspection purposes.
 ///
 /// Models scalars and Rust aggregate types: `Struct`, `StructTuple` and
@@ -41,7 +43,7 @@ pub enum Value {
     Schema {
         id: SchemaId,
         values: Vec<Value>,
-    }
+    },
 
     /// Named-field struct value.
     Struct {
@@ -67,7 +69,7 @@ pub enum Value {
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum EnumVariant {
     /// Unit variant (no fields).
-    Unit,
+    Unit(Cow<'static, str>),
     /// Named fields (struct-like variant).
     Named(Cow<'static, str>, Vec<(Cow<'static, str>, Value)>),
     /// Positional fields (tuple-like variant).
