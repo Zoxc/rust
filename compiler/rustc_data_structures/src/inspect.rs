@@ -38,6 +38,11 @@ pub enum Value {
     /// Map of key -> value.
     Map(BTreeMap<Value, Value>),
 
+    Schema {
+        id: SchemaId,
+        values: Vec<Value>,
+    }
+
     /// Named-field struct value.
     Struct {
         path: Cow<'static, str>,
@@ -62,7 +67,7 @@ pub enum Value {
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum EnumVariant {
     /// Unit variant (no fields).
-    Unit(Cow<'static, str>),
+    Unit,
     /// Named fields (struct-like variant).
     Named(Cow<'static, str>, Vec<(Cow<'static, str>, Value)>),
     /// Positional fields (tuple-like variant).
@@ -76,22 +81,35 @@ impl Value {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize)]
 pub enum Schema {
-    Struct { path: Cow<'static, str>, fields: Vec<(Cow<'static, str>, Schema)> },
-    StructTuple { path: Cow<'static, str>, fields: Vec<Schema> },
-    Enum { path: Cow<'static, str>, variants: Vec<(Cow<'static, str>, Schema)> },
+    Struct { path: &'static str, fields: &'static [&'static str] },
+    StructTuple { path: &'static str, field_count: u32 },
+    Enum { path: &'static str, variant_name:  &'static str, variant: EnumVariantSchema },
+}
+
+/// Describes a single enum variant instance.
+#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum EnumVariantSchema {
+    /// Unit variant (no fields).
+    Unit,
+    /// Named fields (struct-like variant).
+    Named(&'static [&'static str]),
+    /// Positional fields (tuple-like variant).
+    Tuple(u32),
 }
 
 pub struct FileOffset(pub u64);
 
-pub struct SchemaId(UnsafeCell<u8>);
+pub struct SchemaRef(UnsafeCell<Schema>);
 
-impl SchemaId {
-    pub const fn new() {
-        SchemaId(UnsafeCell::new(0))
+impl SchemaRef {
+    pub const fn new(schema: Schema) {
+        SchemaRef(UnsafeCell::new(schema))
     }
 }
+
+pub struct SchemaId(pub u32);
 
 pub struct SpanArgs {
     pub lo_or_index: u32,
@@ -100,7 +118,7 @@ pub struct SpanArgs {
 }
 
 pub struct StructureState<'a, CTX> {
-    schema_list: FxHashMap<Schema, FileOffset>,
+    schema_list: FxHashMap<usize, (u32, FileOffset)>,
     pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_, CTX>) -> Value,
     pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_, CTX>) -> Value,
     pub crate_num: &'a dyn Fn(u32, &mut StructureState<'_, CTX>) -> Value,
