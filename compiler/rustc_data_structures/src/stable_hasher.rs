@@ -31,19 +31,9 @@ pub struct SpanArgs {
 
 pub struct StructureState<'a, CTX> {
     pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_, CTX>) -> Value,
-    pub def_path: &'a dyn Fn(u32, u32) -> Value,
+    pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_, CTX>) -> Value,
+    pub crate_num: &'a dyn Fn(u32, &mut StructureState<'_, CTX>) -> Value,
     pub _marker: PhantomData<&'a CTX>,
-}
-
-impl<'a, CTX> StructureState<'a, CTX> {
-    /// Helper to obtain a structural representation of a `DefPath`.
-    ///
-    /// Some callers previously accessed a `def_path` method on `StructureState`.
-    /// Provide that API surface so existing call sites work while the
-    /// `def_path` plumbing is reconciled.
-    pub fn def_path(&mut self, crate_num: u32, def_index: u32) -> Value {
-        (self.def_path)(crate_num, def_index)
-    }
 }
 
 /// Something that implements `HashStable<CTX>` can be hashed in a way that is

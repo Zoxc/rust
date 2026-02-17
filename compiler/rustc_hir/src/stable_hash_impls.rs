@@ -90,7 +90,7 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for OwnerNodes<'
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
             fields: vec![(
                 std::borrow::Cow::Borrowed("hash"),
-                opt_hash_including_bodies.unwrap().structure(state),
+                opt_hash_including_bodies.structure(state),
             )],
         }
     }
@@ -106,7 +106,7 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for DelayedLints {
         let DelayedLints { opt_hash, .. } = *self;
         inspect::Value::Struct {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![(std::borrow::Cow::Borrowed("hash"), opt_hash.unwrap().structure(state))],
+            fields: vec![(std::borrow::Cow::Borrowed("hash"), opt_hash.structure(state))],
         }
     }
 }
@@ -123,7 +123,7 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for AttributeMap
         let AttributeMap { opt_hash, define_opaque: _, map: _ } = *self;
         inspect::Value::Struct {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![(std::borrow::Cow::Borrowed("hash"), opt_hash.unwrap().structure(state))],
+            fields: vec![(std::borrow::Cow::Borrowed("hash"), opt_hash.structure(state))],
         }
     }
 }
@@ -138,10 +138,7 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for Crate<'_> {
         let Crate { owners: _, opt_hir_hash } = self;
         inspect::Value::Struct {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![(
-                std::borrow::Cow::Borrowed("hash"),
-                opt_hir_hash.unwrap().structure(state),
-            )],
+            fields: vec![(std::borrow::Cow::Borrowed("hash"), opt_hir_hash.structure(state))],
         }
     }
 }

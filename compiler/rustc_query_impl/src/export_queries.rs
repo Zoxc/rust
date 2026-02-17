@@ -3,8 +3,8 @@ use std::marker::PhantomData;
 
 use rustc_data_structures::inspect::{self, EnumVariant, Value};
 use rustc_data_structures::stable_hasher::{HashStable, SpanArgs, StructureState};
+use rustc_hir::def_id::CrateNum;
 use rustc_middle::ty::TyCtxt;
-use rustc_middle::ty::print::with_no_trimmed_paths;
 use rustc_query_system::ich::StableHashingContext;
 use rustc_span::{CachingSourceMapView, Pos, Span};
 
@@ -18,14 +18,21 @@ use rustc_span::def_id::LOCAL_CRATE;
 use snap::write::FrameEncoder;
 // Cursor was used in an earlier approach; no longer needed.
 
-fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32) -> inspect::Value {
+fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32,
+    state: &mut StructureState<'_, StableHashingContext<'_>>,) -> inspect::Value {
     // Construct a `DefId` from the supplied `u32` crate/def indices
     // and return an `inspect::Value::String` containing the def path.
     let def_id = rustc_span::def_id::DefId {
         krate: rustc_span::def_id::CrateNum::from_u32(crate_num),
         index: rustc_span::def_id::DefIndex::from_u32(index),
     };
-    inspect::Value::String(with_no_trimmed_paths!(tcx.def_path_str(def_id).into()))
+    tcx.def_path(def_id).structure(state)
+}
+
+fn crate_num_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32,
+    state: &mut StructureState<'_, StableHashingContext<'_>>,) -> inspect::Value {
+        tcx.def_path_hash(
+        CrateNum::from_u32(crate_num).as_def_id()).stable_crate_id().structure(state)
 }
 
 fn span_value(
@@ -140,7 +147,8 @@ pub(crate) fn collect_all_query_structures<'tcx>(
     mut file: Option<&mut fs::File>,
 ) -> Result<inspect::Value, ()> {
     let mut state = StructureState::<'_, StableHashingContext<'_>> {
-        def_path: &|crate_num, index| def_path_value(tcx, crate_num, index),
+        def_path: &|crate_num, index, state| def_path_value(tcx, crate_num, index, state),
+        crate_num: &|crate_num, state| crate_num_value(tcx, crate_num, state),
         span_value: &|args, state| span_value(tcx, args, state),
         _marker: PhantomData,
     };

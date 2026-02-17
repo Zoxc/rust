@@ -407,7 +407,7 @@ rustc_data_structures::define_id_collections!(
 impl<CTX: HashStableContext> HashStable<CTX> for DefId {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        state.def_path(self.krate.as_u32(), self.index.as_u32())
+        (state.def_path)(self.krate.as_u32(), self.index.as_u32(), state)
     }
 
     #[inline]
@@ -434,10 +434,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for LocalDefId {
 impl<CTX: HashStableContext> HashStable<CTX> for CrateNum {
     #[inline]
     fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
-        inspect::Value::StructTuple {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![self.as_def_id().structure(state)],
-        }
+        (state.crate_num)(self.as_u32(), state)
     }
 
     #[inline]
