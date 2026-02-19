@@ -11,7 +11,6 @@ use std::cell::UnsafeCell;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::hash::Hash;
-use std::io::Write;
 use std::marker::PhantomData;
 
 use ordered_float::OrderedFloat;
@@ -123,13 +122,11 @@ pub struct SpanArgs {
 }
 
 pub trait Write {
-    pub fn write_u128(&mut self, value: u 128) {
-        todo!()
-    }
+    fn write_u128(&mut self, value: u128);
 }
 
-pub struct StructureState<'a, CTX> {
-    pub schema_list: FxHashMap<usize, (u32, &'static SchemaRef)>,
+pub struct StructureState<'a, CTX, W> {
+    pub schema_list: FxHashMap<usize, (SchemaId, &'static SchemaRef)>,
     pub writer: W,
     pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_, CTX>) -> Value,
     pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_, CTX>) -> Value,
@@ -137,19 +134,15 @@ pub struct StructureState<'a, CTX> {
     pub _marker: PhantomData<&'a CTX>,
 }
 
-impl<'a, CTX> StructureState<'a, CTX> {
+impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
     pub fn intern_schema(&mut self, schema: &'static SchemaRef) -> SchemaId {
         let key = schema as *const SchemaRef as usize;
-        if let Some(&id) = self.schema_list.get(&key) {
-            return id;
+        if let Some(id) = self.schema_list.get(&key) {
+            return id.0;
         }
 
         let id = SchemaId(self.schema_list.len() as u32);
         self.schema_list.insert(key, (id, schema));
         id
-    }
-
-    pub fn schema_list(&self) -> &FxHashMap<usize, SchemaId> {
-        &self.schema_list
     }
 }
