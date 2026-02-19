@@ -124,6 +124,7 @@ pub struct SpanArgs {
 
 pub trait Write {
     fn write_u128(&mut self, value: u128);
+    fn write_i128(&mut self, value: i128);
     fn write_bytes(&mut self, bytes: &[u8]);
 }
 
@@ -155,12 +156,24 @@ impl Write for FileWriter {
             let _ = f.write_all(&value.to_le_bytes());
         }
     }
+
+    fn write_i128(&mut self, value: i128) {
+        if let Some(f) = &mut self.0 {
+            let _ = f.write_all(&value.to_le_bytes());
+        }
+    }
 }
 
 // Implement `Write` for an optional mutable file reference so callers can
 // pass `Option<&mut File>` as the `W` type parameter on `StructureState`.
 impl<'a> Write for Option<&'a mut File> {
     fn write_u128(&mut self, value: u128) {
+        if let Some(f) = self {
+            let _ = f.write_all(&value.to_le_bytes());
+        }
+    }
+
+    fn write_i128(&mut self, value: i128) {
         if let Some(f) = self {
             let _ = f.write_all(&value.to_le_bytes());
         }
@@ -196,7 +209,7 @@ impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
     }
 
     pub fn write_int(&mut self, v: i128) {
-        self.writer.write_bytes(&v.to_le_bytes());
+        self.writer.write_i128(v);
     }
 
     pub fn write_uint(&mut self, v: u128) {
