@@ -176,12 +176,16 @@ impl<'a> Write for Option<&'a mut File> {
     }
 }
 
-pub struct StructureState<'a, CTX, W> {
+pub struct State<'a> {
     pub schema_list: FxHashMap<usize, (SchemaId, &'static SchemaRef)>,
+    pub span_value: &'a dyn Fn(SpanArgs, &mut State, &mut dyn Write),
+    pub def_path: &'a dyn Fn(u32, u32, &mut State, &mut dyn Write),
+    pub crate_num: &'a dyn Fn(u32, &mut State, &mut dyn Write),
+}
+
+pub struct StructureState<'a, CTX, W> {
+    pub state: &'a mut State<'a>,
     pub writer: W,
-    pub span_value: &'a dyn Fn(SpanArgs, &mut dyn StructureStateOps<CTX>),
-    pub def_path: &'a dyn Fn(u32, u32, &mut dyn StructureStateOps<CTX>),
-    pub crate_num: &'a dyn Fn(u32, &mut dyn StructureStateOps<CTX>),
     pub _marker: PhantomData<&'a CTX>,
 }
 
