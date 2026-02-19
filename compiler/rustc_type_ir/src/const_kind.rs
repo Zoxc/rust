@@ -131,7 +131,10 @@ impl<CTX> HashStable<CTX> for InferConst {
         }
     }
 
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> inspect::Value {
         match self {
             InferConst::Var(_) => inspect::Value::Enum {
                 path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),

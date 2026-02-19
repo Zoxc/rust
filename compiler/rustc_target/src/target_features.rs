@@ -49,7 +49,10 @@ impl<CTX> HashStable<CTX> for Stability {
     }
 
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, CTX, W>,
+    ) -> inspect::Value {
         use inspect::EnumVariant;
 
         let variant = match self {

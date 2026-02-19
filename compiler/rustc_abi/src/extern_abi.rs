@@ -222,9 +222,9 @@ impl Hash for ExternAbi {
 #[cfg(feature = "nightly")]
 impl<C> HashStable<C> for ExternAbi {
     #[inline]
-    fn structure(
+    fn structure<W: ::rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'_, C>,
+        _state: &mut StructureState<'_, C, W>,
     ) -> ::rustc_data_structures::inspect::Value {
         // Preserve enum semantics in inspection output.
         ::rustc_data_structures::inspect::Value::Enum {

@@ -171,7 +171,10 @@ use crate::stable_hasher::StableOrd;
 
 impl<CTX> HashStable<CTX> for Fingerprint {
     #[inline]
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> crate::inspect::Value {
         // Preserve the `Fingerprint` type while still using its canonical
         // 16-byte representation.
         crate::inspect::Value::StructTuple {

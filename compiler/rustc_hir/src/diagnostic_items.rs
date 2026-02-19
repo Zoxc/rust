@@ -22,7 +22,10 @@ impl<CTX: crate::HashStableContext> HashStable<CTX> for DiagnosticItems {
         self.name_to_id.hash_stable(ctx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, CTX, W>,
+    ) -> inspect::Value {
         // Represent by the name -> id mapping which is the primary data used for hashing,
         // but preserve the wrapper type.
         inspect::Value::Struct {

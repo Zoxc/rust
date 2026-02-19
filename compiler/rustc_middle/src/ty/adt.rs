@@ -174,9 +174,9 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
         hash.hash_stable(hcx, hasher);
     }
 
-    fn structure<'s>(
+    fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
-        state: &mut StructureState<'s, StableHashingContext<'a>>,
+        state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> inspect::Value {
         // Represent ADT definition by its DefId and invariant layout information.
         inspect::Value::Struct {

@@ -121,7 +121,7 @@ impl PartialEq<&[Symbol]> for Path {
 }
 
 impl<CTX: rustc_span::HashStableContext> HashStable<CTX> for Path {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
         let segments = self.segments.iter().map(|s| s.ident.structure(state)).collect();
         inspect::Value::Struct {
             path: std::any::type_name::<Self>().into(),

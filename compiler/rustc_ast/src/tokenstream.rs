@@ -139,7 +139,7 @@ impl<D: SpanDecoder> Decodable<D> for LazyAttrTokenStream {
 }
 
 impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
         // Preserve wrapper type; avoid a Debug-only string representation.
         inspect::Value::Enum {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
@@ -836,7 +836,7 @@ impl<CTX> HashStable<CTX> for TokenStream
 where
     CTX: crate::HashStableContext,
 {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
         let mut out = Vec::new();
         for sub_tt in self.iter() {
             out.push(inspect::Value::from(sub_tt.structure(state)));

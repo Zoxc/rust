@@ -42,7 +42,10 @@ impl fmt::Display for Svh {
 
 impl<T> stable_hasher::HashStable<T> for Svh {
     #[inline]
-    fn structure(&self, state: &mut stable_hasher::StructureState<'_, T>) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        state: &mut stable_hasher::StructureState<'_, T, W>,
+    ) -> crate::inspect::Value {
         let Svh { hash } = *self;
         crate::inspect::Value::StructTuple {
             path: std::any::type_name::<Self>().into(),

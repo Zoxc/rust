@@ -144,7 +144,10 @@ impl LintExpectationId {
 
 impl<HCX: HashStableContext> HashStable<HCX> for LintExpectationId {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, HCX>) -> Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, HCX, W>,
+    ) -> Value {
         match self {
             LintExpectationId::Stable { hir_id, attr_index, lint_index: Some(lint_index) } => {
                 Value::Struct {
@@ -651,7 +654,10 @@ impl<HCX> HashStable<HCX> for LintId {
     }
 
     #[inline]
-    fn structure(&self, _state: &mut StructureState<'_, HCX>) -> Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, HCX, W>,
+    ) -> Value {
         // Represent `LintId` structurally to preserve the wrapper type.
         Value::Struct {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),

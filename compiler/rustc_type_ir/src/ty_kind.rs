@@ -686,7 +686,10 @@ impl<CTX> HashStable<CTX> for InferTy {
         }
     }
 
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> Value {
         use InferTy::*;
         match self {
             TyVar(_) => inspect::Value::Enum {

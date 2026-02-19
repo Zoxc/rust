@@ -172,7 +172,10 @@ impl<CTX> crate::ty::HashStable<CTX> for ScalarInt {
         self.size.get().hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> inspect::Value {
         // Represent the raw bytes (little-endian) as binary per canonical representation
         inspect::Value::StructTuple {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),

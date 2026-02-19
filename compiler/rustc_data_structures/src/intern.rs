@@ -107,7 +107,10 @@ impl<T, CTX> HashStable<CTX> for Interned<'_, T>
 where
     T: HashStable<CTX>,
 {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, CTX, W>,
+    ) -> crate::inspect::Value {
         // Preserve the `Interned` wrapper to indicate this is an interned pointer.
         crate::inspect::Value::Struct {
             path: std::borrow::Cow::Borrowed("Interned"),

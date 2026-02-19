@@ -18,8 +18,12 @@ use rustc_span::def_id::LOCAL_CRATE;
 use snap::write::FrameEncoder;
 // Cursor was used in an earlier approach; no longer needed.
 
-fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32,
-    state: &mut StructureState<'_, StableHashingContext<'_>>,) -> inspect::Value {
+fn def_path_value<'tcx, W: rustc_data_structures::inspect::Write>(
+    tcx: TyCtxt<'tcx>,
+    crate_num: u32,
+    index: u32,
+    state: &mut StructureState<'_, StableHashingContext<'_>, W>,
+) -> inspect::Value {
     // Construct a `DefId` from the supplied `u32` crate/def indices
     // and return an `inspect::Value::String` containing the def path.
     let def_id = rustc_span::def_id::DefId {
@@ -29,16 +33,20 @@ fn def_path_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32, index: u32,
     tcx.def_path(def_id).structure(state)
 }
 
-fn crate_num_value<'tcx>(tcx: TyCtxt<'tcx>, crate_num: u32,
-    state: &mut StructureState<'_, StableHashingContext<'_>>,) -> inspect::Value {
-        tcx.def_path_hash(
-        CrateNum::from_u32(crate_num).as_def_id()).stable_crate_id().structure(state)
+fn crate_num_value<'tcx, W: rustc_data_structures::inspect::Write>(
+    tcx: TyCtxt<'tcx>,
+    crate_num: u32,
+    state: &mut StructureState<'_, StableHashingContext<'_>, W>,
+) -> inspect::Value {
+    tcx.def_path_hash(CrateNum::from_u32(crate_num).as_def_id())
+        .stable_crate_id()
+        .structure(state)
 }
 
-fn span_value(
+fn span_value<W: rustc_data_structures::inspect::Write>(
     tcx: TyCtxt<'_>,
     span_args: SpanArgs,
-    state: &mut StructureState<'_, StableHashingContext<'_>>,
+    state: &mut StructureState<'_, StableHashingContext<'_>, W>,
 ) -> inspect::Value {
     let span = Span::from_args(span_args);
 
@@ -146,7 +154,7 @@ pub(crate) fn collect_all_query_structures<'tcx>(
     // but instead hash each per-query `Map` value and store that hash.
     file: Option<&mut fs::File>,
 ) -> Result<inspect::Value, ()> {
-    let mut state = StructureState::<'_, StableHashingContext<'_>> {
+    let mut state: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> = StructureState {
         schema_list: Default::default(),
         file,
         def_path: &|crate_num, index, state| def_path_value(tcx, crate_num, index, state),
@@ -318,11 +326,11 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
 }
 
 /// Assemble the final per-query structure map from the entries and metadata.
-pub(crate) fn assemble_query_structures<'tcx, K, QV, C, F>(
+pub(crate) fn assemble_query_structures<'tcx, K, QV, C, F, W>(
     _tcx: TyCtxt<'tcx>,
     name: String,
     cache: &C,
-    state: &mut StructureState<'_, StableHashingContext<'_>>,
+    state: &mut StructureState<'_, StableHashingContext<'_>, W>,
     mut get_value: F,
 ) -> (String, inspect::Value)
 where
@@ -331,7 +339,7 @@ where
     for<'s> K: HashStable<StableHashingContext<'s>>,
     QV: Sized,
     C::Value: Copy,
-    F: FnMut(&K, &C::Value, &mut StructureState<'_, StableHashingContext<'_>>) -> inspect::Value,
+    F: FnMut(&K, &C::Value, &mut StructureState<'_, StableHashingContext<'_>, W>) -> inspect::Value,
 {
     // Build entries by iterating the cache and using the provided closure
     // to obtain the value representation for each entry. The closure is

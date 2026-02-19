@@ -262,7 +262,10 @@ where
     P: HashStable<HCX> + Aligned + ?Sized,
     T: Tag + HashStable<HCX>,
 {
-    fn structure(&self, state: &mut StructureState<'_, HCX>) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, HCX, W>,
+    ) -> crate::inspect::Value {
         crate::inspect::Value::Struct {
             path: std::any::type_name::<Self>().into(),
             fields: vec![

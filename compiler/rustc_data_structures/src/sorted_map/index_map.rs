@@ -131,7 +131,10 @@ where
     K: HashStable<C>,
     V: HashStable<C>,
 {
-    fn structure(&self, state: &mut StructureState<'_, C>) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, C, W>,
+    ) -> crate::inspect::Value {
         let SortedIndexMultiMap { items, idx_sorted_by_item_key: _ } = self;
         crate::inspect::Value::Struct {
             path: std::any::type_name::<Self>().into(),

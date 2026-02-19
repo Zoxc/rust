@@ -418,7 +418,10 @@ impl<V: Hash + Eq, I: Iterator<Item = V>> From<UnordItems<V, I>> for UnordSet<V>
 }
 
 impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
-    fn structure(&self, state: &mut StructureState<'_, HCX>) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, HCX, W>,
+    ) -> crate::inspect::Value {
         // Represent the set structurally in an order-independent way without
         // using hashing. Use a MessagePack map where each key is the
         // structural representation of an element and the value is `1`.
@@ -669,7 +672,10 @@ where
 }
 
 impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> for UnordMap<K, V> {
-    fn structure(&self, state: &mut StructureState<'_, HCX>) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, HCX, W>,
+    ) -> crate::inspect::Value {
         // Represent the map structurally as a MessagePack map of key->value
         // where both key and value are their structural representations.
         let len = self.inner.len();
@@ -759,7 +765,10 @@ impl<T, I: Iterator<Item = T>> From<UnordItems<T, I>> for UnordBag<T> {
 }
 
 impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
-    fn structure(&self, state: &mut StructureState<'_, HCX>) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, HCX, W>,
+    ) -> crate::inspect::Value {
         // Represent bag (multiset) structurally as a MessagePack map from
         // element-structure -> count. This encodes multiplicity without
         // depending on iteration order or hashing.

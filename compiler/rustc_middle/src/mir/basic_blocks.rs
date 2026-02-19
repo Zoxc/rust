@@ -175,9 +175,9 @@ impl<CTX> HashStable<CTX> for Cache {
     #[inline]
     fn hash_stable(&self, _: &mut CTX, _: &mut StableHasher) {}
 
-    fn structure(
+    fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'_, CTX>,
+        _state: &mut StructureState<'_, CTX, W>,
     ) -> rustc_data_structures::inspect::Value {
         // Cache is transient and ignored for hashing; preserve wrapper type.
         rustc_data_structures::inspect::Value::Enum {

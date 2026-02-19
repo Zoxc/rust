@@ -150,7 +150,10 @@ impl<CTX> HashStable<CTX> for LangItem {
         ::std::hash::Hash::hash(self, hasher);
     }
 
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> inspect::Value {
         inspect::Value::Enum {
             path: std::any::type_name::<Self>().into(),
             variant: inspect::EnumVariant::Unit(self.variant_name().into()),

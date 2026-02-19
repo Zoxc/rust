@@ -127,7 +127,10 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
         }
     }
 
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, CTX, W>,
+    ) -> inspect::Value {
         use std::borrow::Cow;
 
         inspect::Value::Struct {

@@ -49,9 +49,9 @@ where
         hash.hash_stable(hcx, hasher);
     }
 
-    fn structure<'s>(
+    fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'s, StableHashingContext<'a>>,
+        _state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> inspect::Value {
         use std::borrow::Cow;
 
@@ -84,9 +84,9 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for ty::GenericArg<'tcx> {
         self.kind().hash_stable(hcx, hasher);
     }
 
-    fn structure<'s>(
+    fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
-        state: &mut StructureState<'s, StableHashingContext<'a>>,
+        state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> inspect::Value {
         // Delegate to the kind's structural representation
         self.kind().structure(state)
@@ -103,9 +103,9 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
         });
     }
 
-    fn structure<'s>(
+    fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'s, StableHashingContext<'a>>,
+        _state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> inspect::Value {
         // We cannot access tcx here; represent AllocId by its resolved allocation's structure when available.
         // Fall back to a tag indicating AllocId.
@@ -121,9 +121,9 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance
         self.into_parts().hash_stable(hcx, hasher);
     }
 
-    fn structure<'s>(
+    fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
-        state: &mut StructureState<'s, StableHashingContext<'a>>,
+        state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> inspect::Value {
         // Represent by its decomposed parts
         let (alloc, a, b) = self.into_parts();

@@ -32,6 +32,7 @@ use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
+use rustc_data_structures::inspect::Write as _InspectWrite;
 use rustc_data_structures::sync::Lock;
 use rustc_data_structures::unhash::UnhashMap;
 use rustc_hashes::Hash64;
@@ -1519,7 +1520,7 @@ fn update_disambiguator(expn_data: &mut ExpnData, mut ctx: impl HashStableContex
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
         // Represent SyntaxContext by either nil (root) or [expn_id.structure, transparency.structure]
         let variant = if self.is_root() {
             inspect::EnumVariant::Unit("Root".into())
@@ -1550,7 +1551,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
         // Represent ExpnId structurally as [krate.structure, local_id]
         inspect::Value::Struct {
             path: std::any::type_name::<Self>().into(),
@@ -1575,7 +1576,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for LocalExpnId {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
         inspect::Value::StructTuple {
             path: std::any::type_name::<Self>().into(),
             fields: vec![self.to_expn_id().structure(state)],

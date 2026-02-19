@@ -280,9 +280,9 @@ impl<'a> HashStable<StableHashingContext<'a>> for EffectiveVisibilities {
         map.hash_stable(hcx, hasher);
     }
 
-    fn structure<'s>(
+    fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
-        state: &mut StructureState<'s, StableHashingContext<'a>>,
+        state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> inspect::Value {
         let EffectiveVisibilities { ref map } = *self;
         inspect::Value::from(map.structure(state))

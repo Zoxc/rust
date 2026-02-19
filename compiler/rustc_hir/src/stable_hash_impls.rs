@@ -82,7 +82,10 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for OwnerNodes<'
         opt_hash_including_bodies.unwrap().hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<'_, HirCtx>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, HirCtx, W>,
+    ) -> inspect::Value {
         // Represent by the cached hash including bodies which is the canonical representation
         // used above for hashing, but preserve the wrapper type.
         let OwnerNodes { opt_hash_including_bodies, nodes: _, bodies: _ } = *self;
@@ -102,7 +105,10 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for DelayedLints {
         opt_hash.unwrap().hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<'_, HirCtx>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, HirCtx, W>,
+    ) -> inspect::Value {
         let DelayedLints { opt_hash, .. } = *self;
         inspect::Value::Struct {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
@@ -119,7 +125,10 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for AttributeMap
         opt_hash.unwrap().hash_stable(hcx, hasher);
     }
 
-    fn structure(&self, state: &mut StructureState<'_, HirCtx>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, HirCtx, W>,
+    ) -> inspect::Value {
         let AttributeMap { opt_hash, define_opaque: _, map: _ } = *self;
         inspect::Value::Struct {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
@@ -134,7 +143,10 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for Crate<'_> {
         opt_hir_hash.unwrap().hash_stable(hcx, hasher)
     }
 
-    fn structure(&self, state: &mut StructureState<'_, HirCtx>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, HirCtx, W>,
+    ) -> inspect::Value {
         let Crate { owners: _, opt_hir_hash } = self;
         inspect::Value::Struct {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
@@ -148,7 +160,10 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for HashIgnoredAttrId 
         /* we don't hash HashIgnoredAttrId, we ignore them */
     }
 
-    fn structure(&self, _state: &mut StructureState<'_, HirCtx>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, HirCtx, W>,
+    ) -> inspect::Value {
         // This value is ignored for hashing.
         inspect::Value::Enum {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),

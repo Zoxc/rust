@@ -128,9 +128,9 @@ pub trait Write {
 pub struct StructureState<'a, CTX, W> {
     pub schema_list: FxHashMap<usize, (SchemaId, &'static SchemaRef)>,
     pub writer: W,
-    pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_, CTX>) -> Value,
-    pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_, CTX>) -> Value,
-    pub crate_num: &'a dyn Fn(u32, &mut StructureState<'_, CTX>) -> Value,
+    pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_, CTX, W>) -> Value,
+    pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_, CTX, W>) -> Value,
+    pub crate_num: &'a dyn Fn(u32, &mut StructureState<'_, CTX, W>) -> Value,
     pub _marker: PhantomData<&'a CTX>,
 }
 

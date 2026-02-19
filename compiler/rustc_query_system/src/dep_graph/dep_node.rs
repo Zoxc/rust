@@ -311,7 +311,10 @@ impl<HCX> HashStable<HCX> for WorkProductId {
         self.hash.hash_stable(hcx, hasher)
     }
 
-    fn structure(&self, state: &mut StructureState<'_, HCX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, HCX, W>,
+    ) -> inspect::Value {
         // Fingerprint already has a structure() impl that returns Binary(16)
         inspect::Value::StructTuple {
             path: std::any::type_name::<Self>().into(),

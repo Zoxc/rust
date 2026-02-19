@@ -21,6 +21,7 @@ pub use rustc_stable_hash::{
     FromStableHash, SipHasher128Hash as StableHasherHash, StableSipHasher128 as StableHasher,
 };
 
+use crate::inspect;
 use crate::inspect::Value;
 
 pub use crate::inspect::{SpanArgs, StructureState};
@@ -158,7 +159,10 @@ macro_rules! impl_stable_traits_for_trivial_type {
     ($t:ty, $structure_fn:expr) => {
         impl<CTX> $crate::stable_hasher::HashStable<CTX> for $t {
             #[inline]
-            fn structure<'s>(&self, _state: &mut StructureState<'s, CTX>) -> Value {
+            fn structure<'s, W: crate::inspect::Write>(
+                &self,
+                _state: &mut StructureState<'s, CTX, W>,
+            ) -> Value {
                 ($structure_fn)(self)
             }
 
@@ -208,7 +212,7 @@ impl_stable_traits_for_trivial_type!(Hash64, |h: &Hash64| Value::Binary(
 // hashing we want to hash the full 128-bit hash.
 impl<CTX> HashStable<CTX> for Hash128 {
     #[inline]
-    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
+    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
         // Represent the 128-bit hash as a 16-byte binary.
         let bytes = self.as_u128().to_le_bytes();
         Value::Binary(bytes.to_vec())
@@ -229,7 +233,7 @@ impl StableOrd for Hash128 {
 }
 
 impl<CTX> HashStable<CTX> for ! {
-    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
+    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
         unreachable!()
     }
 
@@ -239,7 +243,7 @@ impl<CTX> HashStable<CTX> for ! {
 }
 
 impl<CTX, T> HashStable<CTX> for PhantomData<T> {
-    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
+    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
         // Preserve the wrapper type in inspection output.
         Value::Struct { path: std::borrow::Cow::Borrowed("PhantomData"), fields: Vec::new() }
     }
@@ -249,7 +253,10 @@ impl<CTX, T> HashStable<CTX> for PhantomData<T> {
 
 impl<CTX> HashStable<CTX> for NonZero<u32> {
     #[inline]
-    fn structure<'s>(&self, state: &mut StructureState<'s, CTX>) -> Value {
+    fn structure<'s, W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'s, CTX, W>,
+    ) -> Value {
         // Show the wrapper type so inspection output retains the fact this is a NonZero.
         Value::Struct {
             path: std::borrow::Cow::Borrowed("NonZero<u32>"),
@@ -265,7 +272,7 @@ impl<CTX> HashStable<CTX> for NonZero<u32> {
 
 impl<CTX> HashStable<CTX> for NonZero<usize> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         Value::Struct {
             path: std::borrow::Cow::Borrowed("NonZero<usize>"),
             fields: vec![(std::borrow::Cow::Borrowed("value"), self.get().structure(state))],
@@ -279,7 +286,10 @@ impl<CTX> HashStable<CTX> for NonZero<usize> {
 }
 
 impl<CTX> HashStable<CTX> for f32 {
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> Value {
         Value::F64(ordered_float::OrderedFloat(*self as f64))
     }
 
@@ -290,7 +300,10 @@ impl<CTX> HashStable<CTX> for f32 {
 }
 
 impl<CTX> HashStable<CTX> for f64 {
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> Value {
         Value::F64(ordered_float::OrderedFloat(*self))
     }
 
@@ -302,7 +315,7 @@ impl<CTX> HashStable<CTX> for f64 {
 
 impl<CTX> HashStable<CTX> for ::std::cmp::Ordering {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         // Preserve enum semantics in inspection output.
         let variant = match self {
             std::cmp::Ordering::Less => std::borrow::Cow::Borrowed("Less"),
@@ -324,7 +337,7 @@ impl<CTX> HashStable<CTX> for ::std::cmp::Ordering {
 
 impl<T1: HashStable<CTX>, CTX> HashStable<CTX> for (T1,) {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         let (ref _0,) = *self;
         // Preserve tuple semantics in inspection output.
         Value::Tuple(vec![_0.structure(state)])
@@ -338,7 +351,7 @@ impl<T1: HashStable<CTX>, CTX> HashStable<CTX> for (T1,) {
 }
 
 impl<T1: HashStable<CTX>, T2: HashStable<CTX>, CTX> HashStable<CTX> for (T1, T2) {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         let (ref _0, ref _1) = *self;
         let mut out = Vec::new();
         out.push(_0.structure(state));
@@ -368,7 +381,7 @@ where
     T2: HashStable<CTX>,
     T3: HashStable<CTX>,
 {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         let (ref _0, ref _1, ref _2) = *self;
         let mut out = Vec::new();
         out.push(_0.structure(state));
@@ -401,7 +414,7 @@ where
     T3: HashStable<CTX>,
     T4: HashStable<CTX>,
 {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         let (ref _0, ref _1, ref _2, ref _3) = *self;
         let mut out = Vec::new();
         out.push(_0.structure(state));
@@ -432,7 +445,10 @@ impl<T1: StableOrd, T2: StableOrd, T3: StableOrd, T4: StableOrd> StableOrd for (
 }
 
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for [T] {
-    default fn structure<'s>(&self, state: &mut StructureState<'s, CTX>) -> Value {
+    default fn structure<'s, W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'s, CTX, W>,
+    ) -> Value {
         // Represent slices/arrays using a MessagePack array that mirrors
         // the in-memory sequence of elements (no explicit length prefix).
         let mut out = Vec::with_capacity(self.len());
@@ -453,7 +469,10 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for [T] {
 }
 
 impl<CTX> HashStable<CTX> for [u8] {
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> Value {
         // Represent byte slices as a binary value which already contains
         // length information and matches the memory representation.
         Value::Binary(self.to_vec())
@@ -467,7 +486,7 @@ impl<CTX> HashStable<CTX> for [u8] {
 
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for Vec<T> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         self[..].structure(state)
     }
 
@@ -479,7 +498,7 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for Vec<T> {
 
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for thin_vec::ThinVec<T> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         self[..].structure(state)
     }
 
@@ -496,7 +515,10 @@ where
     R: BuildHasher,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, CTX, W>,
+    ) -> crate::inspect::Value {
         // Represent maps as MessagePack maps so the structure mirrors the
         // logical key->value relationship instead of a linear sequence.
         let mut map: BTreeMap<crate::inspect::Value, crate::inspect::Value> = BTreeMap::new();
@@ -521,7 +543,10 @@ where
     R: BuildHasher,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, CTX, W>,
+    ) -> crate::inspect::Value {
         // Represent sets as arrays of elements (order preserved by IndexSet).
         let mut out = Vec::with_capacity(self.len());
         for key in self {
@@ -544,7 +569,10 @@ where
     A: HashStable<CTX>,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, CTX, W>,
+    ) -> crate::inspect::Value {
         self[..].structure(state)
     }
 
@@ -556,7 +584,7 @@ where
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         // Preserve the `Box` wrapper in inspection output.
         Value::Struct {
             path: std::borrow::Cow::Borrowed("Box"),
@@ -572,7 +600,7 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         Value::Struct {
             path: std::borrow::Cow::Borrowed("Rc"),
             fields: vec![(std::borrow::Cow::Borrowed("value"), (**self).structure(state))],
@@ -587,7 +615,7 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::sync::Arc<T> {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         Value::Struct {
             path: std::borrow::Cow::Borrowed("Arc"),
             fields: vec![(std::borrow::Cow::Borrowed("value"), (**self).structure(state))],
@@ -602,7 +630,10 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::sync::Arc<T> {
 
 impl<CTX> HashStable<CTX> for str {
     #[inline]
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> Value {
         // Represent strings as UTF-8 strings which mirrors their in-memory
         // UTF-8 representation.
         Value::String(self.to_owned().into())
@@ -624,7 +655,10 @@ impl StableOrd for &str {
 
 impl<CTX> HashStable<CTX> for String {
     #[inline]
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> Value {
         Value::String(self.clone().into())
     }
 
@@ -660,7 +694,7 @@ impl<HCX, T1: ToStableHashKey<HCX>, T2: ToStableHashKey<HCX>> ToStableHashKey<HC
 
 impl<CTX> HashStable<CTX> for bool {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         let _ = state;
         Value::Bool(*self)
     }
@@ -683,7 +717,7 @@ where
     T: HashStable<CTX>,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         match *self {
             Some(ref value) => Value::Enum {
                 path: std::borrow::Cow::Borrowed("Option"),
@@ -723,7 +757,7 @@ where
     T2: HashStable<CTX>,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         match *self {
             Ok(ref x) => Value::Enum {
                 path: std::borrow::Cow::Borrowed("Result"),
@@ -757,7 +791,7 @@ where
     T: HashStable<CTX> + ?Sized,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         (**self).structure(state)
     }
 
@@ -769,7 +803,7 @@ where
 
 impl<T, CTX> HashStable<CTX> for ::std::mem::Discriminant<T> {
     #[inline]
-    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
+    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
         // Represent the discriminant structurally as an enum so the
         // inspection output preserves that this is a discriminant and
         // which variant it corresponds to. We use the `Debug` string as
@@ -795,7 +829,7 @@ where
     T: HashStable<CTX>,
 {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         Value::Struct {
             path: std::borrow::Cow::Borrowed("RangeInclusive"),
             fields: vec![
@@ -816,7 +850,7 @@ impl<I: Idx, T, CTX> HashStable<CTX> for IndexSlice<I, T>
 where
     T: HashStable<CTX>,
 {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         Value::Struct {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
             fields: vec![(std::borrow::Cow::Borrowed("raw"), self.raw[..].structure(state))],
@@ -835,7 +869,7 @@ impl<I: Idx, T, CTX> HashStable<CTX> for IndexVec<I, T>
 where
     T: HashStable<CTX>,
 {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         Value::Struct {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
             fields: vec![(std::borrow::Cow::Borrowed("raw"), self.raw[..].structure(state))],
@@ -851,7 +885,7 @@ where
 }
 
 impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
-    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
+    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
         // Represent DenseBitSet structurally as [domain_size, [set_indices...]]
         // by listing the indices of set bits. This avoids accessing private
         // internals such as the word vector.
@@ -878,7 +912,7 @@ impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
 }
 
 impl<R: Idx, C: Idx, CTX> HashStable<CTX> for bit_set::BitMatrix<R, C> {
-    fn structure<'s>(&self, _: &mut StructureState<'s, CTX>) -> Value {
+    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
         // Represent BitMatrix structurally as an array of rows, where each
         // row is an array of set column indices. This avoids reading private
         // fields while preserving the matrix contents.
@@ -906,7 +940,7 @@ impl<T, CTX> HashStable<CTX> for bit_set::FiniteBitSet<T>
 where
     T: HashStable<CTX> + bit_set::FiniteBitSetTy,
 {
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         Value::StructTuple {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
             fields: vec![self.0.structure(state)],
@@ -951,7 +985,7 @@ where
     K: HashStable<HCX> + StableOrd,
     V: HashStable<HCX>,
 {
-    fn structure(&self, state: &mut StructureState<'_, HCX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) -> Value {
         let mut map: BTreeMap<crate::inspect::Value, crate::inspect::Value> = BTreeMap::new();
         for (k, v) in self.iter() {
             map.insert(k.structure(state), v.structure(state));
@@ -975,7 +1009,7 @@ impl<K, HCX> HashStable<HCX> for ::std::collections::BTreeSet<K>
 where
     K: HashStable<HCX> + StableOrd,
 {
-    fn structure(&self, state: &mut StructureState<'_, HCX>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) -> Value {
         let mut entries = Vec::with_capacity(self.len());
         for entry in self.iter() {
             entries.push(entry.structure(state));

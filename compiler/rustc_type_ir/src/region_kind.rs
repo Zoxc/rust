@@ -250,7 +250,10 @@ where
         }
     }
 
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, CTX, W>,
+    ) -> Value {
         use RegionKind::*;
         let path = std::borrow::Cow::Borrowed(std::any::type_name::<Self>());
         match self {

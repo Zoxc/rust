@@ -88,9 +88,9 @@ impl<CTX> rustc_data_structures::stable_hasher::HashStable<CTX> for Span
 where
     CTX: crate::HashStableContext,
 {
-    fn structure(
+    fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
-        state: &mut rustc_data_structures::stable_hasher::StructureState<'_, CTX>,
+        state: &mut rustc_data_structures::stable_hasher::StructureState<'_, CTX, W>,
     ) -> rustc_data_structures::inspect::Value {
         (state.span_value)(
             rustc_data_structures::stable_hasher::SpanArgs {

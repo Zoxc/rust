@@ -926,10 +926,10 @@ mod binding_form_impl {
             }
         }
 
-        fn structure<'s>(
-            &self,
-            state: &mut StructureState<'s, StableHashingContext<'a>>,
-        ) -> inspect::Value {
+            fn structure<'s, W: rustc_data_structures::inspect::Write>(
+                &self,
+                state: &mut StructureState<'s, StableHashingContext<'a>, W>,
+            ) -> inspect::Value {
             use super::BindingForm::*;
 
             match self {

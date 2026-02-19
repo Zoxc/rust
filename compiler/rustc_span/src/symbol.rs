@@ -2889,7 +2889,10 @@ impl fmt::Display for Symbol {
 
 impl<CTX> HashStable<CTX> for Symbol {
     #[inline]
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> inspect::Value {
         // Preserve the `Symbol` wrapper in inspection output.
         inspect::Value::StructTuple {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
@@ -2958,7 +2961,10 @@ impl fmt::Debug for ByteSymbol {
 
 impl<CTX> HashStable<CTX> for ByteSymbol {
     #[inline]
-    fn structure(&self, _state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        _state: &mut StructureState<'_, CTX, W>,
+    ) -> inspect::Value {
         // Preserve the `ByteSymbol` wrapper in inspection output.
         inspect::Value::StructTuple {
             path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),

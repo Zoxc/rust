@@ -59,7 +59,10 @@ impl rustc_index::Idx for OwnerId {
 
 impl<CTX: HashStableContext> HashStable<CTX> for OwnerId {
     #[inline]
-    fn structure(&self, state: &mut StructureState<'_, CTX>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(
+        &self,
+        state: &mut StructureState<'_, CTX, W>,
+    ) -> inspect::Value {
         // Represent OwnerId by its contained LocalDefId
         inspect::Value::StructTuple {
             path: std::any::type_name::<Self>().into(),
