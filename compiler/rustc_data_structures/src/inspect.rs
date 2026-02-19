@@ -123,8 +123,8 @@ enum ValueKind {
 }
 
 #[inline]
-fn write_tag(&mut self, tag: u8) {
-    self.writer.write_bytes(&[tag]);
+fn write_tag<W: Write>(writer: &mut W, tag: u8) {
+    writer.write_bytes(&[tag]);
 }
 
 pub trait Write {
@@ -132,52 +132,52 @@ pub trait Write {
     fn write_i128(&mut self, value: i128);
     fn write_bytes(&mut self, bytes: &[u8]);
 
-    pub fn write_bool(&mut self, v: bool) {
-        self.write_tag(ValueKind::Bool);
+    fn write_bool(&mut self, v: bool) {
+        write_tag(self, ValueKind::Bool as u8);
         let byte = if v { 1u8 } else { 0u8 };
-        self.writer.write_bytes(&[byte]);
+        self.write_bytes(&[byte]);
     }
 
-    pub fn write_int(&mut self, v: i128) {
-        self.write_tag(ValueKind::Int);
-        self.writer.write_i128(v);
+    fn write_int(&mut self, v: i128) {
+        write_tag(self, ValueKind::Int as u8);
+        self.write_i128(v);
     }
 
-    pub fn write_uint(&mut self, v: u128) {
-        self.write_tag(ValueKind::UInt);
-        self.writer.write_u128(v);
+    fn write_uint(&mut self, v: u128) {
+        write_tag(self, ValueKind::UInt as u8);
+        self.write_u128(v);
     }
 
-    pub fn write_f64(&mut self, v: f64) {
-        self.write_tag(ValueKind::F64);
-        self.writer.write_bytes(&v.to_bits().to_le_bytes());
+    fn write_f64(&mut self, v: f64) {
+        write_tag(self, ValueKind::F64 as u8);
+        self.write_bytes(&v.to_bits().to_le_bytes());
     }
 
-    pub fn write_binary(&mut self, v: &[u8]) {
-        self.write_tag(ValueKind::Binary);
-        self.writer.write_u128(v.len() as u128);
-        self.writer.write_bytes(v);
+    fn write_binary(&mut self, v: &[u8]) {
+        write_tag(self, ValueKind::Binary as u8);
+        self.write_u128(v.len() as u128);
+        self.write_bytes(v);
     }
 
-    pub fn write_string(&mut self, s: &str) {
-        self.write_tag(ValueKind::String);
-        self.writer.write_u128(s.len() as u128);
-        self.writer.write_bytes(s.as_bytes());
+    fn write_string(&mut self, s: &str) {
+        write_tag(self, ValueKind::String as u8);
+        self.write_u128(s.len() as u128);
+        self.write_bytes(s.as_bytes());
     }
 
-    pub fn write_array_header(&mut self, len: usize) {
-        self.write_tag(ValueKind::Array);
-        self.writer.write_u128(len as u128);
+    fn write_array_header(&mut self, len: usize) {
+        write_tag(self, ValueKind::Array as u8);
+        self.write_u128(len as u128);
     }
 
-    pub fn write_tuple_header(&mut self, len: usize) {
-        self.write_tag(ValueKind::Tuple);
-        self.writer.write_u128(len as u128);
+    fn write_tuple_header(&mut self, len: usize) {
+        write_tag(self, ValueKind::Tuple as u8);
+        self.write_u128(len as u128);
     }
 
-    pub fn write_map_header(&mut self, len: usize) {
-        self.write_tag(ValueKind::Map);
-        self.writer.write_u128(len as u128);
+    fn write_map_header(&mut self, len: usize) {
+        write_tag(self, ValueKind::Map as u8);
+        self.write_u128(len as u128);
     }
 }
 
