@@ -22,7 +22,8 @@ fn def_path_value<'tcx>(
     tcx: TyCtxt<'tcx>,
     crate_num: u32,
     index: u32,
-    state: &mut dyn StructureStateOps<StableHashingContext<'_>>,
+    _state: &mut rustc_data_structures::inspect::State<'_>,
+    w: &mut dyn rustc_data_structures::inspect::Write,
 ) {
     // Construct a `DefId` from the supplied `u32` crate/def indices
     // and return an `inspect::Value::String` containing the def path.
@@ -45,7 +46,8 @@ fn crate_num_value<'tcx>(
 fn span_value(
     tcx: TyCtxt<'_>,
     span_args: SpanArgs,
-    state: &mut dyn StructureStateOps<StableHashingContext<'_>>,
+    state: &mut rustc_data_structures::inspect::State<'_>,
+    w: &mut dyn rustc_data_structures::inspect::Write,
 ) {
     let span = Span::from_args(span_args);
 
@@ -161,12 +163,16 @@ pub(crate) fn collect_all_query_structures<'tcx>(
     // but instead hash each per-query `Map` value and store that hash.
     file: Option<&mut fs::File>,
 ) -> Result<inspect::Value, ()> {
-    let mut state: StructureState<'_, StableHashingContext<'_>, Option<&mut fs::File>> = StructureState {
+    let mut inner_state: rustc_data_structures::inspect::State<'_> = rustc_data_structures::inspect::State {
         schema_list: Default::default(),
+        span_value: &|args, st, w| span_value(tcx, args, st, w),
+        def_path: &|crate_num, index, st, w| def_path_value(tcx, crate_num, index, st, w),
+        crate_num: &|crate_num, st, w| crate_num_value(tcx, crate_num, st, w),
+    };
+
+    let mut state: StructureState<'_, StableHashingContext<'_>, Option<&mut fs::File>> = StructureState {
+        state: &mut inner_state,
         writer: file,
-        def_path: &|crate_num, index, state| def_path_value(tcx, crate_num, index, state),
-        crate_num: &|crate_num, state| crate_num_value(tcx, crate_num, state),
-        span_value: &|args, state| span_value(tcx, args, state),
         _marker: PhantomData,
     };
 

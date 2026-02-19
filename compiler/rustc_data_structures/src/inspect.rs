@@ -15,6 +15,8 @@ use std::io::Write as IoWrite;
 use std::marker::PhantomData;
 
 use ordered_float::OrderedFloat;
+use rustc_hashes::Hash128;
+use rustc_stable_hash::StableSipHasher128;
 use serde::{Deserialize, Serialize};
 
 use crate::fx::FxHashMap;
@@ -112,6 +114,65 @@ pub trait Write {
     fn write_bytes(&mut self, bytes: &[u8]);
 }
 
+impl<'a> Write for &'a mut dyn Write {
+    #[inline]
+    fn write_u128(&mut self, value: u128) {
+        (&mut **self).write_u128(value)
+    }
+
+    #[inline]
+    fn write_i128(&mut self, value: i128) {
+        (&mut **self).write_i128(value)
+    }
+
+    #[inline]
+    fn write_bytes(&mut self, bytes: &[u8]) {
+        (&mut **self).write_bytes(bytes)
+    }
+}
+
+/// A `inspect::Write` implementation that hashes the written bytes.
+///
+/// This is useful when callers need a deterministic, compact key for a
+/// structural stream without materializing the full byte buffer.
+pub struct Hasher(StableSipHasher128);
+
+impl Hasher {
+    #[inline]
+    pub fn new() -> Self {
+        Hasher(StableSipHasher128::new())
+    }
+
+    #[inline]
+    pub fn finish(self) -> Hash128 {
+        self.0.finish::<Hash128>()
+    }
+}
+
+impl Default for Hasher {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Write for Hasher {
+    #[inline]
+    fn write_u128(&mut self, value: u128) {
+        std::hash::Hasher::write(&mut self.0, &value.to_le_bytes());
+    }
+
+    #[inline]
+    fn write_i128(&mut self, value: i128) {
+        std::hash::Hasher::write(&mut self.0, &value.to_le_bytes());
+    }
+
+    #[inline]
+    fn write_bytes(&mut self, bytes: &[u8]) {
+        std::hash::Hasher::write(&mut self.0, bytes);
+    }
+}
+
 /// A simple writer wrapper used by inspection/serialization code which
 /// optionally writes to an underlying `File`.
 ///
@@ -178,9 +239,9 @@ impl<'a> Write for Option<&'a mut File> {
 
 pub struct State<'a> {
     pub schema_list: FxHashMap<usize, (SchemaId, &'static SchemaRef)>,
-    pub span_value: &'a dyn Fn(SpanArgs, &mut State, &mut dyn Write),
-    pub def_path: &'a dyn Fn(u32, u32, &mut State, &mut dyn Write),
-    pub crate_num: &'a dyn Fn(u32, &mut State, &mut dyn Write),
+    pub span_value: &'a dyn for<'s> Fn(SpanArgs, &mut State<'s>, &mut dyn Write),
+    pub def_path: &'a dyn for<'s> Fn(u32, u32, &mut State<'s>, &mut dyn Write),
+    pub crate_num: &'a dyn for<'s> Fn(u32, &mut State<'s>, &mut dyn Write),
 }
 
 pub struct StructureState<'a, CTX, W> {
@@ -190,18 +251,19 @@ pub struct StructureState<'a, CTX, W> {
 }
 
 impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
-    pub fn split(&mut self) -> (&'a mut State<'a>, &mut W) {
-        (self.state, &self.writer)
+    pub fn split(&mut self) -> (&mut State<'a>, &mut W) {
+        (self.state, &mut self.writer)
+    }
     }
 
     pub fn intern_schema(&mut self, schema: &'static SchemaRef) -> SchemaId {
         let key = schema as *const SchemaRef as usize;
-        if let Some(id) = self.schema_list.get(&key) {
+        if let Some(id) = self.state.schema_list.get(&key) {
             return id.0;
         }
 
-        let id = SchemaId(self.schema_list.len() as u32);
-        self.schema_list.insert(key, (id, schema));
+        let id = SchemaId(self.state.schema_list.len() as u32);
+        self.state.schema_list.insert(key, (id, schema));
         id
     }
 
