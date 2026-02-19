@@ -76,13 +76,24 @@ pub struct FileOffset(pub u64);
 
 pub struct SchemaRef(UnsafeCell<Schema>);
 
+// SchemaRef is intended to be referenced from 'static locations and only
+// accessed via shared references; the contained Schema is never mutated
+// after creation. Marking SchemaRef as Sync is safe because callers only
+// obtain shared references to the inner Schema through `get()`.
+unsafe impl Sync for SchemaRef {}
+
 impl SchemaRef {
     pub const fn new(schema: Schema) -> Self {
         SchemaRef(UnsafeCell::new(schema))
+    }
 
     #[inline]
     pub fn get(&self) -> &Schema {
-        &self.0
+        // SAFETY: callers only obtain shared references to the contained
+        // Schema; the UnsafeCell is used to allow a 'static reference to
+        // be created at runtime when interning schemas. Accessing the
+        // inner Schema through a shared reference is safe here.
+        unsafe { &*self.0.get() }
     }
 }
 
