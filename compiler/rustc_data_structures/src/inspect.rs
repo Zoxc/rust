@@ -270,33 +270,11 @@ impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
         id
     }
 
-    // Writers used by `HashStable::structure`. These write a self-describing
-    // stream to `self.writer`.
-
     #[inline]
     fn write_tag(&mut self, tag: u8) {
         self.writer.write_bytes(&[tag]);
     }
 
-    // Tag values for the structural stream.
-    const TAG_BOOL: u8 = 0;
-    const TAG_INT: u8 = 1;
-    const TAG_UINT: u8 = 2;
-    const TAG_F64: u8 = 3;
-    const TAG_BINARY: u8 = 4;
-    const TAG_STRING: u8 = 5;
-    const TAG_ARRAY: u8 = 6;
-    const TAG_TUPLE: u8 = 7;
-    const TAG_MAP: u8 = 8;
-    const TAG_SCHEMA: u8 = 9;
-
-    const SCHEMA_STRUCT: u8 = 0;
-    const SCHEMA_STRUCT_TUPLE: u8 = 1;
-    const SCHEMA_ENUM: u8 = 2;
-
-    const ENUM_VARIANT_UNIT: u8 = 0;
-    const ENUM_VARIANT_NAMED: u8 = 1;
-    const ENUM_VARIANT_TUPLE: u8 = 2;
     pub fn write_bool(&mut self, v: bool) {
         self.write_tag(ValueKind::Bool);
         let byte = if v { 1u8 } else { 0u8 };
