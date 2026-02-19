@@ -31,7 +31,9 @@ fn def_path_value<'tcx>(
         krate: rustc_span::def_id::CrateNum::from_u32(crate_num),
         index: rustc_span::def_id::DefIndex::from_u32(index),
     };
-    state.write_string(&tcx.def_path(def_id).to_string_no_crate_verbose())
+    let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
+        StructureState { state, writer: w, _marker: PhantomData };
+    tmp.write_string(&tcx.def_path(def_id).to_string_no_crate_verbose());
 }
 
 fn crate_num_value<'tcx>(
@@ -40,11 +42,13 @@ fn crate_num_value<'tcx>(
     state: &mut dyn StructureStateOps<StableHashingContext<'_>>,
 ) {
     let stable = tcx.def_path_hash(CrateNum::from_u32(crate_num).as_def_id()).stable_crate_id();
-    state.write_uint(stable.as_u64() as u128);
+    let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
+        StructureState { state, writer: w, _marker: PhantomData };
+    tmp.write_uint(stable.as_u64() as u128);
 }
 
-fn span_value(
-    tcx: TyCtxt<'_>,
+fn span_value<'tcx>(
+    tcx: TyCtxt<'tcx>,
     span_args: SpanArgs,
     state: &mut rustc_data_structures::inspect::State<'_>,
     w: &mut dyn rustc_data_structures::inspect::Write,
@@ -58,7 +62,9 @@ fn span_value(
             variant_name: "Dummy",
             variant: EnumVariantSchema::Unit,
         });
-        state.write_schema_header(&SCHEMA);
+        let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
+            StructureState { state, writer: w, _marker: PhantomData };
+        tmp.write_schema_header(&SCHEMA);
         return;
     }
 
@@ -76,13 +82,15 @@ fn span_value(
             variant_name: "Relative",
             variant: EnumVariantSchema::Named(&["ctxt", "parent", "lo", "hi"]),
         });
-        state.write_schema_header(&SCHEMA);
+        let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
+            StructureState { state, writer: w, _marker: PhantomData };
         // `SyntaxContext` does not implement `HashStable` on a `dyn StructureStateOps`.
         // For export, represent the context by its root-ness only.
-        state.write_bool(span.ctxt.is_root());
-        state.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
-        state.write_uint(lo as u128);
-        state.write_uint(hi as u128);
+        tmp.write_schema_header(&SCHEMA);
+        tmp.write_bool(span.ctxt.is_root());
+        tmp.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
+        tmp.write_uint(lo as u128);
+        tmp.write_uint(hi as u128);
         return;
     }
 
@@ -93,7 +101,9 @@ fn span_value(
     let Some((file, line_lo, col_lo, line_hi, col_hi)) = caching.span_data_to_lines_and_cols(&span)
     else {
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum { path: "Span", variant_name: "Dummy", variant: EnumVariantSchema::Unit });
-        state.write_schema_header(&SCHEMA);
+        let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
+            StructureState { state, writer: w, _marker: PhantomData };
+        tmp.write_schema_header(&SCHEMA);
         return;
     };
 
@@ -109,11 +119,13 @@ fn span_value(
             variant_name: "Relative",
             variant: EnumVariantSchema::Named(&["ctxt", "parent", "lo", "hi"]),
         });
-        state.write_schema_header(&SCHEMA);
-        state.write_bool(span.ctxt.is_root());
-        state.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
-        state.write_uint(lo as u128);
-        state.write_uint(hi as u128);
+        let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
+            StructureState { state, writer: w, _marker: PhantomData };
+        tmp.write_schema_header(&SCHEMA);
+        tmp.write_bool(span.ctxt.is_root());
+        tmp.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
+        tmp.write_uint(lo as u128);
+        tmp.write_uint(hi as u128);
         return;
     }
 
@@ -140,17 +152,19 @@ fn span_value(
             "len",
         ]),
     });
-    state.write_schema_header(&SCHEMA);
-    state.write_bool(span.ctxt.is_root());
-    state.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
+    let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
+        StructureState { state, writer: w, _marker: PhantomData };
+    tmp.write_schema_header(&SCHEMA);
+    tmp.write_bool(span.ctxt.is_root());
+    tmp.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
     // `StableSourceFileId` is a newtype around `Hash128` with a private field.
     // For export, write a deterministic string form.
-    state.write_string(&format!("{:?}", file.stable_id));
-    state.write_uint(col_lo.0 as u128);
-    state.write_uint(col_hi.0 as u128);
-    state.write_uint(line_lo as u128);
-    state.write_uint(line_hi as u128);
-    state.write_uint(len as u128);
+    tmp.write_string(&format!("{:?}", file.stable_id));
+    tmp.write_uint(col_lo.0 as u128);
+    tmp.write_uint(col_hi.0 as u128);
+    tmp.write_uint(line_lo as u128);
+    tmp.write_uint(line_hi as u128);
+    tmp.write_uint(len as u128);
 }
 
 /// Collects structural representations for all queries and returns

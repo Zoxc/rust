@@ -13,6 +13,7 @@ use rustc_macros::{Decodable_NoContext, Encodable_NoContext};
 
 use crate::fingerprint::Fingerprint;
 use crate::fx::{FxBuildHasher, FxHashMap, FxHashSet};
+use crate::inspect::Hasher;
 use crate::stable_hasher::{
     HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey,
 };
@@ -420,9 +421,8 @@ impl<V: Hash + Eq, I: Iterator<Item = V>> From<UnordItems<V, I>> for UnordSet<V>
 
 impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) {
-        // Represent the set structurally in an order-independent way without
-        // using hashing. Use a map where each key is the structural
-        // representation of an element and the value is `1`.
+        // Represent the set structurally in an order-independent way.
+        // Use a map where each key is the structural hash of an element and the value is `1`.
 
         let len = self.inner.len();
 
@@ -435,17 +435,17 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
         state.write_schema_header(&SCHEMA);
         len.structure(state);
 
-        // Deterministically order entries by their structural bytes.
-        let mut keys: Vec<Vec<u8>> = self
+        // Deterministically order entries by their structural hashes.
+        let mut keys: Vec<rustc_hashes::Hash128> = self
             .inner
             .iter()
-            .map(|item| structure_bytes(item, state))
+            .map(|item| structure_hash(item, state))
             .collect();
         keys.sort();
 
         state.write_map_header(keys.len());
         for k in keys {
-            state.writer.write_bytes(&k);
+            state.write_binary(&k.as_u128().to_le_bytes());
             state.write_uint(1u128);
         }
     }
@@ -675,7 +675,7 @@ where
 impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> for UnordMap<K, V> {
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) {
         // Represent the map structurally as an order-independent map of key->value,
-        // where both key and value are their structural representations.
+        // where both key and value are their structural hashes.
 
         let len = self.inner.len();
 
@@ -688,17 +688,17 @@ impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> fo
         state.write_schema_header(&SCHEMA);
         len.structure(state);
 
-        let mut entries: Vec<(Vec<u8>, Vec<u8>)> = self
+        let mut entries: Vec<(rustc_hashes::Hash128, rustc_hashes::Hash128)> = self
             .inner
             .iter()
-            .map(|(k, v)| (structure_bytes(k, state), structure_bytes(v, state)))
+            .map(|(k, v)| (structure_hash(k, state), structure_hash(v, state)))
             .collect();
         entries.sort_by(|(ka, va), (kb, vb)| ka.cmp(kb).then_with(|| va.cmp(vb)));
 
         state.write_map_header(entries.len());
         for (k, v) in entries {
-            state.writer.write_bytes(&k);
-            state.writer.write_bytes(&v);
+            state.write_binary(&k.as_u128().to_le_bytes());
+            state.write_binary(&v.as_u128().to_le_bytes());
         }
     }
 
@@ -766,8 +766,8 @@ impl<T, I: Iterator<Item = T>> From<UnordItems<T, I>> for UnordBag<T> {
 
 impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) {
-        // Represent bag (multiset) structurally as a map from element-structure -> count.
-        // This encodes multiplicity without depending on iteration order or hashing.
+        // Represent bag (multiset) structurally as a map from element-hash -> count.
+        // This encodes multiplicity without depending on iteration order.
 
         let len = self.inner.len();
 
@@ -779,16 +779,16 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
         state.write_schema_header(&SCHEMA);
         len.structure(state);
 
-        // Aggregate counts by equality of written structure bytes.
-        let mut keys: Vec<Vec<u8>> = self
+        // Aggregate counts by equality of written structure hashes.
+        let mut keys: Vec<rustc_hashes::Hash128> = self
             .inner
             .iter()
-            .map(|item| structure_bytes(item, state))
+            .map(|item| structure_hash(item, state))
             .collect();
         keys.sort();
 
         // Group equal keys to compute multiplicities.
-        let mut grouped: Vec<(Vec<u8>, u64)> = Vec::new();
+        let mut grouped: Vec<(rustc_hashes::Hash128, u64)> = Vec::new();
         for k in keys {
             if let Some((last_k, cnt)) = grouped.last_mut()
                 && *last_k == k
@@ -801,7 +801,7 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
 
         state.write_map_header(grouped.len());
         for (k, cnt) in grouped {
-            state.writer.write_bytes(&k);
+            state.write_binary(&k.as_u128().to_le_bytes());
             state.write_uint(cnt as u128);
         }
     }
@@ -866,21 +866,23 @@ fn hash_iter_order_independent<
     }
 }
 
-fn structure_bytes<HCX, W: crate::inspect::Write, T: HashStable<HCX>>(
+fn structure_hash<HCX, W: crate::inspect::Write, T: HashStable<HCX>>(
     value: &T,
     parent: &mut StructureState<'_, HCX, W>,
-) -> Vec<u8> {
-    let mut tmp: StructureState<'_, HCX, crate::inspect::VecWriter> = StructureState {
+) -> rustc_hashes::Hash128 {
+    let mut tmp: crate::inspect::State<'_> = crate::inspect::State {
         schema_list: Default::default(),
-        writer: crate::inspect::VecWriter::new(),
-        span_value: parent.span_value,
-        def_path: parent.def_path,
-        crate_num: parent.crate_num,
+        span_value: parent.state.span_value,
+        def_path: parent.state.def_path,
+        crate_num: parent.state.crate_num,
+    };
+    let mut tmp = StructureState {
+        state: &mut tmp,
+        writer: Hasher::new(),
         _marker: PhantomData,
     };
-
     value.structure(&mut tmp);
-    tmp.writer.into_inner()
+    tmp.writer.finish()
 }
 
 // Do not implement IntoIterator for the collections in this module.

@@ -92,13 +92,15 @@ where
         &self,
         state: &mut rustc_data_structures::stable_hasher::StructureState<'_, CTX, W>,
     ) {
-        (state.span_value)(
+        let (st, w) = state.split();
+        (st.span_value)(
             rustc_data_structures::stable_hasher::SpanArgs {
                 lo_or_index: self.lo_or_index,
                 len_with_tag_or_marker: self.len_with_tag_or_marker,
                 ctxt_or_parent_or_marker: self.ctxt_or_parent_or_marker,
             },
-            state,
+            st,
+            w,
         );
     }
 

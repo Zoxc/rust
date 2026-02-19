@@ -410,7 +410,8 @@ impl<CTX: HashStableContext> HashStable<CTX> for DefId {
         &self,
         state: &mut StructureState<'_, CTX, W>,
     ) {
-        (state.def_path)(self.krate.as_u32(), self.index.as_u32(), state)
+        let (st, w) = state.split();
+        (st.def_path)(self.krate.as_u32(), self.index.as_u32(), st, w)
     }
 
     #[inline]
@@ -448,7 +449,8 @@ impl<CTX: HashStableContext> HashStable<CTX> for CrateNum {
         &self,
         state: &mut StructureState<'_, CTX, W>,
     ) {
-        (state.crate_num)(self.as_u32(), state)
+        let (st, w) = state.split();
+        (st.crate_num)(self.as_u32(), st, w)
     }
 
     #[inline]
