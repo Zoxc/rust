@@ -144,9 +144,11 @@ pub(crate) fn collect_all_query_structures<'tcx>(
     // we iterate over PER_QUERY_COLLECT_STRUCTURES_FNS. We need Seek to
     // obtain current offsets. If `None` is passed, we will not write payloads
     // but instead hash each per-query `Map` value and store that hash.
-    mut file: Option<&mut fs::File>,
+    file: Option<&mut fs::File>,
 ) -> Result<inspect::Value, ()> {
     let mut state = StructureState::<'_, StableHashingContext<'_>> {
+        schema_list: Default::default(),
+        file,
         def_path: &|crate_num, index, state| def_path_value(tcx, crate_num, index, state),
         crate_num: &|crate_num, state| crate_num_value(tcx, crate_num, state),
         span_value: &|args, state| span_value(tcx, args, state),
@@ -158,7 +160,7 @@ pub(crate) fn collect_all_query_structures<'tcx>(
     // hashing/compression is handled per-query in `assemble_query_structures`
 
     for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
-        let (name, value) = f(tcx, &mut state, file.as_deref_mut());
+        let (name, value) = f(tcx, &mut state);
         out.push((inspect::Value::String(name.into()), value));
     }
 
@@ -321,7 +323,6 @@ pub(crate) fn assemble_query_structures<'tcx, K, QV, C, F>(
     name: String,
     cache: &C,
     state: &mut StructureState<'_, StableHashingContext<'_>>,
-    mut file: Option<&mut std::fs::File>,
     mut get_value: F,
 ) -> (String, inspect::Value)
 where
@@ -376,7 +377,7 @@ where
     let h = hasher.finish::<Hash128>();
     let value_field = inspect::Value::UInt(h.as_u128());
 
-    let stored_entries = if let Some(file) = file.as_deref_mut() {
+    let stored_entries = if let Some(file) = state.file.as_deref_mut() {
         // Serialize
         let ser = match bincode::serialize(&entries_value) {
             Ok(b) => b,
@@ -432,7 +433,7 @@ where
     // Only include the `entries` field when we actually wrote a payload to a
     // file; if no file was provided we skip the `entries` field and only
     // provide the stable `value` hash so callers can still verify contents.
-    if file.is_some() {
+    if state.file.is_some() {
         out_map.push((inspect::Value::String("entries".into()), stored_entries));
     }
     out_map.push((inspect::Value::String("value".into()), value_field));
