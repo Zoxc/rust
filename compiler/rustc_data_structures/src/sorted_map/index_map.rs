@@ -139,7 +139,6 @@ where
                 fields: &["items"],
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         items.structure(state);
     }
 

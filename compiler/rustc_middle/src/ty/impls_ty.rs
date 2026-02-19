@@ -59,7 +59,6 @@ where
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self[..].structure(state);
     }
 }
@@ -119,7 +118,6 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(0);
     }
 }
 
@@ -143,7 +141,6 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(3);
         alloc.structure(state);
         a.structure(state);
         b.structure(state);

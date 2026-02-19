@@ -32,7 +32,6 @@ impl<CTX: crate::HashStableContext> HashStable<CTX> for DiagnosticItems {
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self.name_to_id.structure(state);
     }
 }

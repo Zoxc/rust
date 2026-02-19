@@ -180,7 +180,6 @@ impl<CTX> HashStable<CTX> for Fingerprint {
                 field_count: 1,
             });
         _state.write_schema_header(&SCHEMA);
-        _state.write_array_header(1);
         _state.write_binary(&self.to_le_bytes());
     }
 

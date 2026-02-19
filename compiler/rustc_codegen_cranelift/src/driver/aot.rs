@@ -67,7 +67,6 @@ impl<HCX> HashStable<HCX> for OngoingModuleCodegen {
             );
 
         _state.write_schema_header(&SCHEMA);
-        _state.write_array_header(0);
     }
 }
 

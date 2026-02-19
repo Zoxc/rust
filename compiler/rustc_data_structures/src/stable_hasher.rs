@@ -10,19 +10,13 @@ use smallvec::SmallVec;
 #[cfg(test)]
 mod tests;
 
-// Provide the inspection `Value` type for `HashStable::structure` implementations.
-// FxHashMap is referenced by some modules in this crate but not all build
-// configurations use it. Keep the import to avoid churn while some
-// refactorings complete; the unused-import warning can be addressed later.
-use std::collections::BTreeMap;
-
 use rustc_hashes::{Hash64, Hash128};
 pub use rustc_stable_hash::{
     FromStableHash, SipHasher128Hash as StableHasherHash, StableSipHasher128 as StableHasher,
 };
 
 use crate::inspect;
-use crate::inspect::{EnumVariantSchema, Schema, SchemaRef, Value};
+use crate::inspect::{EnumVariantSchema, Schema, SchemaRef};
 
 pub use crate::inspect::{SpanArgs, StructureState};
 
@@ -54,8 +48,8 @@ pub use crate::inspect::{SpanArgs, StructureState};
 ///   differences.
 pub trait HashStable<CTX> {
     /// Returns the exact data that will be hashed by `hash_stable` as an
-    /// inspection `Value`.
-    fn structure<'a, W: inspect::Write>(&self, state: &mut StructureState<'a, CTX, W>) -> Value;
+    /// inspection output.
+    fn structure<'a, W: inspect::Write>(&self, state: &mut StructureState<'a, CTX, W>);
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher);
 }
@@ -151,19 +145,16 @@ impl<T: StableOrd> StableCompare for T {
 /// Use `#[derive(HashStable_Generic)]` instead.
 #[macro_export]
 macro_rules! impl_stable_traits_for_trivial_type {
-    // The macro accepts a type and an expression (closure) that takes `&T` and
-    // returns an `inspect::Value`. It will call the expression with `self`.
-
-    // Structure function: the supplied expression is called with `&self` and
-    // must return an `inspect::Value` directly.
+    // The macro accepts a type and an expression (closure) that takes `&T`
+    // plus a `StructureState` and writes the inspection structure directly.
     ($t:ty, $structure_fn:expr) => {
         impl<CTX> $crate::stable_hasher::HashStable<CTX> for $t {
             #[inline]
             fn structure<'s, W: crate::inspect::Write>(
                 &self,
                 _state: &mut StructureState<'s, CTX, W>,
-            ) -> Value {
-                ($structure_fn)(self)
+            ) {
+                ($structure_fn)(self, _state);
             }
 
             #[inline]
@@ -184,38 +175,54 @@ macro_rules! impl_stable_traits_for_trivial_type {
 
 // The macro is local to this module; no re-export needed.
 
-impl_stable_traits_for_trivial_type!(i8, |v: &i8| Value::Int(*v as i128));
-impl_stable_traits_for_trivial_type!(i16, |v: &i16| Value::Int(*v as i128));
-impl_stable_traits_for_trivial_type!(i32, |v: &i32| Value::Int(*v as i128));
-impl_stable_traits_for_trivial_type!(i64, |v: &i64| Value::Int(*v as i128));
-impl_stable_traits_for_trivial_type!(isize, |v: &isize| Value::Int(*v as i128));
+impl_stable_traits_for_trivial_type!(i8, |v: &i8, s: &mut StructureState<'_, CTX, W>| s
+    .write_int(*v as i128));
+impl_stable_traits_for_trivial_type!(i16, |v: &i16, s: &mut StructureState<'_, CTX, W>| s
+    .write_int(*v as i128));
+impl_stable_traits_for_trivial_type!(i32, |v: &i32, s: &mut StructureState<'_, CTX, W>| s
+    .write_int(*v as i128));
+impl_stable_traits_for_trivial_type!(i64, |v: &i64, s: &mut StructureState<'_, CTX, W>| s
+    .write_int(*v as i128));
+impl_stable_traits_for_trivial_type!(isize, |v: &isize, s: &mut StructureState<'_, CTX, W>| s
+    .write_int(*v as i128));
 
-impl_stable_traits_for_trivial_type!(u8, |v: &u8| Value::UInt(*v as u128));
-impl_stable_traits_for_trivial_type!(u16, |v: &u16| Value::UInt(*v as u128));
-impl_stable_traits_for_trivial_type!(u32, |v: &u32| Value::UInt(*v as u128));
-impl_stable_traits_for_trivial_type!(u64, |v: &u64| Value::UInt(*v as u128));
-impl_stable_traits_for_trivial_type!(usize, |v: &usize| Value::UInt(*v as u128));
+impl_stable_traits_for_trivial_type!(u8, |v: &u8, s: &mut StructureState<'_, CTX, W>| s
+    .write_uint(*v as u128));
+impl_stable_traits_for_trivial_type!(u16, |v: &u16, s: &mut StructureState<'_, CTX, W>| s
+    .write_uint(*v as u128));
+impl_stable_traits_for_trivial_type!(u32, |v: &u32, s: &mut StructureState<'_, CTX, W>| s
+    .write_uint(*v as u128));
+impl_stable_traits_for_trivial_type!(u64, |v: &u64, s: &mut StructureState<'_, CTX, W>| s
+    .write_uint(*v as u128));
+impl_stable_traits_for_trivial_type!(usize, |v: &usize, s: &mut StructureState<'_, CTX, W>| s
+    .write_uint(*v as u128));
 
-impl_stable_traits_for_trivial_type!(u128, |v: &u128| Value::Binary((*v).to_le_bytes().to_vec()));
+impl_stable_traits_for_trivial_type!(u128, |v: &u128, s: &mut StructureState<'_, CTX, W>| s
+    .write_binary(&v.to_le_bytes()));
+impl_stable_traits_for_trivial_type!(i128, |v: &i128, s: &mut StructureState<'_, CTX, W>| s
+    .write_binary(&v.to_le_bytes()));
 
-impl_stable_traits_for_trivial_type!(i128, |v: &i128| Value::Binary((*v).to_le_bytes().to_vec()));
+impl_stable_traits_for_trivial_type!(char, |c: &char, s: &mut StructureState<'_, CTX, W>| {
+    let mut buf = [0u8; 4];
+    let st = c.encode_utf8(&mut buf);
+    s.write_string(st);
+});
 
-impl_stable_traits_for_trivial_type!(char, |c: &char| Value::String((*c).to_string().into()));
+impl_stable_traits_for_trivial_type!((), |_: &(), s: &mut StructureState<'_, CTX, W>| s
+    .write_tuple_header(0));
 
-impl_stable_traits_for_trivial_type!((), |_: &()| Value::Tuple(vec![]));
-
-impl_stable_traits_for_trivial_type!(Hash64, |h: &Hash64| Value::Binary(
-    h.as_u64().to_le_bytes().to_vec()
-));
+impl_stable_traits_for_trivial_type!(Hash64, |h: &Hash64, s: &mut StructureState<'_, CTX, W>| {
+    s.write_binary(&h.as_u64().to_le_bytes());
+});
 
 // We need a custom impl as the default hash function will only hash half the bits. For stable
 // hashing we want to hash the full 128-bit hash.
 impl<CTX> HashStable<CTX> for Hash128 {
     #[inline]
-    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
+    fn structure<'s, W: crate::inspect::Write>(&self, state: &mut StructureState<'s, CTX, W>) {
         // Represent the 128-bit hash as a 16-byte binary.
         let bytes = self.as_u128().to_le_bytes();
-        Value::Binary(bytes.to_vec())
+        state.write_binary(&bytes);
     }
 
     #[inline]
@@ -233,7 +240,7 @@ impl StableOrd for Hash128 {
 }
 
 impl<CTX> HashStable<CTX> for ! {
-    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
+    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) {
         unreachable!()
     }
 
@@ -243,14 +250,10 @@ impl<CTX> HashStable<CTX> for ! {
 }
 
 impl<CTX, T> HashStable<CTX> for PhantomData<T> {
-    fn structure<'s, W: crate::inspect::Write>(
-        &self,
-        state: &mut StructureState<'s, CTX, W>,
-    ) -> Value {
+    fn structure<'s, W: crate::inspect::Write>(&self, state: &mut StructureState<'s, CTX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "PhantomData", fields: &[] });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: Vec::new() }
+        state.write_schema_header(&SCHEMA);
     }
 
     fn hash_stable(&self, _ctx: &mut CTX, _hasher: &mut StableHasher) {}
@@ -258,14 +261,11 @@ impl<CTX, T> HashStable<CTX> for PhantomData<T> {
 
 impl<CTX> HashStable<CTX> for NonZero<u32> {
     #[inline]
-    fn structure<'s, W: crate::inspect::Write>(
-        &self,
-        state: &mut StructureState<'s, CTX, W>,
-    ) -> Value {
+    fn structure<'s, W: crate::inspect::Write>(&self, state: &mut StructureState<'s, CTX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "NonZero<u32>", fields: &["value"] });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![self.get().structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        self.get().structure(state);
     }
 
     #[inline]
@@ -276,11 +276,11 @@ impl<CTX> HashStable<CTX> for NonZero<u32> {
 
 impl<CTX> HashStable<CTX> for NonZero<usize> {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "NonZero<usize>", fields: &["value"] });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![self.get().structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        self.get().structure(state);
     }
 
     #[inline]
@@ -290,11 +290,8 @@ impl<CTX> HashStable<CTX> for NonZero<usize> {
 }
 
 impl<CTX> HashStable<CTX> for f32 {
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        _state: &mut StructureState<'_, CTX, W>,
-    ) -> Value {
-        Value::F64(ordered_float::OrderedFloat(*self as f64))
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+        state.write_f64(*self as f64);
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -304,11 +301,8 @@ impl<CTX> HashStable<CTX> for f32 {
 }
 
 impl<CTX> HashStable<CTX> for f64 {
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        _state: &mut StructureState<'_, CTX, W>,
-    ) -> Value {
-        Value::F64(ordered_float::OrderedFloat(*self))
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+        state.write_f64(*self);
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -319,7 +313,7 @@ impl<CTX> HashStable<CTX> for f64 {
 
 impl<CTX> HashStable<CTX> for ::std::cmp::Ordering {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         let name = match self {
             std::cmp::Ordering::Less => "Less",
             std::cmp::Ordering::Equal => "Equal",
@@ -347,8 +341,7 @@ impl<CTX> HashStable<CTX> for ::std::cmp::Ordering {
             "Greater" => &SCHEMA_GREATER,
             _ => unreachable!(),
         };
-        let id = state.intern_schema(schema);
-        Value::Schema { id, values: Vec::new() }
+        state.write_schema_header(schema);
     }
 
     #[inline]
@@ -359,10 +352,10 @@ impl<CTX> HashStable<CTX> for ::std::cmp::Ordering {
 
 impl<T1: HashStable<CTX>, CTX> HashStable<CTX> for (T1,) {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         let (ref _0,) = *self;
-        // Preserve tuple semantics in inspection output.
-        Value::Tuple(vec![_0.structure(state)])
+        state.write_tuple_header(1);
+        _0.structure(state);
     }
 
     #[inline]
@@ -373,13 +366,11 @@ impl<T1: HashStable<CTX>, CTX> HashStable<CTX> for (T1,) {
 }
 
 impl<T1: HashStable<CTX>, T2: HashStable<CTX>, CTX> HashStable<CTX> for (T1, T2) {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         let (ref _0, ref _1) = *self;
-        let mut out = Vec::new();
-        out.push(_0.structure(state));
-        out.push(_1.structure(state));
-        // Represent tuples explicitly as `Tuple` so inspection preserves tuple semantics.
-        Value::Tuple(out)
+        state.write_tuple_header(2);
+        _0.structure(state);
+        _1.structure(state);
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -403,13 +394,12 @@ where
     T2: HashStable<CTX>,
     T3: HashStable<CTX>,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         let (ref _0, ref _1, ref _2) = *self;
-        let mut out = Vec::new();
-        out.push(_0.structure(state));
-        out.push(_1.structure(state));
-        out.push(_2.structure(state));
-        Value::Tuple(out)
+        state.write_tuple_header(3);
+        _0.structure(state);
+        _1.structure(state);
+        _2.structure(state);
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -436,14 +426,13 @@ where
     T3: HashStable<CTX>,
     T4: HashStable<CTX>,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         let (ref _0, ref _1, ref _2, ref _3) = *self;
-        let mut out = Vec::new();
-        out.push(_0.structure(state));
-        out.push(_1.structure(state));
-        out.push(_2.structure(state));
-        out.push(_3.structure(state));
-        Value::Tuple(out)
+        state.write_tuple_header(4);
+        _0.structure(state);
+        _1.structure(state);
+        _2.structure(state);
+        _3.structure(state);
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -470,16 +459,11 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for [T] {
     default fn structure<'s, W: crate::inspect::Write>(
         &self,
         state: &mut StructureState<'s, CTX, W>,
-    ) -> Value {
-        // Represent slices/arrays using a MessagePack array that mirrors
-        // the in-memory sequence of elements (no explicit length prefix).
-        let mut out = Vec::with_capacity(self.len());
+    ) {
+        state.write_array_header(self.len());
         for item in self {
-            out.push(item.structure(state));
+            item.structure(state);
         }
-        // Represent slices/arrays as `Array` so the inspection output
-        // preserves that this is a sequence, not a Rust tuple.
-        Value::Array(out)
     }
 
     default fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -491,13 +475,8 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for [T] {
 }
 
 impl<CTX> HashStable<CTX> for [u8] {
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        _state: &mut StructureState<'_, CTX, W>,
-    ) -> Value {
-        // Represent byte slices as a binary value which already contains
-        // length information and matches the memory representation.
-        Value::Binary(self.to_vec())
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+        state.write_binary(self);
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -508,7 +487,7 @@ impl<CTX> HashStable<CTX> for [u8] {
 
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for Vec<T> {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         self[..].structure(state)
     }
 
@@ -520,7 +499,7 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for Vec<T> {
 
 impl<T: HashStable<CTX>, CTX> HashStable<CTX> for thin_vec::ThinVec<T> {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         self[..].structure(state)
     }
 
@@ -537,17 +516,12 @@ where
     R: BuildHasher,
 {
     #[inline]
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        state: &mut StructureState<'_, CTX, W>,
-    ) -> crate::inspect::Value {
-        // Represent maps as MessagePack maps so the structure mirrors the
-        // logical key->value relationship instead of a linear sequence.
-        let mut map: BTreeMap<crate::inspect::Value, crate::inspect::Value> = BTreeMap::new();
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+        state.write_map_header(self.len());
         for (k, v) in self.iter() {
-            map.insert(k.structure(state), v.structure(state));
+            k.structure(state);
+            v.structure(state);
         }
-        crate::inspect::Value::Map(map)
     }
 
     #[inline]
@@ -565,16 +539,11 @@ where
     R: BuildHasher,
 {
     #[inline]
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        state: &mut StructureState<'_, CTX, W>,
-    ) -> crate::inspect::Value {
-        // Represent sets as arrays of elements (order preserved by IndexSet).
-        let mut out = Vec::with_capacity(self.len());
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+        state.write_array_header(self.len());
         for key in self {
-            out.push(key.structure(state));
+            key.structure(state);
         }
-        crate::inspect::Value::Array(out)
     }
 
     #[inline]
@@ -591,10 +560,7 @@ where
     A: HashStable<CTX>,
 {
     #[inline]
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        state: &mut StructureState<'_, CTX, W>,
-    ) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         self[..].structure(state)
     }
 
@@ -606,11 +572,11 @@ where
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "Box", fields: &["value"] });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![(**self).structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        (**self).structure(state);
     }
 
     #[inline]
@@ -621,11 +587,11 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "Rc", fields: &["value"] });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![(**self).structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        (**self).structure(state);
     }
 
     #[inline]
@@ -636,11 +602,11 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
 
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::sync::Arc<T> {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "Arc", fields: &["value"] });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![(**self).structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        (**self).structure(state);
     }
 
     #[inline]
@@ -651,13 +617,8 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::sync::Arc<T> {
 
 impl<CTX> HashStable<CTX> for str {
     #[inline]
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        _state: &mut StructureState<'_, CTX, W>,
-    ) -> Value {
-        // Represent strings as UTF-8 strings which mirrors their in-memory
-        // UTF-8 representation.
-        Value::String(self.to_owned().into())
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+        state.write_string(self);
     }
 
     #[inline]
@@ -676,11 +637,8 @@ impl StableOrd for &str {
 
 impl<CTX> HashStable<CTX> for String {
     #[inline]
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        _state: &mut StructureState<'_, CTX, W>,
-    ) -> Value {
-        Value::String(self.clone().into())
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+        state.write_string(self);
     }
 
     #[inline]
@@ -715,9 +673,8 @@ impl<HCX, T1: ToStableHashKey<HCX>, T2: ToStableHashKey<HCX>> ToStableHashKey<HC
 
 impl<CTX> HashStable<CTX> for bool {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        let _ = state;
-        Value::Bool(*self)
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+        state.write_bool(*self);
     }
 
     #[inline]
@@ -738,7 +695,7 @@ where
     T: HashStable<CTX>,
 {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         match *self {
             Some(ref value) => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -746,8 +703,8 @@ where
                     variant_name: "Some",
                     variant: EnumVariantSchema::Tuple(1),
                 });
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: vec![value.structure(state)] }
+                state.write_schema_header(&SCHEMA);
+                value.structure(state);
             }
             None => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -755,8 +712,7 @@ where
                     variant_name: "None",
                     variant: EnumVariantSchema::Unit,
                 });
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: Vec::new() }
+                state.write_schema_header(&SCHEMA);
             }
         }
     }
@@ -785,7 +741,7 @@ where
     T2: HashStable<CTX>,
 {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         match *self {
             Ok(ref x) => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -793,8 +749,8 @@ where
                     variant_name: "Ok",
                     variant: EnumVariantSchema::Tuple(1),
                 });
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: vec![x.structure(state)] }
+                state.write_schema_header(&SCHEMA);
+                x.structure(state);
             }
             Err(ref x) => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -802,8 +758,8 @@ where
                     variant_name: "Err",
                     variant: EnumVariantSchema::Tuple(1),
                 });
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: vec![x.structure(state)] }
+                state.write_schema_header(&SCHEMA);
+                x.structure(state);
             }
         }
     }
@@ -823,7 +779,7 @@ where
     T: HashStable<CTX> + ?Sized,
 {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         (**self).structure(state)
     }
 
@@ -835,13 +791,8 @@ where
 
 impl<T, CTX> HashStable<CTX> for ::std::mem::Discriminant<T> {
     #[inline]
-    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
-        // Represent the discriminant structurally as an enum so the
-        // inspection output preserves that this is a discriminant and
-        // which variant it corresponds to. We use the `Debug` string as
-        // the variant name because we don't have a portable numeric index
-        // here. A more robust encoding would use per-enum variant indices.
-        Value::String(format!("{:?}", self).into())
+    fn structure<'s, W: crate::inspect::Write>(&self, state: &mut StructureState<'s, CTX, W>) {
+        state.write_string(&format!("{:?}", self));
     }
 
     #[inline]
@@ -855,14 +806,12 @@ where
     T: HashStable<CTX>,
 {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "RangeInclusive", fields: &["start", "end"] });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema {
-            id,
-            values: vec![self.start().structure(state), self.end().structure(state)],
-        }
+        state.write_schema_header(&SCHEMA);
+        self.start().structure(state);
+        self.end().structure(state);
     }
 
     #[inline]
@@ -876,11 +825,11 @@ impl<I: Idx, T, CTX> HashStable<CTX> for IndexSlice<I, T>
 where
     T: HashStable<CTX>,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "rustc_index::IndexSlice", fields: &["raw"] });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![self.raw[..].structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        self.raw[..].structure(state);
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -895,11 +844,11 @@ impl<I: Idx, T, CTX> HashStable<CTX> for IndexVec<I, T>
 where
     T: HashStable<CTX>,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "rustc_index::IndexVec", fields: &["raw"] });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![self.raw[..].structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        self.raw[..].structure(state);
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -911,23 +860,21 @@ where
 }
 
 impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
-    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
-        // Represent DenseBitSet structurally as [domain_size, [set_indices...]]
-        // by listing the indices of set bits. This avoids accessing private
-        // internals such as the word vector.
-        let mut indices = Vec::new();
-        for idx in self.iter() {
-            indices.push(Value::UInt(idx.index() as u128));
-        }
+    fn structure<'s, W: crate::inspect::Write>(&self, state: &mut StructureState<'s, CTX, W>) {
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
+            path: "rustc_index::bit_set::DenseBitSet",
+            fields: &["domain_size", "indices"],
+        });
 
-        Value::Map(
-            [
-                (Value::String("domain_size".into()), Value::UInt(self.domain_size() as u128)),
-                (Value::String("indices".into()), Value::Array(indices)),
-            ]
-            .into_iter()
-            .collect(),
-        )
+        state.write_schema_header(&SCHEMA);
+
+        state.write_uint(self.domain_size() as u128);
+
+        let indices: Vec<_> = self.iter().map(|idx| idx.index()).collect();
+        state.write_array_header(indices.len());
+        for idx in indices {
+            state.write_uint(idx as u128);
+        }
     }
 
     fn hash_stable(&self, _ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -936,20 +883,23 @@ impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
 }
 
 impl<R: Idx, C: Idx, CTX> HashStable<CTX> for bit_set::BitMatrix<R, C> {
-    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
-        // Represent BitMatrix structurally as an array of rows, where each
-        // row is an array of set column indices. This avoids reading private
-        // fields while preserving the matrix contents.
-        let mut rows_out = Vec::new();
-        for r in self.rows() {
-            let mut cols = Vec::new();
-            for c in self.iter(r) {
-                cols.push(Value::UInt(c.index() as u128));
-            }
-            rows_out.push(Value::Array(cols));
-        }
+    fn structure<'s, W: crate::inspect::Write>(&self, state: &mut StructureState<'s, CTX, W>) {
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
+            path: "rustc_index::bit_set::BitMatrix",
+            fields: &["rows"],
+        });
 
-        Value::Map([(Value::String("rows".into()), Value::Array(rows_out))].into_iter().collect())
+        state.write_schema_header(&SCHEMA);
+
+        let rows: Vec<_> = self.rows().collect();
+        state.write_array_header(rows.len());
+        for r in rows {
+            let cols: Vec<_> = self.iter(r).map(|c| c.index()).collect();
+            state.write_array_header(cols.len());
+            for c in cols {
+                state.write_uint(c as u128);
+            }
+        }
     }
 
     fn hash_stable(&self, _ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -961,11 +911,11 @@ impl<T, CTX> HashStable<CTX> for bit_set::FiniteBitSet<T>
 where
     T: HashStable<CTX> + bit_set::FiniteBitSetTy,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::StructTuple { path: "bit_set::FiniteBitSet", field_count: 1 });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![self.0.structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        self.0.structure(state);
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
@@ -973,17 +923,29 @@ where
     }
 }
 
-impl_stable_traits_for_trivial_type!(::std::ffi::OsStr, |s: &::std::ffi::OsStr| {
-    // Ensure we produce an owned `String` so the `Cow<'static, str>` used by
-    // `Value::String` does not borrow from local stack data.
-    Value::Tuple(vec![Value::String(s.to_string_lossy().into_owned().into())])
-});
+impl_stable_traits_for_trivial_type!(
+    ::std::ffi::OsStr,
+    |s: &::std::ffi::OsStr, st: &mut StructureState<'_, CTX, W>| {
+        st.write_tuple_header(1);
+        st.write_string(&s.to_string_lossy());
+    }
+);
 
-impl_stable_traits_for_trivial_type!(::std::path::Path, |p: &::std::path::Path| {
-    Value::Tuple(vec![Value::String(p.to_string_lossy().into_owned().into())])
-});
-impl_stable_traits_for_trivial_type!(::std::path::PathBuf, |p: &::std::path::PathBuf| {
-    Value::Tuple(vec![Value::String(p.to_string_lossy().into_owned().into())])
+impl_stable_traits_for_trivial_type!(
+    ::std::path::Path,
+    |p: &::std::path::Path, st: &mut StructureState<'_, CTX, W>| {
+        st.write_tuple_header(1);
+        st.write_string(&p.to_string_lossy());
+    }
+);
+impl_stable_traits_for_trivial_type!(::std::path::PathBuf, |p: &::std::path::PathBuf,
+                                                            st: &mut StructureState<
+    '_,
+    CTX,
+    W,
+>| {
+    st.write_tuple_header(1);
+    st.write_string(&p.to_string_lossy());
 });
 
 // It is not safe to implement HashStable for HashSet, HashMap or any other collection type
@@ -997,16 +959,15 @@ where
     K: HashStable<HCX> + StableOrd,
     V: HashStable<HCX>,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) -> Value {
-        let mut map: BTreeMap<crate::inspect::Value, crate::inspect::Value> = BTreeMap::new();
-        for (k, v) in self.iter() {
-            map.insert(k.structure(state), v.structure(state));
-        }
-
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "BTreeMap", fields: &["map"] });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![Value::Map(map)] }
+        state.write_schema_header(&SCHEMA);
+        state.write_map_header(self.len());
+        for (k, v) in self.iter() {
+            k.structure(state);
+            v.structure(state);
+        }
     }
 
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
@@ -1021,16 +982,14 @@ impl<K, HCX> HashStable<HCX> for ::std::collections::BTreeSet<K>
 where
     K: HashStable<HCX> + StableOrd,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) -> Value {
-        let mut entries = Vec::with_capacity(self.len());
-        for entry in self.iter() {
-            entries.push(entry.structure(state));
-        }
-
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "BTreeSet", fields: &["entries"] });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![Value::Array(entries)] }
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(self.len());
+        for entry in self.iter() {
+            entry.structure(state);
+        }
     }
 
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {

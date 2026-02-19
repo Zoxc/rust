@@ -325,7 +325,6 @@ impl<HCX> HashStable<HCX> for WorkProductId {
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self.hash.structure(state);
     }
 }

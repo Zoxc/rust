@@ -24,7 +24,6 @@ impl<'a> HashStable<StableHashingContext<'a>> for ast::NodeId {
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct { path: "NodeId", fields: &[] });
         let _ = &SCHEMA;
         _state.write_schema_header(&SCHEMA);
-        _state.write_array_header(0);
     }
 }
 
@@ -125,7 +124,6 @@ impl<'a> HashStable<StableHashingContext<'a>> for SourceFile {
         });
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(4);
         self.stable_id.structure(state);
         self.src_hash.structure(state);
         self.lines().len().structure(state);
@@ -151,7 +149,6 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::Features {
         });
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(2);
         self.enabled_lang_features().structure(state);
         self.enabled_lib_features().structure(state);
     }
@@ -176,7 +173,6 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLang
         });
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(3);
         gate_name.structure(state);
         attr_sp.structure(state);
         stable_since.structure(state);
@@ -201,7 +197,6 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLibF
         });
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(2);
         gate_name.structure(state);
         attr_sp.structure(state);
     }

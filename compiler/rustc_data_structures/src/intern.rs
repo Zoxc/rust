@@ -115,7 +115,6 @@ where
                 fields: &["value"],
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self.0.structure(state);
     }
 

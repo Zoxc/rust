@@ -433,7 +433,6 @@ impl<CTX: HashStableContext> HashStable<CTX> for LocalDefId {
                 },
             );
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self.to_def_id().structure(state);
     }
 

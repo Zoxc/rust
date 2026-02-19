@@ -164,8 +164,6 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                     pushes.extend(push);
                 }
 
-                let field_count = field_names.len();
-
                 if is_enum {
                     quote! {
                         {
@@ -178,7 +176,6 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                     },
                                 );
                             __state.write_schema_header(&SCHEMA);
-                            __state.write_array_header(#field_count);
                             #pushes
                         }
                     }
@@ -194,7 +191,6 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                     },
                                 );
                             __state.write_schema_header(&SCHEMA);
-                            __state.write_array_header(#field_count);
                             #pushes
                         }
                     }
@@ -230,7 +226,6 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                     },
                                 );
                             __state.write_schema_header(&SCHEMA);
-                            __state.write_array_header(#count as usize);
                             #pushes
                         }
                     }
@@ -245,7 +240,6 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                     },
                                 );
                             __state.write_schema_header(&SCHEMA);
-                            __state.write_array_header(#count as usize);
                             #pushes
                         }
                     }
@@ -264,7 +258,6 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                     },
                                 );
                             __state.write_schema_header(&SCHEMA);
-                            __state.write_array_header(0);
                         }
                     }
                 } else {
@@ -278,7 +271,6 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                     },
                                 );
                             __state.write_schema_header(&SCHEMA);
-                            __state.write_array_header(0);
                         }
                     }
                 }

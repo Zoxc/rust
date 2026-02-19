@@ -183,7 +183,6 @@ impl<CTX> crate::ty::HashStable<CTX> for ScalarInt {
         });
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         state.write_binary(&self.to_bits_unchecked().to_le_bytes());
     }
 }

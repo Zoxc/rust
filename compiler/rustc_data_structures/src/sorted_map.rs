@@ -356,7 +356,6 @@ impl<K: HashStable<CTX> + StableOrd, V: HashStable<CTX>, CTX> HashStable<CTX> fo
                 fields: &["data"],
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self.data.structure(state);
     }
 

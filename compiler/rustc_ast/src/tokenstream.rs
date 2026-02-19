@@ -148,7 +148,6 @@ impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
                 variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
             });
         _state.write_schema_header(&SCHEMA);
-        _state.write_array_header(0);
     }
 
     fn hash_stable(&self, _hcx: &mut CTX, _hasher: &mut StableHasher) {
@@ -847,7 +846,6 @@ where
                 fields: &["trees"],
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         state.write_array_header(self.0.len());
         for sub_tt in self.iter() {
             sub_tt.structure(state);

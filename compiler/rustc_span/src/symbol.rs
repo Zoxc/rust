@@ -2901,7 +2901,6 @@ impl<CTX> HashStable<CTX> for Symbol {
                 },
             );
         _state.write_schema_header(&SCHEMA);
-        _state.write_array_header(1);
         _state.write_string(self.as_str());
     }
 
@@ -2979,7 +2978,6 @@ impl<CTX> HashStable<CTX> for ByteSymbol {
                 },
             );
         _state.write_schema_header(&SCHEMA);
-        _state.write_array_header(1);
         _state.write_binary(self.as_byte_str());
     }
 

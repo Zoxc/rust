@@ -18,50 +18,46 @@ use snap::write::FrameEncoder;
 use std::io::Write as IoWrite;
 // Cursor was used in an earlier approach; no longer needed.
 
-fn def_path_value<'tcx, W: rustc_data_structures::inspect::Write>(
+fn def_path_value<'tcx>(
     tcx: TyCtxt<'tcx>,
     crate_num: u32,
     index: u32,
-    state: &mut StructureState<'_, StableHashingContext<'_>, W>,
-) -> inspect::Value {
+    state: &mut dyn StructureStateOps<StableHashingContext<'_>>,
+) {
     // Construct a `DefId` from the supplied `u32` crate/def indices
     // and return an `inspect::Value::String` containing the def path.
     let def_id = rustc_span::def_id::DefId {
         krate: rustc_span::def_id::CrateNum::from_u32(crate_num),
         index: rustc_span::def_id::DefIndex::from_u32(index),
     };
-    tcx.def_path(def_id).structure(state)
+    state.write_string(&tcx.def_path(def_id).to_string_no_crate_verbose())
 }
 
-fn crate_num_value<'tcx, W: rustc_data_structures::inspect::Write>(
+fn crate_num_value<'tcx>(
     tcx: TyCtxt<'tcx>,
     crate_num: u32,
-    state: &mut StructureState<'_, StableHashingContext<'_>, W>,
-) -> inspect::Value {
-    tcx.def_path_hash(CrateNum::from_u32(crate_num).as_def_id())
-        .stable_crate_id()
-        .structure(state)
+    state: &mut dyn StructureStateOps<StableHashingContext<'_>>,
+) {
+    let stable = tcx.def_path_hash(CrateNum::from_u32(crate_num).as_def_id()).stable_crate_id();
+    state.write_uint(stable.as_u64() as u128);
 }
 
-fn span_value<W: rustc_data_structures::inspect::Write>(
+fn span_value(
     tcx: TyCtxt<'_>,
     span_args: SpanArgs,
-    state: &mut StructureState<'_, StableHashingContext<'_>, W>,
-) -> inspect::Value {
+    state: &mut dyn StructureStateOps<StableHashingContext<'_>>,
+) {
     let span = Span::from_args(span_args);
 
     let span = span.data_untracked();
-    let ctx_val = span.ctxt.structure(state);
-    let parent_val = span.parent.structure(state);
-
     if span.is_dummy() {
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
             path: "Span",
             variant_name: "Dummy",
             variant: EnumVariantSchema::Unit,
         });
-        let id = state.intern_schema(&SCHEMA);
-        return Value::Schema { id, values: Vec::new() };
+        state.write_schema_header(&SCHEMA);
+        return;
     }
 
     let parent = span.parent.map(|parent| tcx.def_span(parent).data_untracked());
@@ -78,11 +74,14 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
             variant_name: "Relative",
             variant: EnumVariantSchema::Named(&["ctxt", "parent", "lo", "hi"]),
         });
-        let id = state.intern_schema(&SCHEMA);
-        return Value::Schema {
-            id,
-            values: vec![ctx_val, parent_val, lo.structure(state), hi.structure(state)],
-        };
+        state.write_schema_header(&SCHEMA);
+        // `SyntaxContext` does not implement `HashStable` on a `dyn StructureStateOps`.
+        // For export, represent the context by its root-ness only.
+        state.write_bool(span.ctxt.is_root());
+        state.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
+        state.write_uint(lo as u128);
+        state.write_uint(hi as u128);
+        return;
     }
 
     let mut caching = CachingSourceMapView::new(tcx.sess.source_map());
@@ -92,8 +91,8 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
     let Some((file, line_lo, col_lo, line_hi, col_hi)) = caching.span_data_to_lines_and_cols(&span)
     else {
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum { path: "Span", variant_name: "Dummy", variant: EnumVariantSchema::Unit });
-        let id = state.intern_schema(&SCHEMA);
-        return Value::Schema { id, values: Vec::new() };
+        state.write_schema_header(&SCHEMA);
+        return;
     };
 
     if let Some(parent) = parent
@@ -108,11 +107,12 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
             variant_name: "Relative",
             variant: EnumVariantSchema::Named(&["ctxt", "parent", "lo", "hi"]),
         });
-        let id = state.intern_schema(&SCHEMA);
-        return Value::Schema {
-            id,
-            values: vec![ctx_val, parent_val, lo.structure(state), hi.structure(state)],
-        };
+        state.write_schema_header(&SCHEMA);
+        state.write_bool(span.ctxt.is_root());
+        state.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
+        state.write_uint(lo as u128);
+        state.write_uint(hi as u128);
+        return;
     }
 
     // Hash both the length and the end location (line/column) of a span. If we hash only the
@@ -138,20 +138,17 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
             "len",
         ]),
     });
-    let id = state.intern_schema(&SCHEMA);
-    Value::Schema {
-        id,
-        values: vec![
-            ctx_val,
-            parent_val,
-            file.stable_id.structure(state),
-            col_lo.structure(state),
-            col_hi.structure(state),
-            line_lo.structure(state),
-            line_hi.structure(state),
-            len.structure(state),
-        ],
-    }
+    state.write_schema_header(&SCHEMA);
+    state.write_bool(span.ctxt.is_root());
+    state.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
+    // `StableSourceFileId` is a newtype around `Hash128` with a private field.
+    // For export, write a deterministic string form.
+    state.write_string(&format!("{:?}", file.stable_id));
+    state.write_uint(col_lo.0 as u128);
+    state.write_uint(col_hi.0 as u128);
+    state.write_uint(line_lo as u128);
+    state.write_uint(line_hi as u128);
+    state.write_uint(len as u128);
 }
 
 /// Collects structural representations for all queries and returns

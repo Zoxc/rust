@@ -74,16 +74,13 @@ impl<CTX> HashStable<CTX> for Stability {
         match self {
             Stability::Stable => {
                 state.write_schema_header(&SCHEMA_STABLE);
-                state.write_array_header(0);
             }
             Stability::Unstable(nightly_feature) => {
                 state.write_schema_header(&SCHEMA_UNSTABLE);
-                state.write_array_header(1);
                 nightly_feature.structure(state);
             }
             Stability::Forbidden { reason } => {
                 state.write_schema_header(&SCHEMA_FORBIDDEN);
-                state.write_array_header(1);
                 state.write_string(reason);
             }
         }

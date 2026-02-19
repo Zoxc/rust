@@ -262,7 +262,6 @@ where
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(0);
             }
             ReStatic => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -274,7 +273,6 @@ where
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(0);
             }
             ReError(_) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -286,7 +284,6 @@ where
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(0);
             }
             ReBound(d, r) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -300,7 +297,6 @@ where
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(2);
                 d.structure(state);
                 r.structure(state);
             }
@@ -316,7 +312,6 @@ where
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(1);
                 r.structure(state);
             }
             ReLateParam(r) => {
@@ -331,7 +326,6 @@ where
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(1);
                 r.structure(state);
             }
             RePlaceholder(r) => {
@@ -346,7 +340,6 @@ where
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(1);
                 r.structure(state);
             }
             ReVar(_) => {
@@ -359,7 +352,6 @@ where
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(0);
             }
         }
     }

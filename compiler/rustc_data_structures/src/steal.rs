@@ -87,7 +87,6 @@ impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
                     variant: crate::inspect::EnumVariantSchema::Unit,
                 });
             state.write_schema_header(&SCHEMA);
-            state.write_array_header(0);
         } else {
             // SAFETY: we just checked that the option is `Some`.
             static SCHEMA: crate::inspect::SchemaRef =
@@ -96,7 +95,6 @@ impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
                     field_count: 1,
                 });
             state.write_schema_header(&SCHEMA);
-            state.write_array_header(1);
             guard.as_ref().unwrap().structure(state);
         }
     }

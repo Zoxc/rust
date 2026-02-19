@@ -95,7 +95,6 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for OwnerNodes<'
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         opt_hash_including_bodies.structure(state);
     }
 }
@@ -120,7 +119,6 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for DelayedLints {
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         opt_hash.structure(state);
     }
 }
@@ -147,7 +145,6 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for AttributeMap
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         opt_hash.structure(state);
     }
 }
@@ -172,7 +169,6 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for Crate<'_> {
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         opt_hir_hash.structure(state);
     }
 }
@@ -197,6 +193,5 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for HashIgnoredAttrId 
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(0);
     }
 }

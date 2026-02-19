@@ -1528,7 +1528,6 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
                     variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                 });
             _state.write_schema_header(&SCHEMA);
-            _state.write_array_header(0);
         } else {
             static SCHEMA: rustc_data_structures::inspect::SchemaRef =
                 rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Enum {
@@ -1538,7 +1537,6 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
                 });
             let (expn_id, transparency) = self.outer_mark();
             _state.write_schema_header(&SCHEMA);
-            _state.write_array_header(2);
             expn_id.structure(_state);
             transparency.structure(_state);
         }
@@ -1568,7 +1566,6 @@ impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
                 fields: &["krate", "local_id"],
             });
         _state.write_schema_header(&SCHEMA);
-        _state.write_array_header(2);
         self.krate.structure(_state);
         _state.write_uint(self.local_id.as_u32() as u128);
     }
@@ -1594,7 +1591,6 @@ impl<CTX: HashStableContext> HashStable<CTX> for LocalExpnId {
                 field_count: 1,
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self.to_expn_id().structure(state);
     }
 

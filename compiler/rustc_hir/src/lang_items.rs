@@ -160,7 +160,6 @@ impl<CTX> HashStable<CTX> for LangItem {
         });
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         state.write_string(self.variant_name());
     }
 }

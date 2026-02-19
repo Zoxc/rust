@@ -127,7 +127,6 @@ impl<CTX: rustc_span::HashStableContext> HashStable<CTX> for Path {
                 fields: &["segments"],
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         state.write_array_header(self.segments.len());
         for seg in &self.segments {
             seg.ident.structure(state);

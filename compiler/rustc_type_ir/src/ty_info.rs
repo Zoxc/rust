@@ -138,7 +138,6 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(2);
         self.internee.structure(state);
         self.stable_hash.structure(state);
     }

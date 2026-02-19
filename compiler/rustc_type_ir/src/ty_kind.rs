@@ -699,7 +699,6 @@ impl<CTX> HashStable<CTX> for InferTy {
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(0);
             }
             IntVar(_) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -711,7 +710,6 @@ impl<CTX> HashStable<CTX> for InferTy {
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(0);
             }
             FloatVar(_) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -723,7 +721,6 @@ impl<CTX> HashStable<CTX> for InferTy {
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(0);
             }
             FreshTy(v) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -735,7 +732,6 @@ impl<CTX> HashStable<CTX> for InferTy {
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(1);
                 (*v).structure(state);
             }
             FreshIntTy(v) => {
@@ -748,7 +744,6 @@ impl<CTX> HashStable<CTX> for InferTy {
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(1);
                 (*v).structure(state);
             }
             FreshFloatTy(v) => {
@@ -761,7 +756,6 @@ impl<CTX> HashStable<CTX> for InferTy {
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(1);
                 (*v).structure(state);
             }
         }

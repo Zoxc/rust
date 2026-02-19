@@ -185,7 +185,6 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
             });
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(3);
         self.did.structure(state);
         self.flags.structure(state);
         self.repr.discr_type().structure(state);

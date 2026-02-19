@@ -53,7 +53,6 @@ impl<T> stable_hasher::HashStable<T> for Svh {
                 field_count: 1,
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         hash.structure(state);
     }
 

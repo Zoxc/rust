@@ -155,7 +155,6 @@ impl<HCX: HashStableContext> HashStable<HCX> for LintExpectationId {
                     );
 
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(3);
                 hir_id.structure(state);
                 attr_index.structure(state);
                 lint_index.structure(state);
@@ -669,7 +668,6 @@ impl<HCX> HashStable<HCX> for LintId {
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self.lint_name_raw().structure(state);
     }
 }

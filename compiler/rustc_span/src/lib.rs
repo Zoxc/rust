@@ -2685,7 +2685,6 @@ impl<H: HashStableContext> HashStable<H> for RelativeBytePos {
                 field_count: 1,
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self.0.structure(state);
     }
 
@@ -2702,7 +2701,6 @@ impl<H: HashStableContext> HashStable<H> for BytePos {
                 field_count: 1,
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self.0.structure(state);
     }
 
@@ -2719,7 +2717,6 @@ impl<H: HashStableContext> HashStable<H> for CharPos {
                 field_count: 1,
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self.0.structure(state);
     }
 

@@ -269,7 +269,6 @@ where
                 fields: &["pointer", "tag"],
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(2);
         self.pointer().structure(state);
         self.tag().structure(state);
     }

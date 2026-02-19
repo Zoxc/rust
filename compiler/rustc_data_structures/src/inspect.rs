@@ -179,9 +179,9 @@ impl<'a> Write for Option<&'a mut File> {
 pub struct StructureState<'a, CTX, W> {
     pub schema_list: FxHashMap<usize, (SchemaId, &'static SchemaRef)>,
     pub writer: W,
-    pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_, CTX, W>) -> Value,
-    pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_, CTX, W>) -> Value,
-    pub crate_num: &'a dyn Fn(u32, &mut StructureState<'_, CTX, W>) -> Value,
+    pub span_value: &'a dyn Fn(SpanArgs, &mut dyn StructureStateOps<CTX>),
+    pub def_path: &'a dyn Fn(u32, u32, &mut dyn StructureStateOps<CTX>),
+    pub crate_num: &'a dyn Fn(u32, &mut dyn StructureStateOps<CTX>),
     pub _marker: PhantomData<&'a CTX>,
 }
 
@@ -197,49 +197,82 @@ impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
         id
     }
 
-    // Writers corresponding to each `Value` variant. These write to
-    // `self.writer` rather than returning a `Value`.
+    // Writers used by `HashStable::structure`. These write a self-describing
+    // stream to `self.writer`.
+
+    #[inline]
+    fn write_tag(&mut self, tag: u8) {
+        self.writer.write_bytes(&[tag]);
+    }
+
+    // Tag values for the structural stream.
+    const TAG_BOOL: u8 = 0;
+    const TAG_INT: u8 = 1;
+    const TAG_UINT: u8 = 2;
+    const TAG_F64: u8 = 3;
+    const TAG_BINARY: u8 = 4;
+    const TAG_STRING: u8 = 5;
+    const TAG_ARRAY: u8 = 6;
+    const TAG_TUPLE: u8 = 7;
+    const TAG_MAP: u8 = 8;
+    const TAG_SCHEMA: u8 = 9;
+
+    const SCHEMA_STRUCT: u8 = 0;
+    const SCHEMA_STRUCT_TUPLE: u8 = 1;
+    const SCHEMA_ENUM: u8 = 2;
+
+    const ENUM_VARIANT_UNIT: u8 = 0;
+    const ENUM_VARIANT_NAMED: u8 = 1;
+    const ENUM_VARIANT_TUPLE: u8 = 2;
     pub fn write_bool(&mut self, v: bool) {
+        self.write_tag(Self::TAG_BOOL);
         let byte = if v { 1u8 } else { 0u8 };
         self.writer.write_bytes(&[byte]);
     }
 
     pub fn write_int(&mut self, v: i128) {
+        self.write_tag(Self::TAG_INT);
         self.writer.write_i128(v);
     }
 
     pub fn write_uint(&mut self, v: u128) {
+        self.write_tag(Self::TAG_UINT);
         self.writer.write_u128(v);
     }
 
     pub fn write_f64(&mut self, v: f64) {
+        self.write_tag(Self::TAG_F64);
         self.writer.write_bytes(&v.to_bits().to_le_bytes());
     }
 
     pub fn write_binary(&mut self, v: &[u8]) {
+        self.write_tag(Self::TAG_BINARY);
         self.writer.write_u128(v.len() as u128);
         self.writer.write_bytes(v);
     }
 
     pub fn write_string(&mut self, s: &str) {
+        self.write_tag(Self::TAG_STRING);
         self.writer.write_u128(s.len() as u128);
         self.writer.write_bytes(s.as_bytes());
     }
 
     pub fn write_array_header(&mut self, len: usize) {
+        self.write_tag(Self::TAG_ARRAY);
         self.writer.write_u128(len as u128);
     }
 
     pub fn write_tuple_header(&mut self, len: usize) {
+        self.write_tag(Self::TAG_TUPLE);
         self.writer.write_u128(len as u128);
     }
 
     pub fn write_map_header(&mut self, len: usize) {
+        self.write_tag(Self::TAG_MAP);
         self.writer.write_u128(len as u128);
     }
 
     pub fn write_schema_header(&mut self, schema: &'static SchemaRef) {
-        let id = self.intern_schema(schema);
-        self.writer.write_u128(id.0 as u128);
+        self.write_tag(Self::TAG_SCHEMA);
     }
 }

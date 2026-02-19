@@ -433,7 +433,6 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
             });
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(2);
         len.structure(state);
 
         // Deterministically order entries by their structural bytes.
@@ -687,7 +686,6 @@ impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> fo
             });
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(2);
         len.structure(state);
 
         let mut entries: Vec<(Vec<u8>, Vec<u8>)> = self
@@ -779,7 +777,6 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
                 fields: &["len", "counts"],
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(2);
         len.structure(state);
 
         // Aggregate counts by equality of written structure bytes.

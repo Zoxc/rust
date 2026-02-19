@@ -940,7 +940,6 @@ mod binding_form_impl {
                         variant: inspect::EnumVariantSchema::Tuple(1),
                     });
                     state.write_schema_header(&SCHEMA);
-                    state.write_array_header(1);
                     binding.structure(state);
                 }
                 ImplicitSelf(kind) => {
@@ -950,7 +949,6 @@ mod binding_form_impl {
                         variant: inspect::EnumVariantSchema::Tuple(1),
                     });
                     state.write_schema_header(&SCHEMA);
-                    state.write_array_header(1);
                     kind.structure(state);
                 }
                 RefForGuard(local) => {
@@ -960,7 +958,6 @@ mod binding_form_impl {
                         variant: inspect::EnumVariantSchema::Tuple(1),
                     });
                     state.write_schema_header(&SCHEMA);
-                    state.write_array_header(1);
                     local.structure(state);
                 }
             }

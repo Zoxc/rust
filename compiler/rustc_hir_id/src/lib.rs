@@ -71,7 +71,6 @@ impl<CTX: HashStableContext> HashStable<CTX> for OwnerId {
                 },
             );
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         self.def_id.structure(state);
     }
 

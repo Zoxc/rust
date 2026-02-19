@@ -144,7 +144,6 @@ impl<CTX> HashStable<CTX> for InferConst {
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(0);
             }
             InferConst::Fresh(i) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -156,7 +155,6 @@ impl<CTX> HashStable<CTX> for InferConst {
                         },
                     );
                 state.write_schema_header(&SCHEMA);
-                state.write_array_header(1);
                 (*i).structure(state);
             }
         }

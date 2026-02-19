@@ -69,7 +69,6 @@ impl<CTX> HashStable<CTX> for Pu128 {
                 field_count: 1,
             });
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(1);
         { self.0 }.structure(state);
     }
 

@@ -190,6 +190,5 @@ impl<CTX> HashStable<CTX> for Cache {
             );
 
         state.write_schema_header(&SCHEMA);
-        state.write_array_header(0);
     }
 }
