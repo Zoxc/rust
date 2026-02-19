@@ -73,7 +73,7 @@ impl<T> Steal<T> {
 }
 
 impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
         // Attempt to read the inner value without triggering the
         // `borrow()` panic path. If the value has been stolen, return
         // a placeholder so callers can still obtain a stable structural

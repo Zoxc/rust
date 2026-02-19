@@ -120,7 +120,8 @@ fn hash_stable_derive_with_mode(
             #[inline]
             fn structure<'s, W: ::rustc_data_structures::inspect::Write>(
                 &self,
-                __state: &mut ::rustc_data_structures::stable_hasher::StructureState<'s, #context, W>,
+                __state: &mut ::rustc_data_structures::stable_hasher::StructureState<'s, #context>,
+                __writer: &mut W,
             ) {
                 match *self { #structure }
             }
@@ -175,7 +176,7 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[#(#field_names),*]),
                                     },
                                 );
-                            __state.write_schema_header(&SCHEMA);
+                            __state.write_schema_header(&SCHEMA, __writer);
                             #pushes
                         }
                     }
@@ -190,7 +191,7 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         fields: &[#(#field_names),*],
                                     },
                                 );
-                            __state.write_schema_header(&SCHEMA);
+                            __state.write_schema_header(&SCHEMA, __writer);
                             #pushes
                         }
                     }
@@ -225,7 +226,7 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         variant: ::rustc_data_structures::inspect::EnumVariantSchema::Tuple(#count),
                                     },
                                 );
-                            __state.write_schema_header(&SCHEMA);
+                            __state.write_schema_header(&SCHEMA, __writer);
                             #pushes
                         }
                     }
@@ -239,7 +240,7 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         field_count: #count,
                                     },
                                 );
-                            __state.write_schema_header(&SCHEMA);
+                            __state.write_schema_header(&SCHEMA, __writer);
                             #pushes
                         }
                     }
@@ -270,7 +271,7 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         fields: &[],
                                     },
                                 );
-                            __state.write_schema_header(&SCHEMA);
+                            __state.write_schema_header(&SCHEMA, __writer);
                         }
                     }
                 }

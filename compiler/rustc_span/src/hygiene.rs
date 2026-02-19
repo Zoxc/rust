@@ -1518,7 +1518,7 @@ fn update_disambiguator(expn_data: &mut ExpnData, mut ctx: impl HashStableContex
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<W>, writer: &mut W) {
         // Represent SyntaxContext by either nil (root) or [expn_id.structure, transparency.structure]
         if self.is_root() {
             static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -1558,7 +1558,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<W>, writer: &mut W) {
         // Represent ExpnId structurally as [krate.structure, local_id]
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
@@ -1584,7 +1584,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for LocalExpnId {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
                 path: "rustc_span::hygiene::LocalExpnId",

@@ -420,7 +420,7 @@ impl<V: Hash + Eq, I: Iterator<Item = V>> From<UnordItems<V, I>> for UnordSet<V>
 }
 
 impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) {
+    fn structure(&self, state: &mut StructureState<'_, HCX>, writer: &mut impl crate::inspect::Write) {
         // Represent the set structurally in an order-independent way.
         // Use a map where each key is the structural hash of an element and the value is `1`.
 
@@ -432,8 +432,8 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
                 fields: &["len", "entries"],
             });
 
-        state.write_schema_header(&SCHEMA);
-        len.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        len.structure(state, writer);
 
         // Deterministically order entries by their structural hashes.
         let mut keys: Vec<rustc_hashes::Hash128> = self
@@ -443,10 +443,10 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
             .collect();
         keys.sort();
 
-        state.write_map_header(keys.len());
+        writer.write_map_header(keys.len());
         for k in keys {
-            state.write_binary(&k.as_u128().to_le_bytes());
-            state.write_uint(1u128);
+            writer.write_binary(&k.as_u128().to_le_bytes());
+            writer.write_uint(1u128);
         }
     }
 
@@ -673,7 +673,7 @@ where
 }
 
 impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> for UnordMap<K, V> {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) {
+    fn structure(&self, state: &mut StructureState<'_, HCX>, writer: &mut impl crate::inspect::Write) {
         // Represent the map structurally as an order-independent map of key->value,
         // where both key and value are their structural hashes.
 
@@ -685,8 +685,8 @@ impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> fo
                 fields: &["len", "entries"],
             });
 
-        state.write_schema_header(&SCHEMA);
-        len.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        len.structure(state, writer);
 
         let mut entries: Vec<(rustc_hashes::Hash128, rustc_hashes::Hash128)> = self
             .inner
@@ -695,10 +695,10 @@ impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> fo
             .collect();
         entries.sort_by(|(ka, va), (kb, vb)| ka.cmp(kb).then_with(|| va.cmp(vb)));
 
-        state.write_map_header(entries.len());
+        writer.write_map_header(entries.len());
         for (k, v) in entries {
-            state.write_binary(&k.as_u128().to_le_bytes());
-            state.write_binary(&v.as_u128().to_le_bytes());
+            writer.write_binary(&k.as_u128().to_le_bytes());
+            writer.write_binary(&v.as_u128().to_le_bytes());
         }
     }
 
@@ -765,7 +765,7 @@ impl<T, I: Iterator<Item = T>> From<UnordItems<T, I>> for UnordBag<T> {
 }
 
 impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) {
+    fn structure(&self, state: &mut StructureState<'_, HCX>, writer: &mut impl crate::inspect::Write) {
         // Represent bag (multiset) structurally as a map from element-hash -> count.
         // This encodes multiplicity without depending on iteration order.
 
@@ -776,8 +776,8 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
                 path: "rustc_data_structures::unord::UnordBag",
                 fields: &["len", "counts"],
             });
-        state.write_schema_header(&SCHEMA);
-        len.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        len.structure(state, writer);
 
         // Aggregate counts by equality of written structure hashes.
         let mut keys: Vec<rustc_hashes::Hash128> = self
@@ -799,10 +799,10 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
             }
         }
 
-        state.write_map_header(grouped.len());
+        writer.write_map_header(grouped.len());
         for (k, cnt) in grouped {
-            state.write_binary(&k.as_u128().to_le_bytes());
-            state.write_uint(cnt as u128);
+            writer.write_binary(&k.as_u128().to_le_bytes());
+            writer.write_uint(cnt as u128);
         }
     }
 
@@ -866,19 +866,17 @@ fn hash_iter_order_independent<
     }
 }
 
-fn structure_hash<HCX, W: crate::inspect::Write, T: HashStable<HCX>>(
-    value: &T,
-    parent: &mut StructureState<'_, HCX, W>,
-) -> rustc_hashes::Hash128 {
-    let mut inner_state: crate::inspect::State<'_> = crate::inspect::State {
+fn structure_hash<HCX, T: HashStable<HCX>>(value: &T, parent: &mut StructureState<'_, HCX>) ->
+    rustc_hashes::Hash128 {
+    let mut inner_state = crate::inspect::State {
         schema_list: Default::default(),
-        span_value: parent.state.span_value,
-        def_path: parent.state.def_path,
-        crate_num: parent.state.crate_num,
+        span_value: parent.span_value,
+        def_path: parent.def_path,
+        crate_num: parent.crate_num,
     };
     let mut inner_hasher = Hasher::new();
     let mut st = StructureState::join(&mut inner_state, &mut inner_hasher);
-    value.structure(&mut st);
+    value.structure(&mut st, &mut inner_hasher);
     drop(st);
     inner_hasher.finish()
 }

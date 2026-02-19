@@ -2678,7 +2678,7 @@ impl<D: Decoder> Decodable<D> for BytePos {
 }
 
 impl<H: HashStableContext> HashStable<H> for RelativeBytePos {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, H, W>) {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
                 path: "rustc_span::RelativeBytePos",
@@ -2694,7 +2694,7 @@ impl<H: HashStableContext> HashStable<H> for RelativeBytePos {
 }
 
 impl<H: HashStableContext> HashStable<H> for BytePos {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, H, W>) {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
                 path: "rustc_span::BytePos",
@@ -2710,7 +2710,7 @@ impl<H: HashStableContext> HashStable<H> for BytePos {
 }
 
 impl<H: HashStableContext> HashStable<H> for CharPos {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, H, W>) {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
                 path: "rustc_span::CharPos",

@@ -135,66 +135,66 @@ pub trait Write {
     fn write_bool(&mut self, v: bool) {
         write_tag(self, ValueKind::Bool as u8);
         let byte = if v { 1u8 } else { 0u8 };
-        self.write_bytes(&[byte]);
+        self.write_raw_bytes(&[byte]);
     }
 
     fn write_int(&mut self, v: i128) {
         write_tag(self, ValueKind::Int as u8);
-        self.write_i128(v);
+        self.write_raw_i128(v);
     }
 
     fn write_uint(&mut self, v: u128) {
         write_tag(self, ValueKind::UInt as u8);
-        self.write_u128(v);
+        self.write_raw_u128(v);
     }
 
     fn write_f64(&mut self, v: f64) {
         write_tag(self, ValueKind::F64 as u8);
-        self.write_bytes(&v.to_bits().to_le_bytes());
+        self.write_raw_bytes(&v.to_bits().to_le_bytes());
     }
 
     fn write_binary(&mut self, v: &[u8]) {
         write_tag(self, ValueKind::Binary as u8);
-        self.write_u128(v.len() as u128);
-        self.write_bytes(v);
+        self.write_raw_u128(v.len() as u128);
+        self.write_raw_bytes(v);
     }
 
     fn write_string(&mut self, s: &str) {
         write_tag(self, ValueKind::String as u8);
-        self.write_u128(s.len() as u128);
-        self.write_bytes(s.as_bytes());
+        self.write_raw_u128(s.len() as u128);
+        self.write_raw_bytes(s.as_bytes());
     }
 
     fn write_array_header(&mut self, len: usize) {
         write_tag(self, ValueKind::Array as u8);
-        self.write_u128(len as u128);
+        self.write_raw_u128(len as u128);
     }
 
     fn write_tuple_header(&mut self, len: usize) {
         write_tag(self, ValueKind::Tuple as u8);
-        self.write_u128(len as u128);
+        self.write_raw_u128(len as u128);
     }
 
     fn write_map_header(&mut self, len: usize) {
         write_tag(self, ValueKind::Map as u8);
-        self.write_u128(len as u128);
+        self.write_raw_u128(len as u128);
     }
 }
 
 impl<'a> Write for &'a mut dyn Write {
     #[inline]
-    fn write_u128(&mut self, value: u128) {
-        (&mut **self).write_u128(value)
+    fn write_raw_u128(&mut self, value: u128) {
+        (&mut **self).write_raw_u128(value)
     }
 
     #[inline]
-    fn write_i128(&mut self, value: i128) {
-        (&mut **self).write_i128(value)
+    fn write_raw_i128(&mut self, value: i128) {
+        (&mut **self).write_raw_i128(value)
     }
 
     #[inline]
-    fn write_bytes(&mut self, bytes: &[u8]) {
-        (&mut **self).write_bytes(bytes)
+    fn write_raw_bytes(&mut self, bytes: &[u8]) {
+        (&mut **self).write_raw_bytes(bytes)
     }
 }
 
@@ -225,17 +225,17 @@ impl Default for Hasher {
 
 impl Write for Hasher {
     #[inline]
-    fn write_u128(&mut self, value: u128) {
+    fn write_raw_u128(&mut self, value: u128) {
         std::hash::Hasher::write(&mut self.0, &value.to_le_bytes());
     }
 
     #[inline]
-    fn write_i128(&mut self, value: i128) {
+    fn write_raw_i128(&mut self, value: i128) {
         std::hash::Hasher::write(&mut self.0, &value.to_le_bytes());
     }
 
     #[inline]
-    fn write_bytes(&mut self, bytes: &[u8]) {
+    fn write_raw_bytes(&mut self, bytes: &[u8]) {
         std::hash::Hasher::write(&mut self.0, bytes);
     }
 }
@@ -261,7 +261,7 @@ impl FileWriter {
 }
 
 impl Write for FileWriter {
-    fn write_u128(&mut self, value: u128) {
+    fn write_raw_u128(&mut self, value: u128) {
         if let Some(f) = &mut self.0 {
             // Best-effort write: ignore I/O errors here, callers handle
             // higher-level failures via diagnostics. Write as little-endian.
@@ -269,13 +269,13 @@ impl Write for FileWriter {
         }
     }
 
-    fn write_i128(&mut self, value: i128) {
+    fn write_raw_i128(&mut self, value: i128) {
         if let Some(f) = &mut self.0 {
             let _ = f.write_all(&value.to_le_bytes());
         }
     }
 
-    fn write_bytes(&mut self, bytes: &[u8]) {
+    fn write_raw_bytes(&mut self, bytes: &[u8]) {
         if let Some(f) = &mut self.0 {
             let _ = f.write_all(bytes);
         }
@@ -285,19 +285,19 @@ impl Write for FileWriter {
 // Implement `Write` for an optional mutable file reference so callers can
 // pass `Option<&mut File>` as the `W` type parameter on `StructureState`.
 impl<'a> Write for Option<&'a mut File> {
-    fn write_u128(&mut self, value: u128) {
+    fn write_raw_u128(&mut self, value: u128) {
         if let Some(f) = self {
             let _ = f.write_all(&value.to_le_bytes());
         }
     }
 
-    fn write_i128(&mut self, value: i128) {
+    fn write_raw_i128(&mut self, value: i128) {
         if let Some(f) = self {
             let _ = f.write_all(&value.to_le_bytes());
         }
     }
 
-    fn write_bytes(&mut self, bytes: &[u8]) {
+    fn write_raw_bytes(&mut self, bytes: &[u8]) {
         if let Some(f) = self {
             let _ = f.write_all(bytes);
         }
@@ -306,26 +306,26 @@ impl<'a> Write for Option<&'a mut File> {
 
 pub struct StructureState<'a, CTX> {
     pub schema_list: FxHashMap<usize, (SchemaId, &'static SchemaRef)>,
-    pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_,CTX>, &mut dyn Write),
-    pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_,CTX>, &mut dyn Write),
-    pub crate_num: &'a dyn Fn(u32, &mut StructureState<'_,CTX>, &mut dyn Write),
+    pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_, CTX>, &mut dyn Write),
+    pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_, CTX>, &mut dyn Write),
+    pub crate_num: &'a dyn Fn(u32, &mut StructureState<'_, CTX>, &mut dyn Write),
     pub _marker: PhantomData<&'a CTX>,
 }
 
-impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
+impl<'a, CTX> StructureState<'a, CTX> {
     pub fn intern_schema(&mut self, schema: &'static SchemaRef) -> SchemaId {
         let key = schema as *const SchemaRef as usize;
-        if let Some(id) = self.state.schema_list.get(&key) {
+        if let Some(id) = self.schema_list.get(&key) {
             return id.0;
         }
 
-        let id = SchemaId(self.state.schema_list.len() as u32);
-        self.state.schema_list.insert(key, (id, schema));
+        let id = SchemaId(self.schema_list.len() as u32);
+        self.schema_list.insert(key, (id, schema));
         id
     }
 
     pub fn write_schema_header(&mut self, schema: &'static SchemaRef, writer: &mut impl Write) {
-        write_tag(self.writer, ValueKind::Schema as u8);
+        write_tag(writer, ValueKind::Schema as u8);
         let id = self.intern_schema(schema);
         writer.write_raw_u128(id.0);
     }

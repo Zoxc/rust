@@ -262,7 +262,7 @@ where
     P: HashStable<HCX> + Aligned + ?Sized,
     T: Tag + HashStable<HCX>,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, HCX, W>) {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
                 path: "rustc_data_structures::tagged_ptr::TaggedRef",

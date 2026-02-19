@@ -120,7 +120,7 @@ impl PartialEq<&[Symbol]> for Path {
 }
 
 impl<CTX: rustc_span::HashStableContext> HashStable<CTX> for Path {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
                 path: "rustc_ast::ast::Path",

@@ -349,7 +349,7 @@ impl<K: Ord, V> FromIterator<(K, V)> for SortedMap<K, V> {
 
 impl<K: HashStable<CTX> + StableOrd, V: HashStable<CTX>, CTX> HashStable<CTX> for SortedMap<K, V> {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
                 path: "rustc_data_structures::sorted_map::SortedMap",

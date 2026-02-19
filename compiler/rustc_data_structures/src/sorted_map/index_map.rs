@@ -131,7 +131,7 @@ where
     K: HashStable<C>,
     V: HashStable<C>,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, C, W>) {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
         let SortedIndexMultiMap { items, idx_sorted_by_item_key: _ } = self;
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
