@@ -6,7 +6,6 @@
 
 use std::fmt::{self, Debug};
 
-use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
     HashStable, StableHasher, StableOrd, StructureState, ToStableHashKey,
 };
@@ -62,7 +61,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for OwnerId {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+    ) {
         // Represent OwnerId by its contained LocalDefId
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -71,8 +70,9 @@ impl<CTX: HashStableContext> HashStable<CTX> for OwnerId {
                     field_count: 1,
                 },
             );
-        let id = state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: vec![self.def_id.structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        self.def_id.structure(state);
     }
 
     #[inline]

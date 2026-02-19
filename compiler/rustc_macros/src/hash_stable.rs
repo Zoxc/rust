@@ -117,8 +117,11 @@ fn hash_stable_derive_with_mode(
                 #discriminant
                 match *self { #body }
             }
-                #[inline]
-                fn structure<'s, W: ::rustc_data_structures::inspect::Write>(&self, __state: &mut ::rustc_data_structures::stable_hasher::StructureState<'s, #context, W>) -> ::rustc_data_structures::inspect::Value {
+            #[inline]
+            fn structure<'s, W: ::rustc_data_structures::inspect::Write>(
+                &self,
+                __state: &mut ::rustc_data_structures::stable_hasher::StructureState<'s, #context, W>,
+            ) {
                 match *self { #structure }
             }
         },
@@ -129,8 +132,8 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
     let is_enum = matches!(s.ast().data, syn::Data::Enum(_));
     let type_ident = &s.ast().ident;
 
-    // Build match arms for each variant where we intern a schema and then
-    // return a `Value::Schema` with positional field values.
+    // Build match arms for each variant where we write a schema header and then
+    // stream positional field values into the StructureState.
     s.each_variant(|vi| {
         let var_ident = &vi.ast().ident;
 
@@ -154,16 +157,16 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
 
                     let bind_ident = &binding.binding;
                     let push = if let Some(project) = attrs.project {
-                        quote! { values.push((#bind_ident.#project).structure(__state)); }
+                        quote! { (#bind_ident.#project).structure(__state); }
                     } else {
-                        quote! { values.push(#bind_ident.structure(__state)); }
+                        quote! { #bind_ident.structure(__state); }
                     };
                     pushes.extend(push);
                 }
 
                 let field_count = field_names.len();
 
-                    if is_enum {
+                if is_enum {
                     quote! {
                         {
                             static SCHEMA: ::rustc_data_structures::inspect::SchemaRef =
@@ -174,10 +177,9 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[#(#field_names),*]),
                                     },
                                 );
-                            let __id = __state.intern_schema(&SCHEMA);
-                            let mut values: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
+                            __state.write_schema_header(&SCHEMA);
+                            __state.write_array_header(#field_count);
                             #pushes
-                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values }
                         }
                     }
                 } else {
@@ -191,10 +193,9 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         fields: &[#(#field_names),*],
                                     },
                                 );
-                            let __id = __state.intern_schema(&SCHEMA);
-                            let mut values: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
+                            __state.write_schema_header(&SCHEMA);
+                            __state.write_array_header(#field_count);
                             #pushes
-                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values }
                         }
                     }
                 }
@@ -210,9 +211,9 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                     count += 1;
                     let bind_ident = &binding.binding;
                     let push = if let Some(project) = attrs.project {
-                        quote! { values.push((#bind_ident.#project).structure(__state)); }
+                        quote! { (#bind_ident.#project).structure(__state); }
                     } else {
-                        quote! { values.push(#bind_ident.structure(__state)); }
+                        quote! { #bind_ident.structure(__state); }
                     };
                     pushes.extend(push);
                 }
@@ -228,10 +229,9 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         variant: ::rustc_data_structures::inspect::EnumVariantSchema::Tuple(#count),
                                     },
                                 );
-                            let __id = __state.intern_schema(&SCHEMA);
-                            let mut values: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
+                            __state.write_schema_header(&SCHEMA);
+                            __state.write_array_header(#count as usize);
                             #pushes
-                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values }
                         }
                     }
                 } else {
@@ -244,10 +244,9 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         field_count: #count,
                                     },
                                 );
-                            let __id = __state.intern_schema(&SCHEMA);
-                            let mut values: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
+                            __state.write_schema_header(&SCHEMA);
+                            __state.write_array_header(#count as usize);
                             #pushes
-                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values }
                         }
                     }
                 }
@@ -264,8 +263,8 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         variant: ::rustc_data_structures::inspect::EnumVariantSchema::Unit,
                                     },
                                 );
-                            let __id = __state.intern_schema(&SCHEMA);
-                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values: Vec::new() }
+                            __state.write_schema_header(&SCHEMA);
+                            __state.write_array_header(0);
                         }
                     }
                 } else {
@@ -278,8 +277,8 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         fields: &[],
                                     },
                                 );
-                            let __id = __state.intern_schema(&SCHEMA);
-                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values: Vec::new() }
+                            __state.write_schema_header(&SCHEMA);
+                            __state.write_array_header(0);
                         }
                     }
                 }

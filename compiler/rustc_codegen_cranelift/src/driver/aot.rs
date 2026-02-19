@@ -54,9 +54,9 @@ impl<HCX> HashStable<HCX> for OngoingModuleCodegen {
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
         _state: &mut StructureState<'s, HCX, W>,
-    ) -> ::rustc_data_structures::inspect::Value {
-        // OngoingModuleCodegen is transient/runtime-only; represent as an
-        // unit variant in the inspect representation.
+    ) {
+        // OngoingModuleCodegen is transient/runtime-only; represent as a
+        // unit variant.
         static SCHEMA: ::rustc_data_structures::inspect::SchemaRef =
             ::rustc_data_structures::inspect::SchemaRef::new(
                 ::rustc_data_structures::inspect::Schema::Enum {
@@ -65,8 +65,9 @@ impl<HCX> HashStable<HCX> for OngoingModuleCodegen {
                     variant: ::rustc_data_structures::inspect::EnumVariantSchema::Unit,
                 },
             );
-        let id = _state.intern_schema(&SCHEMA);
-        ::rustc_data_structures::inspect::Value::Schema { id, values: Vec::new() }
+
+        _state.write_schema_header(&SCHEMA);
+        _state.write_array_header(0);
     }
 }
 

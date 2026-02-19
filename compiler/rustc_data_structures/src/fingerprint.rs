@@ -171,10 +171,7 @@ use crate::stable_hasher::StableOrd;
 
 impl<CTX> HashStable<CTX> for Fingerprint {
     #[inline]
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        _state: &mut StructureState<'_, CTX, W>,
-    ) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) {
         // Preserve the `Fingerprint` type while still using its canonical
         // 16-byte representation.
         static SCHEMA: crate::inspect::SchemaRef =
@@ -182,11 +179,9 @@ impl<CTX> HashStable<CTX> for Fingerprint {
                 path: "rustc_data_structures::fingerprint::Fingerprint",
                 field_count: 1,
             });
-        let id = _state.intern_schema(&SCHEMA);
-        crate::inspect::Value::Schema {
-            id,
-            values: vec![crate::inspect::Value::Binary(self.to_le_bytes().to_vec())],
-        }
+        _state.write_schema_header(&SCHEMA);
+        _state.write_array_header(1);
+        _state.write_binary(&self.to_le_bytes());
     }
 
     #[inline]

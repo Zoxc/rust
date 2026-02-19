@@ -6,7 +6,6 @@ use std::str;
 use rustc_abi::{FIRST_VARIANT, ReprOptions, VariantIdx};
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::FxHashMap;
-use rustc_data_structures::inspect;
 use rustc_data_structures::intern::Interned;
 use rustc_data_structures::stable_hasher::{
     HashStable, HashingControls, StableHasher, StructureState,
@@ -177,22 +176,19 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'s, StableHashingContext<'a>, W>,
-    ) -> inspect::Value {
+    ) {
         // Represent ADT definition by its DefId and invariant layout information.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
                 path: "rustc_middle::ty::adt::AdtDefData",
                 fields: &["did", "flags", "discr_type"],
             });
-        let id = state.intern_schema(&SCHEMA);
-        inspect::Value::Schema {
-            id,
-            values: vec![
-                self.did.structure(state),
-                self.flags.structure(state),
-                self.repr.discr_type().structure(state),
-            ],
-        }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(3);
+        self.did.structure(state);
+        self.flags.structure(state);
+        self.repr.discr_type().structure(state);
     }
 }
 

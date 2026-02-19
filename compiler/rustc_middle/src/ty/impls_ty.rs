@@ -6,10 +6,6 @@ use std::ptr;
 
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::FxHashMap;
-// Avoid importing `inspect::Value` unqualified to prevent collisions with
-// `ty::Value` / `valtree::Value` in other modules. Use fully-qualified paths
-// where the compact inspect `Value` is needed.
-use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
     HashStable, HashingControls, StableHasher, StructureState, ToStableHashKey,
 };
@@ -52,7 +48,7 @@ where
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'s, StableHashingContext<'a>, W>,
-    ) -> inspect::Value {
+    ) {
         // Preserve the `RawList` wrapper while still showing list semantics.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -61,9 +57,10 @@ where
                     fields: &["items"],
                 },
             );
-        let id = state.intern_schema(&SCHEMA);
-        let items = inspect::Value::Array(self[..].iter().map(|e| e.structure(state)).collect());
-        inspect::Value::Schema { id, values: vec![items] }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        self[..].structure(state);
     }
 }
 
@@ -90,9 +87,9 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for ty::GenericArg<'tcx> {
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'s, StableHashingContext<'a>, W>,
-    ) -> inspect::Value {
+    ) {
         // Delegate to the kind's structural representation
-        self.kind().structure(state)
+        self.kind().structure(state);
     }
 }
 
@@ -108,8 +105,8 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
 
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'s, StableHashingContext<'a>, W>,
-    ) -> inspect::Value {
+        state: &mut StructureState<'s, StableHashingContext<'a>, W>,
+    ) {
         // We cannot access tcx here; represent AllocId by its resolved allocation's structure when available.
         // Fall back to a tag indicating AllocId.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -120,8 +117,9 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
                     variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                 },
             );
-        let id = _state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: Vec::new() }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(0);
     }
 }
 
@@ -133,7 +131,7 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'s, StableHashingContext<'a>, W>,
-    ) -> inspect::Value {
+    ) {
         // Represent by its decomposed parts
         let (alloc, a, b) = self.into_parts();
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -143,11 +141,12 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance
                     fields: &["alloc", "a", "b"],
                 },
             );
-        let id = state.intern_schema(&SCHEMA);
-        inspect::Value::Schema {
-            id,
-            values: vec![alloc.structure(state), a.structure(state), b.structure(state)],
-        }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(3);
+        alloc.structure(state);
+        a.structure(state);
+        b.structure(state);
     }
 }
 

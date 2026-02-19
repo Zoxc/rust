@@ -117,8 +117,6 @@ impl fmt::Debug for InferConst {
 }
 
 #[cfg(feature = "nightly")]
-use rustc_data_structures::inspect;
-#[cfg(feature = "nightly")]
 use rustc_data_structures::stable_hasher::StructureState;
 #[cfg(feature = "nightly")]
 impl<CTX> HashStable<CTX> for InferConst {
@@ -133,8 +131,8 @@ impl<CTX> HashStable<CTX> for InferConst {
 
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+        state: &mut StructureState<'_, CTX, W>,
+    ) {
         match self {
             InferConst::Var(_) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -145,8 +143,8 @@ impl<CTX> HashStable<CTX> for InferConst {
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                let id = _state.intern_schema(&SCHEMA);
-                inspect::Value::Schema { id, values: Vec::new() }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(0);
             }
             InferConst::Fresh(i) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -157,8 +155,9 @@ impl<CTX> HashStable<CTX> for InferConst {
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Tuple(1),
                         },
                     );
-                let id = _state.intern_schema(&SCHEMA);
-                inspect::Value::Schema { id, values: vec![inspect::Value::UInt(*i as u128)] }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(1);
+                (*i).structure(state);
             }
         }
     }

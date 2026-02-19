@@ -926,10 +926,10 @@ mod binding_form_impl {
             }
         }
 
-            fn structure<'s, W: rustc_data_structures::inspect::Write>(
-                &self,
-                state: &mut StructureState<'s, StableHashingContext<'a>, W>,
-            ) -> inspect::Value {
+        fn structure<'s, W: rustc_data_structures::inspect::Write>(
+            &self,
+            state: &mut StructureState<'s, StableHashingContext<'a>, W>,
+        ) {
             use super::BindingForm::*;
 
             match self {
@@ -939,8 +939,9 @@ mod binding_form_impl {
                         variant_name: "Var",
                         variant: inspect::EnumVariantSchema::Tuple(1),
                     });
-                    let id = state.intern_schema(&SCHEMA);
-                    inspect::Value::Schema { id, values: vec![binding.structure(state)] }
+                    state.write_schema_header(&SCHEMA);
+                    state.write_array_header(1);
+                    binding.structure(state);
                 }
                 ImplicitSelf(kind) => {
                     static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Enum {
@@ -948,8 +949,9 @@ mod binding_form_impl {
                         variant_name: "ImplicitSelf",
                         variant: inspect::EnumVariantSchema::Tuple(1),
                     });
-                    let id = state.intern_schema(&SCHEMA);
-                    inspect::Value::Schema { id, values: vec![kind.structure(state)] }
+                    state.write_schema_header(&SCHEMA);
+                    state.write_array_header(1);
+                    kind.structure(state);
                 }
                 RefForGuard(local) => {
                     static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Enum {
@@ -957,8 +959,9 @@ mod binding_form_impl {
                         variant_name: "RefForGuard",
                         variant: inspect::EnumVariantSchema::Tuple(1),
                     });
-                    let id = state.intern_schema(&SCHEMA);
-                    inspect::Value::Schema { id, values: vec![local.structure(state)] }
+                    state.write_schema_header(&SCHEMA);
+                    state.write_array_header(1);
+                    local.structure(state);
                 }
             }
         }

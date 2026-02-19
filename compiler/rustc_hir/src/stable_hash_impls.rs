@@ -1,6 +1,3 @@
-// Use fully-qualified `rustc_data_structures::inspect::Value` where needed to
-// avoid accidental shadowing of other `Value` symbols.
-use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
     HashStable, StableHasher, StructureState, ToStableHashKey,
 };
@@ -85,7 +82,7 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for OwnerNodes<'
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, HirCtx, W>,
-    ) -> inspect::Value {
+    ) {
         // Represent by the cached hash including bodies which is the canonical representation
         // used above for hashing, but preserve the wrapper type.
         let OwnerNodes { opt_hash_including_bodies, nodes: _, bodies: _ } = *self;
@@ -96,8 +93,10 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for OwnerNodes<'
                     fields: &["hash"],
                 },
             );
-        let id = state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: vec![opt_hash_including_bodies.structure(state)] }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        opt_hash_including_bodies.structure(state);
     }
 }
 
@@ -110,7 +109,7 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for DelayedLints {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, HirCtx, W>,
-    ) -> inspect::Value {
+    ) {
         let DelayedLints { opt_hash, .. } = *self;
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -119,8 +118,10 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for DelayedLints {
                     fields: &["hash"],
                 },
             );
-        let id = state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: vec![opt_hash.structure(state)] }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        opt_hash.structure(state);
     }
 }
 
@@ -135,7 +136,7 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for AttributeMap
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, HirCtx, W>,
-    ) -> inspect::Value {
+    ) {
         let AttributeMap { opt_hash, define_opaque: _, map: _ } = *self;
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -144,8 +145,10 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for AttributeMap
                     fields: &["hash"],
                 },
             );
-        let id = state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: vec![opt_hash.structure(state)] }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        opt_hash.structure(state);
     }
 }
 
@@ -158,7 +161,7 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for Crate<'_> {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, HirCtx, W>,
-    ) -> inspect::Value {
+    ) {
         let Crate { owners: _, opt_hir_hash } = self;
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -167,8 +170,10 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for Crate<'_> {
                     fields: &["hash"],
                 },
             );
-        let id = state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: vec![opt_hir_hash.structure(state)] }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        opt_hir_hash.structure(state);
     }
 }
 
@@ -179,8 +184,8 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for HashIgnoredAttrId 
 
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'_, HirCtx, W>,
-    ) -> inspect::Value {
+        state: &mut StructureState<'_, HirCtx, W>,
+    ) {
         // This value is ignored for hashing.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -190,7 +195,8 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for HashIgnoredAttrId 
                     variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                 },
             );
-        let id = _state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: Vec::new() }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(0);
     }
 }

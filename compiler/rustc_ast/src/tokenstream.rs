@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::{cmp, fmt, iter, mem};
 
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
-use rustc_data_structures::{inspect, sync};
+use rustc_data_structures::sync;
 use rustc_macros::{Decodable, Encodable, HashStable_Generic, Walkable};
 use rustc_serialize::{Decodable, Encodable};
 use rustc_span::{DUMMY_SP, Span, SpanDecoder, SpanEncoder, Symbol, sym};
@@ -139,7 +139,7 @@ impl<D: SpanDecoder> Decodable<D> for LazyAttrTokenStream {
 }
 
 impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) {
         // Preserve wrapper type; avoid a Debug-only string representation.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Enum {
@@ -147,8 +147,8 @@ impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
                 variant_name: "Opaque",
                 variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
             });
-        let id = _state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: Vec::new() }
+        _state.write_schema_header(&SCHEMA);
+        _state.write_array_header(0);
     }
 
     fn hash_stable(&self, _hcx: &mut CTX, _hasher: &mut StableHasher) {
@@ -840,18 +840,18 @@ impl<CTX> HashStable<CTX> for TokenStream
 where
     CTX: crate::HashStableContext,
 {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
-        let mut out = Vec::new();
-        for sub_tt in self.iter() {
-            out.push(inspect::Value::from(sub_tt.structure(state)));
-        }
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
                 path: "rustc_ast::tokenstream::TokenStream",
                 fields: &["trees"],
             });
-        let id = state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: vec![inspect::Value::Array(out)] }
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        state.write_array_header(self.0.len());
+        for sub_tt in self.iter() {
+            sub_tt.structure(state);
+        }
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

@@ -1,12 +1,12 @@
 use std::fmt;
 use std::hash::{BuildHasherDefault, Hash, Hasher};
 
+use rustc_data_structures::AtomicRef;
 use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::stable_hasher::{
     HashStable, StableHasher, StableOrd, StructureState, ToStableHashKey,
 };
 use rustc_data_structures::unhash::Unhasher;
-use rustc_data_structures::{AtomicRef, inspect};
 use rustc_hashes::Hash64;
 use rustc_index::Idx;
 use rustc_macros::{BlobDecodable, Decodable, Encodable, HashStable_Generic};
@@ -409,7 +409,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for DefId {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+    ) {
         (state.def_path)(self.krate.as_u32(), self.index.as_u32(), state)
     }
 
@@ -424,7 +424,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for LocalDefId {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+    ) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
                 rustc_data_structures::inspect::Schema::StructTuple {
@@ -432,8 +432,9 @@ impl<CTX: HashStableContext> HashStable<CTX> for LocalDefId {
                     field_count: 1,
                 },
             );
-        let id = state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: vec![self.to_def_id().structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        self.to_def_id().structure(state);
     }
 
     #[inline]
@@ -447,7 +448,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for CrateNum {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+    ) {
         (state.crate_num)(self.as_u32(), state)
     }
 

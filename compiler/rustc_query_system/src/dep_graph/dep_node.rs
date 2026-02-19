@@ -58,11 +58,11 @@
 use std::fmt;
 use std::hash::Hash;
 
+use rustc_data_structures::AtomicRef;
 use rustc_data_structures::fingerprint::{Fingerprint, PackedFingerprint};
 use rustc_data_structures::stable_hasher::{
     HashStable, StableHasher, StableOrd, StructureState, ToStableHashKey,
 };
-use rustc_data_structures::{AtomicRef, inspect};
 use rustc_hir::definitions::DefPathHash;
 use rustc_macros::{Decodable, Encodable};
 
@@ -314,7 +314,7 @@ impl<HCX> HashStable<HCX> for WorkProductId {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, HCX, W>,
-    ) -> inspect::Value {
+    ) {
         // Fingerprint already has a structure() impl that returns Binary(16)
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -323,8 +323,10 @@ impl<HCX> HashStable<HCX> for WorkProductId {
                     field_count: 1,
                 },
             );
-        let id = state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: vec![self.hash.structure(state)] }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        self.hash.structure(state);
     }
 }
 impl<HCX> ToStableHashKey<HCX> for WorkProductId {

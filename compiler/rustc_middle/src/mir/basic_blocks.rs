@@ -177,8 +177,8 @@ impl<CTX> HashStable<CTX> for Cache {
 
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'_, CTX, W>,
-    ) -> rustc_data_structures::inspect::Value {
+        state: &mut StructureState<'_, CTX, W>,
+    ) {
         // Cache is transient and ignored for hashing; preserve wrapper type.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -188,7 +188,8 @@ impl<CTX> HashStable<CTX> for Cache {
                     variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                 },
             );
-        let id = _state.intern_schema(&SCHEMA);
-        rustc_data_structures::inspect::Value::Schema { id, values: Vec::new() }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(0);
     }
 }

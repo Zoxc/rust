@@ -73,10 +73,7 @@ impl<T> Steal<T> {
 }
 
 impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        state: &mut StructureState<'_, CTX, W>,
-    ) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         // Attempt to read the inner value without triggering the
         // `borrow()` panic path. If the value has been stolen, return
         // a placeholder so callers can still obtain a stable structural
@@ -89,8 +86,8 @@ impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
                     variant_name: "Stolen",
                     variant: crate::inspect::EnumVariantSchema::Unit,
                 });
-            let id = state.intern_schema(&SCHEMA);
-            crate::inspect::Value::Schema { id, values: Vec::new() }
+            state.write_schema_header(&SCHEMA);
+            state.write_array_header(0);
         } else {
             // SAFETY: we just checked that the option is `Some`.
             static SCHEMA: crate::inspect::SchemaRef =
@@ -98,11 +95,9 @@ impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
                     path: "rustc_data_structures::steal::Steal",
                     field_count: 1,
                 });
-            let id = state.intern_schema(&SCHEMA);
-            crate::inspect::Value::Schema {
-                id,
-                values: vec![guard.as_ref().unwrap().structure(state)],
-            }
+            state.write_schema_header(&SCHEMA);
+            state.write_array_header(1);
+            guard.as_ref().unwrap().structure(state);
         }
     }
 

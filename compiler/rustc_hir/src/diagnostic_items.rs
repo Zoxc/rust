@@ -1,10 +1,5 @@
 use rustc_data_structures::fx::FxIndexMap;
-// Avoid importing `inspect::Value` unqualified; prefer fully-qualified paths
-// to avoid conflicts with other `Value` types.
-use rustc_data_structures::{
-    inspect,
-    stable_hasher::{HashStable, StableHasher, StructureState},
-};
+use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_span::Symbol;
 use rustc_span::def_id::DefIdMap;
 
@@ -25,7 +20,7 @@ impl<CTX: crate::HashStableContext> HashStable<CTX> for DiagnosticItems {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+    ) {
         // Represent by the name -> id mapping which is the primary data used for hashing,
         // but preserve the wrapper type.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -35,7 +30,9 @@ impl<CTX: crate::HashStableContext> HashStable<CTX> for DiagnosticItems {
                     fields: &["name_to_id"],
                 },
             );
-        let id = state.intern_schema(&SCHEMA);
-        inspect::Value::Schema { id, values: vec![self.name_to_id.structure(state)] }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        self.name_to_id.structure(state);
     }
 }

@@ -24,7 +24,6 @@ use std::{cmp, fmt};
 pub use GenericArgs::*;
 pub use UnsafeSource::*;
 pub use rustc_ast_ir::{FloatTy, IntTy, Movability, Mutability, Pinnedness, UintTy};
-use rustc_data_structures::inspect;
 use rustc_data_structures::packed::Pu128;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_data_structures::stack::ensure_sufficient_stack;
@@ -121,15 +120,18 @@ impl PartialEq<&[Symbol]> for Path {
 }
 
 impl<CTX: rustc_span::HashStableContext> HashStable<CTX> for Path {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
+    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
                 path: "rustc_ast::ast::Path",
                 fields: &["segments"],
             });
-        let id = state.intern_schema(&SCHEMA);
-        let segments = self.segments.iter().map(|s| s.ident.structure(state)).collect();
-        inspect::Value::Schema { id, values: vec![inspect::Value::Array(segments)] }
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        state.write_array_header(self.segments.len());
+        for seg in &self.segments {
+            seg.ident.structure(state);
+        }
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

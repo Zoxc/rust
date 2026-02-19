@@ -544,10 +544,7 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for Term<'tcx> {
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'s, StableHashingContext<'a>, W>,
-    ) -> ::rustc_data_structures::inspect::Value {
-        // The trait requires returning the inspection `Value` from
-        // `rustc_data_structures::inspect`. Delegate to the kind's
-        // `structure()` which produces that `inspect::Value`.
+    ) {
         self.kind().structure(state)
     }
 }

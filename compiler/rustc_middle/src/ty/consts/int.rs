@@ -174,18 +174,17 @@ impl<CTX> crate::ty::HashStable<CTX> for ScalarInt {
 
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+        state: &mut StructureState<'_, CTX, W>,
+    ) {
         // Represent the raw bytes (little-endian) as binary per canonical representation
         static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::StructTuple {
             path: "rustc_middle::ty::consts::int::ScalarInt",
             field_count: 1,
         });
-        let id = _state.intern_schema(&SCHEMA);
-        inspect::Value::Schema {
-            id,
-            values: vec![inspect::Value::Binary(self.to_bits_unchecked().to_le_bytes().to_vec())],
-        }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        state.write_binary(&self.to_bits_unchecked().to_le_bytes());
     }
 }
 

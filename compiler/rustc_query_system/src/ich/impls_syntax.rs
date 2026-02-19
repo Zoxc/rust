@@ -1,7 +1,7 @@
 //! This module contains `HashStable` implementations for various data types
 //! from various crates in no particular order.
 
-use inspect::{Schema, SchemaRef, Value};
+use inspect::{Schema, SchemaRef};
 use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_span::{SourceFile, Symbol, sym};
@@ -19,11 +19,12 @@ impl<'a> HashStable<StableHashingContext<'a>> for ast::NodeId {
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
         _state: &mut StructureState<'s, StableHashingContext<'a>, W>,
-    ) -> Value {
+    ) {
         // NodeIds are un-stable across sessions; represent as a tag.
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct { path: "NodeId", fields: &[] });
         let _ = &SCHEMA;
-        Value::Tuple(Vec::new())
+        _state.write_schema_header(&SCHEMA);
+        _state.write_array_header(0);
     }
 }
 
@@ -117,21 +118,18 @@ impl<'a> HashStable<StableHashingContext<'a>> for SourceFile {
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'s, StableHashingContext<'a>, W>,
-    ) -> Value {
+    ) {
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
             path: "SourceFile",
             fields: &["stable_id", "src_hash", "lines_len", "cnum"],
         });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema {
-            id,
-            values: vec![
-                self.stable_id.structure(state),
-                self.src_hash.structure(state),
-                self.lines().len().structure(state),
-                self.cnum.structure(state),
-            ],
-        }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(4);
+        self.stable_id.structure(state);
+        self.src_hash.structure(state);
+        self.lines().len().structure(state);
+        self.cnum.structure(state);
     }
 }
 
@@ -146,19 +144,16 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::Features {
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'s, StableHashingContext<'tcx>, W>,
-    ) -> Value {
+    ) {
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
             path: "rustc_feature::Features",
             fields: &["enabled_lang_features", "enabled_lib_features"],
         });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema {
-            id,
-            values: vec![
-                self.enabled_lang_features().structure(state),
-                self.enabled_lib_features().structure(state),
-            ],
-        }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(2);
+        self.enabled_lang_features().structure(state);
+        self.enabled_lib_features().structure(state);
     }
 }
 
@@ -173,21 +168,18 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLang
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'s, StableHashingContext<'tcx>, W>,
-    ) -> Value {
+    ) {
         let rustc_feature::EnabledLangFeature { gate_name, attr_sp, stable_since } = self;
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
             path: "rustc_feature::EnabledLangFeature",
             fields: &["gate_name", "attr_sp", "stable_since"],
         });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema {
-            id,
-            values: vec![
-                gate_name.structure(state),
-                attr_sp.structure(state),
-                stable_since.structure(state),
-            ],
-        }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(3);
+        gate_name.structure(state);
+        attr_sp.structure(state);
+        stable_since.structure(state);
     }
 }
 
@@ -201,13 +193,16 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLibF
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'s, StableHashingContext<'tcx>, W>,
-    ) -> Value {
+    ) {
         let rustc_feature::EnabledLibFeature { gate_name, attr_sp } = self;
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
             path: "rustc_feature::EnabledLibFeature",
             fields: &["gate_name", "attr_sp"],
         });
-        let id = state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![gate_name.structure(state), attr_sp.structure(state)] }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(2);
+        gate_name.structure(state);
+        attr_sp.structure(state);
     }
 }

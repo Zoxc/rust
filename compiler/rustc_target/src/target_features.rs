@@ -52,7 +52,7 @@ impl<CTX> HashStable<CTX> for Stability {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+    ) {
         static SCHEMA_STABLE: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Enum {
             path: "rustc_target::target_features::Stability",
             variant_name: "Stable",
@@ -71,18 +71,22 @@ impl<CTX> HashStable<CTX> for Stability {
                 variant: inspect::EnumVariantSchema::Named(&["reason"]),
             });
 
-        let (schema, values) = match self {
-            Stability::Stable => (&SCHEMA_STABLE, Vec::new()),
+        match self {
+            Stability::Stable => {
+                state.write_schema_header(&SCHEMA_STABLE);
+                state.write_array_header(0);
+            }
             Stability::Unstable(nightly_feature) => {
-                (&SCHEMA_UNSTABLE, vec![nightly_feature.structure(state)])
+                state.write_schema_header(&SCHEMA_UNSTABLE);
+                state.write_array_header(1);
+                nightly_feature.structure(state);
             }
             Stability::Forbidden { reason } => {
-                (&SCHEMA_FORBIDDEN, vec![inspect::Value::String((*reason).into())])
+                state.write_schema_header(&SCHEMA_FORBIDDEN);
+                state.write_array_header(1);
+                state.write_string(reason);
             }
-        };
-
-        let id = state.intern_schema(schema);
-        inspect::Value::Schema { id, values }
+        }
     }
 }
 

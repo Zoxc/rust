@@ -209,10 +209,6 @@ impl<I: Interner> fmt::Debug for RegionKind<I> {
     }
 }
 
-use inspect::Value;
-use rustc_data_structures::inspect;
-// Use `inspect::Value` (via `inspect::Value`) to avoid bringing `Value` into
-// the local namespace and potentially shadowing other types named `Value`.
 #[cfg(feature = "nightly")]
 use rustc_data_structures::stable_hasher::StructureState;
 #[cfg(feature = "nightly")]
@@ -253,7 +249,7 @@ where
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, CTX, W>,
-    ) -> Value {
+    ) {
         use RegionKind::*;
         match self {
             ReErased => {
@@ -265,8 +261,8 @@ where
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: Vec::new() }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(0);
             }
             ReStatic => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -277,8 +273,8 @@ where
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: Vec::new() }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(0);
             }
             ReError(_) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -289,8 +285,8 @@ where
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: Vec::new() }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(0);
             }
             ReBound(d, r) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -303,8 +299,10 @@ where
                             ]),
                         },
                     );
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: vec![d.structure(state), r.structure(state)] }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(2);
+                d.structure(state);
+                r.structure(state);
             }
             ReEarlyParam(r) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -317,8 +315,9 @@ where
                             ]),
                         },
                     );
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: vec![r.structure(state)] }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(1);
+                r.structure(state);
             }
             ReLateParam(r) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -331,8 +330,9 @@ where
                             ]),
                         },
                     );
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: vec![r.structure(state)] }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(1);
+                r.structure(state);
             }
             RePlaceholder(r) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -345,8 +345,9 @@ where
                             ]),
                         },
                     );
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: vec![r.structure(state)] }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(1);
+                r.structure(state);
             }
             ReVar(_) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -357,8 +358,8 @@ where
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: Vec::new() }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(0);
             }
         }
     }

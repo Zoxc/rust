@@ -96,8 +96,6 @@ impl<T: Hash> Hash for WithCachedTypeInfo<T> {
     }
 }
 
-use rustc_data_structures::inspect;
-// Use `inspect::Value` to refer to the compact inspect type.
 #[cfg(feature = "nightly")]
 use rustc_data_structures::stable_hasher::StructureState;
 #[cfg(feature = "nightly")]
@@ -130,7 +128,7 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+    ) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
                 rustc_data_structures::inspect::Schema::Struct {
@@ -138,19 +136,10 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
                     fields: &["internee", "stable_hash"],
                 },
             );
-        let id = state.intern_schema(&SCHEMA);
 
-        #[cfg(feature = "nightly")]
-        {
-            inspect::Value::Schema {
-                id,
-                values: vec![self.internee.structure(state), self.stable_hash.structure(state)],
-            }
-        }
-
-        #[cfg(not(feature = "nightly"))]
-        {
-            inspect::Value::Schema { id, values: vec![self.internee.structure(state)] }
-        }
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(2);
+        self.internee.structure(state);
+        self.stable_hash.structure(state);
     }
 }

@@ -131,18 +131,16 @@ where
     K: HashStable<C>,
     V: HashStable<C>,
 {
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        state: &mut StructureState<'_, C, W>,
-    ) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, C, W>) {
         let SortedIndexMultiMap { items, idx_sorted_by_item_key: _ } = self;
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
                 path: "rustc_data_structures::sorted_map::index_map::SortedIndexMultiMap",
                 fields: &["items"],
             });
-        let id = state.intern_schema(&SCHEMA);
-        crate::inspect::Value::Schema { id, values: vec![items.structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        items.structure(state);
     }
 
     fn hash_stable(&self, ctx: &mut C, hasher: &mut StableHasher) {

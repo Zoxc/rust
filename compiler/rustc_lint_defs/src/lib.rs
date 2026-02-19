@@ -4,10 +4,6 @@ use std::fmt::Display;
 use rustc_ast::AttrId;
 use rustc_ast::attr::AttributeExt;
 use rustc_data_structures::fx::FxIndexSet;
-// Use fully-qualified path for the inspect Value to avoid importing the `Value` name.
-use rustc_data_structures::inspect::Value;
-// Avoid importing `inspect::Value` unqualified; use fully-qualified paths
-// to prevent collisions with other `Value` types.
 use rustc_data_structures::stable_hasher::{
     HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey,
 };
@@ -147,7 +143,7 @@ impl<HCX: HashStableContext> HashStable<HCX> for LintExpectationId {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut StructureState<'_, HCX, W>,
-    ) -> Value {
+    ) {
         match self {
             LintExpectationId::Stable { hir_id, attr_index, lint_index: Some(lint_index) } => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -157,15 +153,12 @@ impl<HCX: HashStableContext> HashStable<HCX> for LintExpectationId {
                             fields: &["hir_id", "attr_index", "lint_index"],
                         },
                     );
-                let id = state.intern_schema(&SCHEMA);
-                Value::Schema {
-                    id,
-                    values: vec![
-                        hir_id.structure(state),
-                        Value::UInt(*attr_index as u128),
-                        Value::UInt(*lint_index as u128),
-                    ],
-                }
+
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(3);
+                hir_id.structure(state);
+                attr_index.structure(state);
+                lint_index.structure(state);
             }
             _ => unreachable!(
                 "HashStable should only be called for filled and stable `LintExpectationId`"
@@ -664,8 +657,8 @@ impl<HCX> HashStable<HCX> for LintId {
     #[inline]
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'_, HCX, W>,
-    ) -> Value {
+        state: &mut StructureState<'_, HCX, W>,
+    ) {
         // Represent `LintId` structurally to preserve the wrapper type.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -674,8 +667,10 @@ impl<HCX> HashStable<HCX> for LintId {
                     fields: &["name"],
                 },
             );
-        let id = _state.intern_schema(&SCHEMA);
-        Value::Schema { id, values: vec![Value::String(self.lint_name_raw().into())] }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        self.lint_name_raw().structure(state);
     }
 }
 

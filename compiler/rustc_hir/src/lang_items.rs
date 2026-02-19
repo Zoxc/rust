@@ -152,17 +152,16 @@ impl<CTX> HashStable<CTX> for LangItem {
 
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+        state: &mut StructureState<'_, CTX, W>,
+    ) {
         static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Struct {
             path: "rustc_hir::lang_items::LangItem",
             fields: &["variant"],
         });
-        let id = _state.intern_schema(&SCHEMA);
-        inspect::Value::Schema {
-            id,
-            values: vec![inspect::Value::from_static_str(self.variant_name())],
-        }
+
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        state.write_string(self.variant_name());
     }
 }
 

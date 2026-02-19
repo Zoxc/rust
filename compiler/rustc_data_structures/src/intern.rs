@@ -107,18 +107,16 @@ impl<T, CTX> HashStable<CTX> for Interned<'_, T>
 where
     T: HashStable<CTX>,
 {
-    fn structure<W: crate::inspect::Write>(
-        &self,
-        state: &mut StructureState<'_, CTX, W>,
-    ) -> crate::inspect::Value {
+    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) {
         // Preserve the `Interned` wrapper to indicate this is an interned pointer.
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
                 path: "rustc_data_structures::intern::Interned",
                 fields: &["value"],
             });
-        let id = state.intern_schema(&SCHEMA);
-        crate::inspect::Value::Schema { id, values: vec![self.0.structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        self.0.structure(state);
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

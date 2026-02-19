@@ -91,7 +91,7 @@ where
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         state: &mut rustc_data_structures::stable_hasher::StructureState<'_, CTX, W>,
-    ) -> rustc_data_structures::inspect::Value {
+    ) {
         (state.span_value)(
             rustc_data_structures::stable_hasher::SpanArgs {
                 lo_or_index: self.lo_or_index,
@@ -99,7 +99,7 @@ where
                 ctxt_or_parent_or_marker: self.ctxt_or_parent_or_marker,
             },
             state,
-        )
+        );
     }
 
     fn hash_stable(

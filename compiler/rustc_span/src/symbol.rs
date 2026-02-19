@@ -7,7 +7,6 @@ use std::{fmt, str};
 
 use rustc_arena::DroplessArena;
 use rustc_data_structures::fx::{FxHashSet, FxIndexSet};
-use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{
     HashStable, StableCompare, StableHasher, StructureState, ToStableHashKey,
 };
@@ -2892,7 +2891,7 @@ impl<CTX> HashStable<CTX> for Symbol {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         _state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+    ) {
         // Preserve the `Symbol` wrapper in inspection output.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -2901,11 +2900,9 @@ impl<CTX> HashStable<CTX> for Symbol {
                     field_count: 1,
                 },
             );
-        let id = _state.intern_schema(&SCHEMA);
-        inspect::Value::Schema {
-            id,
-            values: vec![inspect::Value::String(self.as_str().to_string().into())],
-        }
+        _state.write_schema_header(&SCHEMA);
+        _state.write_array_header(1);
+        _state.write_string(self.as_str());
     }
 
     #[inline]
@@ -2972,7 +2969,7 @@ impl<CTX> HashStable<CTX> for ByteSymbol {
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
         _state: &mut StructureState<'_, CTX, W>,
-    ) -> inspect::Value {
+    ) {
         // Preserve the `ByteSymbol` wrapper in inspection output.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -2981,11 +2978,9 @@ impl<CTX> HashStable<CTX> for ByteSymbol {
                     field_count: 1,
                 },
             );
-        let id = _state.intern_schema(&SCHEMA);
-        inspect::Value::Schema {
-            id,
-            values: vec![inspect::Value::Binary(self.as_byte_str().to_vec())],
-        }
+        _state.write_schema_header(&SCHEMA);
+        _state.write_array_header(1);
+        _state.write_binary(self.as_byte_str());
     }
 
     #[inline]

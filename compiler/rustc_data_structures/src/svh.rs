@@ -45,15 +45,16 @@ impl<T> stable_hasher::HashStable<T> for Svh {
     fn structure<W: crate::inspect::Write>(
         &self,
         state: &mut stable_hasher::StructureState<'_, T, W>,
-    ) -> crate::inspect::Value {
+    ) {
         let Svh { hash } = *self;
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::StructTuple {
                 path: "rustc_data_structures::svh::Svh",
                 field_count: 1,
             });
-        let id = state.intern_schema(&SCHEMA);
-        crate::inspect::Value::Schema { id, values: vec![hash.structure(state)] }
+        state.write_schema_header(&SCHEMA);
+        state.write_array_header(1);
+        hash.structure(state);
     }
 
     fn hash_stable(&self, ctx: &mut T, hasher: &mut stable_hasher::StableHasher) {

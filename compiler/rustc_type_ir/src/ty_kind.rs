@@ -2,9 +2,7 @@ use std::fmt;
 use std::ops::Deref;
 
 use derive_where::derive_where;
-use inspect::Value;
 use rustc_ast_ir::Mutability;
-use rustc_data_structures::inspect;
 #[cfg(feature = "nightly")]
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 #[cfg(feature = "nightly")]
@@ -687,8 +685,8 @@ impl<CTX> HashStable<CTX> for InferTy {
 
     fn structure<W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'_, CTX, W>,
-    ) -> Value {
+        state: &mut StructureState<'_, CTX, W>,
+    ) {
         use InferTy::*;
         match self {
             TyVar(_) => {
@@ -700,8 +698,8 @@ impl<CTX> HashStable<CTX> for InferTy {
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                let id = _state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: Vec::new() }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(0);
             }
             IntVar(_) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -712,8 +710,8 @@ impl<CTX> HashStable<CTX> for InferTy {
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                let id = _state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: Vec::new() }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(0);
             }
             FloatVar(_) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -724,8 +722,8 @@ impl<CTX> HashStable<CTX> for InferTy {
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                let id = _state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: Vec::new() }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(0);
             }
             FreshTy(v) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -736,8 +734,9 @@ impl<CTX> HashStable<CTX> for InferTy {
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Tuple(1),
                         },
                     );
-                let id = _state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: vec![Value::UInt((*v) as u128)] }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(1);
+                (*v).structure(state);
             }
             FreshIntTy(v) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -748,8 +747,9 @@ impl<CTX> HashStable<CTX> for InferTy {
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Tuple(1),
                         },
                     );
-                let id = _state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: vec![Value::UInt((*v) as u128)] }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(1);
+                (*v).structure(state);
             }
             FreshFloatTy(v) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -760,8 +760,9 @@ impl<CTX> HashStable<CTX> for InferTy {
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Tuple(1),
                         },
                     );
-                let id = _state.intern_schema(&SCHEMA);
-                Value::Schema { id, values: vec![Value::UInt((*v) as u128)] }
+                state.write_schema_header(&SCHEMA);
+                state.write_array_header(1);
+                (*v).structure(state);
             }
         }
     }
