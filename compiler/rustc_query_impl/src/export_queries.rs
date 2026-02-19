@@ -12,7 +12,7 @@ use rustc_span::{CachingSourceMapView, Pos, Span};
 // macro into the plumbing module; do not import it here.
 use crate::PER_QUERY_COLLECT_STRUCTURES_FNS;
 use std::fs;
-use std::io::{ Write, Seek, SeekFrom};
+use std::io::{Seek, SeekFrom};
 use std::path::PathBuf;
 use rustc_span::def_id::LOCAL_CRATE;
 use snap::write::FrameEncoder;
