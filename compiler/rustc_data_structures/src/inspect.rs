@@ -244,9 +244,8 @@ pub struct State<'a> {
     pub crate_num: &'a dyn for<'s> Fn(u32, &mut State<'s>, &mut dyn Write),
 }
 
-pub struct StructureState<'a, CTX, W> {
+pub struct StructureState<'a, CTX> {
     pub state: &'a mut State<'a>,
-    pub writer: &'a mut W,
     _marker: PhantomData<&'a CTX>,
 }
 

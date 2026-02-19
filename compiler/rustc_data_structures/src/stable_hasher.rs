@@ -49,7 +49,7 @@ pub use crate::inspect::{SpanArgs, StructureState};
 pub trait HashStable<CTX> {
     /// Returns the exact data that will be hashed by `hash_stable` as an
     /// inspection output.
-    fn structure<'a, W: inspect::Write>(&self, state: &mut StructureState<'a, CTX, W>);
+    fn structure<'a>(&self, state: &mut StructureState<'a, CTX>, writer: &mut impl inspect::Write);
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher);
 }
