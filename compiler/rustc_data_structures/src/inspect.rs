@@ -124,6 +124,7 @@ pub struct SpanArgs {
 
 pub trait Write {
     fn write_u128(&mut self, value: u128);
+    fn write_bytes(&mut self, bytes: &[u8]);
 }
 
 /// A simple writer wrapper used by inspection/serialization code which
@@ -176,7 +177,7 @@ pub struct StructureState<'a, CTX, W> {
 }
 
 impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
-    pub fn intern_schema(&mut self, schema: &'static SchemaRef) -> SchemaId {
+    fn intern_schema(&mut self, schema: &'static SchemaRef) -> SchemaId {
         let key = schema as *const SchemaRef as usize;
         if let Some(id) = self.schema_list.get(&key) {
             return id.0;
@@ -185,5 +186,51 @@ impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
         let id = SchemaId(self.schema_list.len() as u32);
         self.schema_list.insert(key, (id, schema));
         id
+    }
+
+    // Writers corresponding to each `Value` variant. These write to
+    // `self.writer` rather than returning a `Value`.
+    pub fn write_bool(&mut self, v: bool) {
+        let byte = if v { 1u8 } else { 0u8 };
+        self.writer.write_bytes(&[byte]);
+    }
+
+    pub fn write_int(&mut self, v: i128) {
+        self.writer.write_bytes(&v.to_le_bytes());
+    }
+
+    pub fn write_uint(&mut self, v: u128) {
+        self.writer.write_u128(v);
+    }
+
+    pub fn write_f64(&mut self, v: f64) {
+        self.writer.write_bytes(&v.to_bits().to_le_bytes());
+    }
+
+    pub fn write_binary(&mut self, v: &[u8]) {
+        self.writer.write_u128(v.len() as u128);
+        self.writer.write_bytes(v);
+    }
+
+    pub fn write_string(&mut self, s: &str) {
+        self.writer.write_u128(s.len() as u128);
+        self.writer.write_bytes(s.as_bytes());
+    }
+
+    pub fn write_array_header(&mut self, len: usize) {
+        self.writer.write_u128(len as u128);
+    }
+
+    pub fn write_tuple_header(&mut self, len: usize) {
+        self.writer.write_u128(len as u128);
+    }
+
+    pub fn write_map_header(&mut self, len: usize) {
+        self.writer.write_u128(len as u128);
+    }
+
+    pub fn write_schema_header(&mut self, schema: &'static SchemaRef) {
+        let id = self.intern_schema(schema);
+        self.writer.write_u128(id.0 as u128);
     }
 }
