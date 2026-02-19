@@ -123,8 +123,8 @@ enum ValueKind {
 }
 
 #[inline]
-fn write_tag<W: Write>(writer: &mut W, tag: u8) {
-    writer.write_bytes(&[tag]);
+fn write_tag(writer: &mut dyn Write, tag: u8) {
+    writer.write_raw_bytes(&[tag]);
 }
 
 pub trait Write {
@@ -327,6 +327,6 @@ impl<'a, CTX> StructureState<'a, CTX> {
     pub fn write_schema_header(&mut self, schema: &'static SchemaRef, writer: &mut impl Write) {
         write_tag(writer, ValueKind::Schema as u8);
         let id = self.intern_schema(schema);
-        writer.write_raw_u128(id.0);
+        writer.write_raw_u128(id.0.into());
     }
 }
