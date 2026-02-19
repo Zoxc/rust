@@ -108,10 +108,77 @@ pub struct SpanArgs {
     pub ctxt_or_parent_or_marker: u16,
 }
 
+#[repr(u8)]
+enum ValueKind {
+    Bool = 0,
+    Int = 1,
+    UInt = 2,
+    F64 = 3,
+    Binary = 4,
+    String = 5,
+    Array = 6,
+    Tuple = 7,
+    Map = 8,
+    Schema = 9,
+}
+
+#[inline]
+fn write_tag(&mut self, tag: u8) {
+    self.writer.write_bytes(&[tag]);
+}
+
 pub trait Write {
     fn write_u128(&mut self, value: u128);
     fn write_i128(&mut self, value: i128);
     fn write_bytes(&mut self, bytes: &[u8]);
+
+    pub fn write_bool(&mut self, v: bool) {
+        self.write_tag(ValueKind::Bool);
+        let byte = if v { 1u8 } else { 0u8 };
+        self.writer.write_bytes(&[byte]);
+    }
+
+    pub fn write_int(&mut self, v: i128) {
+        self.write_tag(ValueKind::Int);
+        self.writer.write_i128(v);
+    }
+
+    pub fn write_uint(&mut self, v: u128) {
+        self.write_tag(ValueKind::UInt);
+        self.writer.write_u128(v);
+    }
+
+    pub fn write_f64(&mut self, v: f64) {
+        self.write_tag(ValueKind::F64);
+        self.writer.write_bytes(&v.to_bits().to_le_bytes());
+    }
+
+    pub fn write_binary(&mut self, v: &[u8]) {
+        self.write_tag(ValueKind::Binary);
+        self.writer.write_u128(v.len() as u128);
+        self.writer.write_bytes(v);
+    }
+
+    pub fn write_string(&mut self, s: &str) {
+        self.write_tag(ValueKind::String);
+        self.writer.write_u128(s.len() as u128);
+        self.writer.write_bytes(s.as_bytes());
+    }
+
+    pub fn write_array_header(&mut self, len: usize) {
+        self.write_tag(ValueKind::Array);
+        self.writer.write_u128(len as u128);
+    }
+
+    pub fn write_tuple_header(&mut self, len: usize) {
+        self.write_tag(ValueKind::Tuple);
+        self.writer.write_u128(len as u128);
+    }
+
+    pub fn write_map_header(&mut self, len: usize) {
+        self.write_tag(ValueKind::Map);
+        self.writer.write_u128(len as u128);
+    }
 }
 
 impl<'a> Write for &'a mut dyn Write {
@@ -268,59 +335,6 @@ impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
         let id = SchemaId(self.state.schema_list.len() as u32);
         self.state.schema_list.insert(key, (id, schema));
         id
-    }
-
-    #[inline]
-    fn write_tag(&mut self, tag: u8) {
-        self.writer.write_bytes(&[tag]);
-    }
-
-    pub fn write_bool(&mut self, v: bool) {
-        self.write_tag(ValueKind::Bool);
-        let byte = if v { 1u8 } else { 0u8 };
-        self.writer.write_bytes(&[byte]);
-    }
-
-    pub fn write_int(&mut self, v: i128) {
-        self.write_tag(ValueKind::Int);
-        self.writer.write_i128(v);
-    }
-
-    pub fn write_uint(&mut self, v: u128) {
-        self.write_tag(ValueKind::UInt);
-        self.writer.write_u128(v);
-    }
-
-    pub fn write_f64(&mut self, v: f64) {
-        self.write_tag(ValueKind::F64);
-        self.writer.write_bytes(&v.to_bits().to_le_bytes());
-    }
-
-    pub fn write_binary(&mut self, v: &[u8]) {
-        self.write_tag(ValueKind::Binary);
-        self.writer.write_u128(v.len() as u128);
-        self.writer.write_bytes(v);
-    }
-
-    pub fn write_string(&mut self, s: &str) {
-        self.write_tag(ValueKind::String);
-        self.writer.write_u128(s.len() as u128);
-        self.writer.write_bytes(s.as_bytes());
-    }
-
-    pub fn write_array_header(&mut self, len: usize) {
-        self.write_tag(ValueKind::Array);
-        self.writer.write_u128(len as u128);
-    }
-
-    pub fn write_tuple_header(&mut self, len: usize) {
-        self.write_tag(ValueKind::Tuple);
-        self.writer.write_u128(len as u128);
-    }
-
-    pub fn write_map_header(&mut self, len: usize) {
-        self.write_tag(ValueKind::Map);
-        self.writer.write_u128(len as u128);
     }
 
     pub fn write_schema_header(&mut self, schema: &'static SchemaRef) {
