@@ -128,9 +128,9 @@ fn write_tag<W: Write>(writer: &mut W, tag: u8) {
 }
 
 pub trait Write {
-    fn write_u128(&mut self, value: u128);
-    fn write_i128(&mut self, value: i128);
-    fn write_bytes(&mut self, bytes: &[u8]);
+    fn write_raw_u128(&mut self, value: u128);
+    fn write_raw_i128(&mut self, value: i128);
+    fn write_raw_bytes(&mut self, bytes: &[u8]);
 
     fn write_bool(&mut self, v: bool) {
         write_tag(self, ValueKind::Bool as u8);
@@ -304,25 +304,12 @@ impl<'a> Write for Option<&'a mut File> {
     }
 }
 
-pub struct State<'a> {
-    pub schema_list: FxHashMap<usize, (SchemaId, &'static SchemaRef)>,
-    pub span_value: &'a dyn for<'s> Fn(SpanArgs, &mut State<'s>, &mut dyn Write),
-    pub def_path: &'a dyn for<'s> Fn(u32, u32, &mut State<'s>, &mut dyn Write),
-    pub crate_num: &'a dyn for<'s> Fn(u32, &mut State<'s>, &mut dyn Write),
-}
-
 pub struct StructureState<'a, CTX> {
-    pub state: &'a mut State<'a>,
-    _marker: PhantomData<&'a CTX>,
-}
-
-impl<'a, CTX, W> StructureState<'a, CTX, W> {
-    pub fn join(state: &'a mut State<'a>, writer: &'a mut W) -> Self {
-        StructureState { state, writer, _marker: PhantomData }
-    }
-    pub fn split(&mut self) -> (&mut State<'a>, &mut W) {
-        (self.state, &mut self.writer)
-    }
+    pub schema_list: FxHashMap<usize, (SchemaId, &'static SchemaRef)>,
+    pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_,CTX>, &mut dyn Write),
+    pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_,CTX>, &mut dyn Write),
+    pub crate_num: &'a dyn Fn(u32, &mut StructureState<'_,CTX>, &mut dyn Write),
+    pub _marker: PhantomData<&'a CTX>,
 }
 
 impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
@@ -337,7 +324,9 @@ impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
         id
     }
 
-    pub fn write_schema_header(&mut self, schema: &'static SchemaRef) {
-        self.write_tag(ValueKind::Schema);
+    pub fn write_schema_header(&mut self, schema: &'static SchemaRef, writer: &mut impl Write) {
+        write_tag(self.writer, ValueKind::Schema as u8);
+        let id = self.intern_schema(schema);
+        writer.write_raw_u128(id.0);
     }
 }
