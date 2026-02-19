@@ -190,6 +190,10 @@ pub struct StructureState<'a, CTX, W> {
 }
 
 impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
+    pub fn split(&mut self) -> (&'a mut State<'a>, &mut W) {
+        (self.state, &self.writer)
+    }
+
     pub fn intern_schema(&mut self, schema: &'static SchemaRef) -> SchemaId {
         let key = schema as *const SchemaRef as usize;
         if let Some(id) = self.schema_list.get(&key) {
