@@ -112,10 +112,14 @@ where
         state: &mut StructureState<'_, CTX, W>,
     ) -> crate::inspect::Value {
         // Preserve the `Interned` wrapper to indicate this is an interned pointer.
-        crate::inspect::Value::Struct {
-            path: std::borrow::Cow::Borrowed("Interned"),
-            fields: vec![(std::borrow::Cow::Borrowed("value"), self.0.structure(state))],
-        }
+        static FIELDS: [&str; 1] = ["value"];
+        static SCHEMA: crate::inspect::SchemaRef =
+            crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
+                path: "rustc_data_structures::intern::Interned",
+                fields: &FIELDS,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        crate::inspect::Value::Schema { id, values: vec![self.0.structure(state)] }
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

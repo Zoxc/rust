@@ -22,7 +22,7 @@ pub use rustc_stable_hash::{
 };
 
 use crate::inspect;
-use crate::inspect::Value;
+use crate::inspect::{EnumVariantSchema, Schema, SchemaRef, Value};
 
 pub use crate::inspect::{SpanArgs, StructureState};
 
@@ -243,9 +243,14 @@ impl<CTX> HashStable<CTX> for ! {
 }
 
 impl<CTX, T> HashStable<CTX> for PhantomData<T> {
-    fn structure<'s, W: crate::inspect::Write>(&self, _: &mut StructureState<'s, CTX, W>) -> Value {
-        // Preserve the wrapper type in inspection output.
-        Value::Struct { path: std::borrow::Cow::Borrowed("PhantomData"), fields: Vec::new() }
+    fn structure<'s, W: crate::inspect::Write>(
+        &self,
+        state: &mut StructureState<'s, CTX, W>,
+    ) -> Value {
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "PhantomData", fields: &[] });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: Vec::new() }
     }
 
     fn hash_stable(&self, _ctx: &mut CTX, _hasher: &mut StableHasher) {}
@@ -257,11 +262,11 @@ impl<CTX> HashStable<CTX> for NonZero<u32> {
         &self,
         state: &mut StructureState<'s, CTX, W>,
     ) -> Value {
-        // Show the wrapper type so inspection output retains the fact this is a NonZero.
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed("NonZero<u32>"),
-            fields: vec![(std::borrow::Cow::Borrowed("value"), self.get().structure(state))],
-        }
+        static FIELDS: [&str; 1] = ["value"];
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "NonZero<u32>", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![self.get().structure(state)] }
     }
 
     #[inline]
@@ -273,10 +278,11 @@ impl<CTX> HashStable<CTX> for NonZero<u32> {
 impl<CTX> HashStable<CTX> for NonZero<usize> {
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed("NonZero<usize>"),
-            fields: vec![(std::borrow::Cow::Borrowed("value"), self.get().structure(state))],
-        }
+        static FIELDS: [&str; 1] = ["value"];
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "NonZero<usize>", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![self.get().structure(state)] }
     }
 
     #[inline]
@@ -316,17 +322,35 @@ impl<CTX> HashStable<CTX> for f64 {
 impl<CTX> HashStable<CTX> for ::std::cmp::Ordering {
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        // Preserve enum semantics in inspection output.
-        let variant = match self {
-            std::cmp::Ordering::Less => std::borrow::Cow::Borrowed("Less"),
-            std::cmp::Ordering::Equal => std::borrow::Cow::Borrowed("Equal"),
-            std::cmp::Ordering::Greater => std::borrow::Cow::Borrowed("Greater"),
+        let name = match self {
+            std::cmp::Ordering::Less => "Less",
+            std::cmp::Ordering::Equal => "Equal",
+            std::cmp::Ordering::Greater => "Greater",
         };
-        let _ = state;
-        Value::Enum {
-            path: std::borrow::Cow::Borrowed("Ordering"),
-            variant: crate::inspect::EnumVariant::Unit(variant),
-        }
+        static SCHEMA_LESS: SchemaRef = SchemaRef::new(Schema::Enum {
+            path: "Ordering",
+            variant_name: "Less",
+            variant: crate::inspect::EnumVariantSchema::Unit,
+        });
+        static SCHEMA_EQUAL: SchemaRef = SchemaRef::new(Schema::Enum {
+            path: "Ordering",
+            variant_name: "Equal",
+            variant: crate::inspect::EnumVariantSchema::Unit,
+        });
+        static SCHEMA_GREATER: SchemaRef = SchemaRef::new(Schema::Enum {
+            path: "Ordering",
+            variant_name: "Greater",
+            variant: crate::inspect::EnumVariantSchema::Unit,
+        });
+
+        let schema = match name {
+            "Less" => &SCHEMA_LESS,
+            "Equal" => &SCHEMA_EQUAL,
+            "Greater" => &SCHEMA_GREATER,
+            _ => unreachable!(),
+        };
+        let id = state.intern_schema(schema);
+        Value::Schema { id, values: Vec::new() }
     }
 
     #[inline]
@@ -585,11 +609,10 @@ where
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        // Preserve the `Box` wrapper in inspection output.
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed("Box"),
-            fields: vec![(std::borrow::Cow::Borrowed("value"), (**self).structure(state))],
-        }
+        static FIELDS: [&str; 1] = ["value"];
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct { path: "Box", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![(**self).structure(state)] }
     }
 
     #[inline]
@@ -601,10 +624,10 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed("Rc"),
-            fields: vec![(std::borrow::Cow::Borrowed("value"), (**self).structure(state))],
-        }
+        static FIELDS: [&str; 1] = ["value"];
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct { path: "Rc", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![(**self).structure(state)] }
     }
 
     #[inline]
@@ -616,10 +639,10 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::sync::Arc<T> {
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed("Arc"),
-            fields: vec![(std::borrow::Cow::Borrowed("value"), (**self).structure(state))],
-        }
+        static FIELDS: [&str; 1] = ["value"];
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct { path: "Arc", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![(**self).structure(state)] }
     }
 
     #[inline]
@@ -719,17 +742,24 @@ where
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         match *self {
-            Some(ref value) => Value::Enum {
-                path: std::borrow::Cow::Borrowed("Option"),
-                variant: crate::inspect::EnumVariant::Tuple(
-                    std::borrow::Cow::Borrowed("Some"),
-                    vec![value.structure(state)],
-                ),
-            },
-            None => Value::Enum {
-                path: std::borrow::Cow::Borrowed("Option"),
-                variant: crate::inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("None")),
-            },
+            Some(ref value) => {
+                static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
+                    path: "Option",
+                    variant_name: "Some",
+                    variant: EnumVariantSchema::Tuple(1),
+                });
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: vec![value.structure(state)] }
+            }
+            None => {
+                static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
+                    path: "Option",
+                    variant_name: "None",
+                    variant: EnumVariantSchema::Unit,
+                });
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: Vec::new() }
+            }
         }
     }
 
@@ -759,20 +789,24 @@ where
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
         match *self {
-            Ok(ref x) => Value::Enum {
-                path: std::borrow::Cow::Borrowed("Result"),
-                variant: crate::inspect::EnumVariant::Tuple(
-                    std::borrow::Cow::Borrowed("Ok"),
-                    vec![x.structure(state)],
-                ),
-            },
-            Err(ref x) => Value::Enum {
-                path: std::borrow::Cow::Borrowed("Result"),
-                variant: crate::inspect::EnumVariant::Tuple(
-                    std::borrow::Cow::Borrowed("Err"),
-                    vec![x.structure(state)],
-                ),
-            },
+            Ok(ref x) => {
+                static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
+                    path: "Result",
+                    variant_name: "Ok",
+                    variant: EnumVariantSchema::Tuple(1),
+                });
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: vec![x.structure(state)] }
+            }
+            Err(ref x) => {
+                static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
+                    path: "Result",
+                    variant_name: "Err",
+                    variant: EnumVariantSchema::Tuple(1),
+                });
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: vec![x.structure(state)] }
+            }
         }
     }
 
@@ -809,13 +843,7 @@ impl<T, CTX> HashStable<CTX> for ::std::mem::Discriminant<T> {
         // which variant it corresponds to. We use the `Debug` string as
         // the variant name because we don't have a portable numeric index
         // here. A more robust encoding would use per-enum variant indices.
-        Value::Enum {
-            path: std::borrow::Cow::Borrowed("Discriminant"),
-            variant: crate::inspect::EnumVariant::Unit(std::borrow::Cow::Owned(format!(
-                "{:?}",
-                self
-            ))),
-        }
+        Value::String(format!("{:?}", self).into())
     }
 
     #[inline]
@@ -830,12 +858,13 @@ where
 {
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed("RangeInclusive"),
-            fields: vec![
-                (std::borrow::Cow::Borrowed("start"), self.start().structure(state)),
-                (std::borrow::Cow::Borrowed("end"), self.end().structure(state)),
-            ],
+        static FIELDS: [&str; 2] = ["start", "end"];
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "RangeInclusive", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema {
+            id,
+            values: vec![self.start().structure(state), self.end().structure(state)],
         }
     }
 
@@ -851,10 +880,11 @@ where
     T: HashStable<CTX>,
 {
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![(std::borrow::Cow::Borrowed("raw"), self.raw[..].structure(state))],
-        }
+        static FIELDS: [&str; 1] = ["raw"];
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "rustc_index::IndexSlice", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![self.raw[..].structure(state)] }
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -870,10 +900,11 @@ where
     T: HashStable<CTX>,
 {
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![(std::borrow::Cow::Borrowed("raw"), self.raw[..].structure(state))],
-        }
+        static FIELDS: [&str; 1] = ["raw"];
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "rustc_index::IndexVec", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![self.raw[..].structure(state)] }
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -894,16 +925,14 @@ impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
             indices.push(Value::UInt(idx.index() as u128));
         }
 
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![
-                (
-                    std::borrow::Cow::Borrowed("domain_size"),
-                    Value::UInt(self.domain_size() as u128),
-                ),
-                (std::borrow::Cow::Borrowed("indices"), Value::Array(indices)),
-            ],
-        }
+        Value::Map(
+            [
+                (Value::String("domain_size".into()), Value::UInt(self.domain_size() as u128)),
+                (Value::String("indices".into()), Value::Array(indices)),
+            ]
+            .into_iter()
+            .collect(),
+        )
     }
 
     fn hash_stable(&self, _ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -925,10 +954,7 @@ impl<R: Idx, C: Idx, CTX> HashStable<CTX> for bit_set::BitMatrix<R, C> {
             rows_out.push(Value::Array(cols));
         }
 
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![(std::borrow::Cow::Borrowed("rows"), Value::Array(rows_out))],
-        }
+        Value::Map([(Value::String("rows".into()), Value::Array(rows_out))].into_iter().collect())
     }
 
     fn hash_stable(&self, _ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -941,10 +967,10 @@ where
     T: HashStable<CTX> + bit_set::FiniteBitSetTy,
 {
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        Value::StructTuple {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![self.0.structure(state)],
-        }
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::StructTuple { path: "bit_set::FiniteBitSet", field_count: 1 });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![self.0.structure(state)] }
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
@@ -955,23 +981,14 @@ where
 impl_stable_traits_for_trivial_type!(::std::ffi::OsStr, |s: &::std::ffi::OsStr| {
     // Ensure we produce an owned `String` so the `Cow<'static, str>` used by
     // `Value::String` does not borrow from local stack data.
-    Value::StructTuple {
-        path: std::borrow::Cow::Borrowed(std::any::type_name::<::std::ffi::OsStr>()),
-        fields: vec![Value::String(s.to_string_lossy().into_owned().into())],
-    }
+    Value::Tuple(vec![Value::String(s.to_string_lossy().into_owned().into())])
 });
 
 impl_stable_traits_for_trivial_type!(::std::path::Path, |p: &::std::path::Path| {
-    Value::StructTuple {
-        path: std::borrow::Cow::Borrowed(std::any::type_name::<::std::path::Path>()),
-        fields: vec![Value::String(p.to_string_lossy().into_owned().into())],
-    }
+    Value::Tuple(vec![Value::String(p.to_string_lossy().into_owned().into())])
 });
 impl_stable_traits_for_trivial_type!(::std::path::PathBuf, |p: &::std::path::PathBuf| {
-    Value::StructTuple {
-        path: std::borrow::Cow::Borrowed(std::any::type_name::<::std::path::PathBuf>()),
-        fields: vec![Value::String(p.to_string_lossy().into_owned().into())],
-    }
+    Value::Tuple(vec![Value::String(p.to_string_lossy().into_owned().into())])
 });
 
 // It is not safe to implement HashStable for HashSet, HashMap or any other collection type
@@ -991,10 +1008,11 @@ where
             map.insert(k.structure(state), v.structure(state));
         }
 
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed("BTreeMap"),
-            fields: vec![(std::borrow::Cow::Borrowed("map"), Value::Map(map))],
-        }
+        static FIELDS: [&str; 1] = ["map"];
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "BTreeMap", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![Value::Map(map)] }
     }
 
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {
@@ -1015,10 +1033,11 @@ where
             entries.push(entry.structure(state));
         }
 
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed("BTreeSet"),
-            fields: vec![(std::borrow::Cow::Borrowed("entries"), Value::Array(entries))],
-        }
+        static FIELDS: [&str; 1] = ["entries"];
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "BTreeSet", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![Value::Array(entries)] }
     }
 
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {

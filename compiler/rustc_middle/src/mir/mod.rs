@@ -933,27 +933,33 @@ mod binding_form_impl {
             use super::BindingForm::*;
 
             match self {
-                Var(binding) => inspect::Value::Enum {
-                    path: std::borrow::Cow::Borrowed("BindingForm"),
-                    variant: inspect::EnumVariant::Tuple(
-                        std::borrow::Cow::Borrowed("Var"),
-                        vec![binding.structure(state)],
-                    ),
-                },
-                ImplicitSelf(kind) => inspect::Value::Enum {
-                    path: std::borrow::Cow::Borrowed("BindingForm"),
-                    variant: inspect::EnumVariant::Tuple(
-                        std::borrow::Cow::Borrowed("ImplicitSelf"),
-                        vec![kind.structure(state)],
-                    ),
-                },
-                RefForGuard(local) => inspect::Value::Enum {
-                    path: std::borrow::Cow::Borrowed("BindingForm"),
-                    variant: inspect::EnumVariant::Tuple(
-                        std::borrow::Cow::Borrowed("RefForGuard"),
-                        vec![local.structure(state)],
-                    ),
-                },
+                Var(binding) => {
+                    static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Enum {
+                        path: "rustc_middle::mir::BindingForm",
+                        variant_name: "Var",
+                        variant: inspect::EnumVariantSchema::Tuple(1),
+                    });
+                    let id = state.intern_schema(&SCHEMA);
+                    inspect::Value::Schema { id, values: vec![binding.structure(state)] }
+                }
+                ImplicitSelf(kind) => {
+                    static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Enum {
+                        path: "rustc_middle::mir::BindingForm",
+                        variant_name: "ImplicitSelf",
+                        variant: inspect::EnumVariantSchema::Tuple(1),
+                    });
+                    let id = state.intern_schema(&SCHEMA);
+                    inspect::Value::Schema { id, values: vec![kind.structure(state)] }
+                }
+                RefForGuard(local) => {
+                    static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Enum {
+                        path: "rustc_middle::mir::BindingForm",
+                        variant_name: "RefForGuard",
+                        variant: inspect::EnumVariantSchema::Tuple(1),
+                    });
+                    let id = state.intern_schema(&SCHEMA);
+                    inspect::Value::Schema { id, values: vec![local.structure(state)] }
+                }
             }
         }
     }

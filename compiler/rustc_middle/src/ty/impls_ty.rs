@@ -51,16 +51,20 @@ where
 
     fn structure<'s, W: rustc_data_structures::inspect::Write>(
         &self,
-        _state: &mut StructureState<'s, StableHashingContext<'a>, W>,
+        state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> inspect::Value {
-        use std::borrow::Cow;
-
         // Preserve the `RawList` wrapper while still showing list semantics.
-        let items = inspect::Value::Array(self[..].iter().map(|e| e.structure(_state)).collect());
-        inspect::Value::Struct {
-            path: Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![(Cow::Borrowed("items"), items)],
-        }
+        static FIELDS: [&str; 1] = ["items"];
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(
+                rustc_data_structures::inspect::Schema::Struct {
+                    path: "rustc_middle::ty::list::RawList",
+                    fields: &FIELDS,
+                },
+            );
+        let id = state.intern_schema(&SCHEMA);
+        let items = inspect::Value::Array(self[..].iter().map(|e| e.structure(state)).collect());
+        inspect::Value::Schema { id, values: vec![items] }
     }
 }
 
@@ -109,10 +113,16 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
     ) -> inspect::Value {
         // We cannot access tcx here; represent AllocId by its resolved allocation's structure when available.
         // Fall back to a tag indicating AllocId.
-        inspect::Value::Enum {
-            path: std::borrow::Cow::Borrowed("AllocId"),
-            variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("AllocId")),
-        }
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(
+                rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_middle::mir::interpret::AllocId",
+                    variant_name: "AllocId",
+                    variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                },
+            );
+        let id = _state.intern_schema(&SCHEMA);
+        inspect::Value::Schema { id, values: Vec::new() }
     }
 }
 
@@ -127,13 +137,18 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance
     ) -> inspect::Value {
         // Represent by its decomposed parts
         let (alloc, a, b) = self.into_parts();
-        inspect::Value::Struct {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![
-                ("alloc".into(), alloc.structure(state)),
-                ("a".into(), a.structure(state)),
-                ("b".into(), b.structure(state)),
-            ],
+        static FIELDS: [&str; 3] = ["alloc", "a", "b"];
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(
+                rustc_data_structures::inspect::Schema::Struct {
+                    path: "rustc_middle::mir::interpret::CtfeProvenance",
+                    fields: &FIELDS,
+                },
+            );
+        let id = state.intern_schema(&SCHEMA);
+        inspect::Value::Schema {
+            id,
+            values: vec![alloc.structure(state), a.structure(state), b.structure(state)],
         }
     }
 }

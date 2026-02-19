@@ -84,7 +84,6 @@ use std::{fmt, iter};
 use md5::{Digest, Md5};
 use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
-use rustc_data_structures::inspect::Write as _InspectWrite;
 use rustc_data_structures::sync::{FreezeLock, FreezeWriteGuard, Lock};
 use rustc_data_structures::unord::UnordMap;
 use rustc_hashes::{Hash64, Hash128};
@@ -2681,10 +2680,13 @@ impl<D: Decoder> Decodable<D> for BytePos {
 
 impl<H: HashStableContext> HashStable<H> for RelativeBytePos {
     fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, H, W>) -> inspect::Value {
-        inspect::Value::StructTuple {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![self.0.structure(state)],
-        }
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
+                path: "rustc_span::RelativeBytePos",
+                field_count: 1,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        inspect::Value::Schema { id, values: vec![self.0.structure(state)] }
     }
 
     fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
@@ -2694,10 +2696,13 @@ impl<H: HashStableContext> HashStable<H> for RelativeBytePos {
 
 impl<H: HashStableContext> HashStable<H> for BytePos {
     fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, H, W>) -> inspect::Value {
-        inspect::Value::StructTuple {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![self.0.structure(state)],
-        }
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
+                path: "rustc_span::BytePos",
+                field_count: 1,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        inspect::Value::Schema { id, values: vec![self.0.structure(state)] }
     }
 
     fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
@@ -2707,10 +2712,13 @@ impl<H: HashStableContext> HashStable<H> for BytePos {
 
 impl<H: HashStableContext> HashStable<H> for CharPos {
     fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, H, W>) -> inspect::Value {
-        inspect::Value::StructTuple {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![self.0.structure(state)],
-        }
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
+                path: "rustc_span::CharPos",
+                field_count: 1,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        inspect::Value::Schema { id, values: vec![self.0.structure(state)] }
     }
 
     fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {

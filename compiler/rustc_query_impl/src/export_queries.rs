@@ -1,7 +1,6 @@
-use std::borrow::Cow;
 use std::marker::PhantomData;
 
-use rustc_data_structures::inspect::{self, EnumVariant, Value};
+use rustc_data_structures::inspect::{self, EnumVariantSchema, Schema, SchemaRef, Value};
 use rustc_data_structures::stable_hasher::{HashStable, SpanArgs, StructureState};
 use rustc_hir::def_id::CrateNum;
 use rustc_middle::ty::TyCtxt;
@@ -56,10 +55,13 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
     let parent_val = span.parent.structure(state);
 
     if span.is_dummy() {
-        return Value::Enum {
-            path: std::borrow::Cow::Borrowed("Span"),
-            variant: EnumVariant::Unit(std::borrow::Cow::Borrowed("Dummy")),
-        };
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
+            path: "Span",
+            variant_name: "Dummy",
+            variant: EnumVariantSchema::Unit,
+        });
+        let id = state.intern_schema(&SCHEMA);
+        return Value::Schema { id, values: Vec::new() };
     }
 
     let parent = span.parent.map(|parent| tcx.def_span(parent).data_untracked());
@@ -71,17 +73,16 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
         // cheaply without the expensive `span_data_to_lines_and_cols` query.
         let lo = (span.lo - parent.lo).to_u32();
         let hi = (span.hi - parent.lo).to_u32();
-        return Value::Enum {
-            path: Cow::Borrowed("Span"),
-            variant: EnumVariant::Named(
-                Cow::Borrowed("Relative"),
-                vec![
-                    (Cow::Borrowed("ctxt"), ctx_val),
-                    (Cow::Borrowed("parent"), parent_val),
-                    (Cow::Borrowed("lo"), lo.structure(state)),
-                    (Cow::Borrowed("hi"), hi.structure(state)),
-                ],
-            ),
+        static FIELDS: [&str; 4] = ["ctxt", "parent", "lo", "hi"];
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
+            path: "Span",
+            variant_name: "Relative",
+            variant: EnumVariantSchema::Named(&FIELDS),
+        });
+        let id = state.intern_schema(&SCHEMA);
+        return Value::Schema {
+            id,
+            values: vec![ctx_val, parent_val, lo.structure(state), hi.structure(state)],
         };
     }
 
@@ -91,10 +92,13 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
     // to it, as opposed to hashing the first position past it.
     let Some((file, line_lo, col_lo, line_hi, col_hi)) = caching.span_data_to_lines_and_cols(&span)
     else {
-        return Value::Enum {
-            path: std::borrow::Cow::Borrowed("Span"),
-            variant: EnumVariant::Unit(std::borrow::Cow::Borrowed("Dummy")),
-        };
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
+            path: "Span",
+            variant_name: "Dummy",
+            variant: EnumVariantSchema::Unit,
+        });
+        let id = state.intern_schema(&SCHEMA);
+        return Value::Schema { id, values: Vec::new() };
     };
 
     if let Some(parent) = parent
@@ -104,17 +108,16 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
         // only hash the relative position.
         let lo = span.lo.0.wrapping_sub(parent.lo.0);
         let hi = span.hi.0.wrapping_sub(parent.lo.0);
-        return Value::Enum {
-            path: Cow::Borrowed("Span"),
-            variant: EnumVariant::Named(
-                Cow::Borrowed("Relative"),
-                vec![
-                    (Cow::Borrowed("ctxt"), ctx_val),
-                    (Cow::Borrowed("parent"), parent_val),
-                    (Cow::Borrowed("lo"), lo.structure(state)),
-                    (Cow::Borrowed("hi"), hi.structure(state)),
-                ],
-            ),
+        static FIELDS: [&str; 4] = ["ctxt", "parent", "lo", "hi"];
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
+            path: "Span",
+            variant_name: "Relative",
+            variant: EnumVariantSchema::Named(&FIELDS),
+        });
+        let id = state.intern_schema(&SCHEMA);
+        return Value::Schema {
+            id,
+            values: vec![ctx_val, parent_val, lo.structure(state), hi.structure(state)],
         };
     }
 
@@ -127,21 +130,34 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
     // length of the span, but we only hash the end location. So hash both.
     let len = (span.hi - span.lo).0;
 
-    Value::Enum {
-        path: Cow::Borrowed("Span"),
-        variant: EnumVariant::Named(
-            Cow::Borrowed("Valid"),
-            vec![
-                (Cow::Borrowed("ctxt"), ctx_val),
-                (Cow::Borrowed("parent"), parent_val),
-                (Cow::Borrowed("stable_id"), file.stable_id.structure(state)),
-                (Cow::Borrowed("col_lo"), col_lo.structure(state)),
-                (Cow::Borrowed("col_hi"), col_hi.structure(state)),
-                (Cow::Borrowed("line_lo"), line_lo.structure(state)),
-                (Cow::Borrowed("line_hi"), line_hi.structure(state)),
-                (Cow::Borrowed("len"), len.structure(state)),
-            ],
-        ),
+    static FIELDS: [&str; 8] = [
+        "ctxt",
+        "parent",
+        "stable_id",
+        "col_lo",
+        "col_hi",
+        "line_lo",
+        "line_hi",
+        "len",
+    ];
+    static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
+        path: "Span",
+        variant_name: "Valid",
+        variant: EnumVariantSchema::Named(&FIELDS),
+    });
+    let id = state.intern_schema(&SCHEMA);
+    Value::Schema {
+        id,
+        values: vec![
+            ctx_val,
+            parent_val,
+            file.stable_id.structure(state),
+            col_lo.structure(state),
+            col_hi.structure(state),
+            line_lo.structure(state),
+            line_hi.structure(state),
+            len.structure(state),
+        ],
     }
 }
 

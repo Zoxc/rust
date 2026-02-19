@@ -136,17 +136,30 @@ impl<CTX> HashStable<CTX> for InferConst {
         _state: &mut StructureState<'_, CTX, W>,
     ) -> inspect::Value {
         match self {
-            InferConst::Var(_) => inspect::Value::Enum {
-                path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-                variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("Var")),
-            },
-            InferConst::Fresh(i) => inspect::Value::Enum {
-                path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-                variant: inspect::EnumVariant::Tuple(
-                    std::borrow::Cow::Borrowed("Fresh"),
-                    vec![inspect::Value::UInt(*i as u128)],
-                ),
-            },
+            InferConst::Var(_) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::const_kind::InferConst",
+                            variant_name: "Var",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                        },
+                    );
+                let id = _state.intern_schema(&SCHEMA);
+                inspect::Value::Schema { id, values: Vec::new() }
+            }
+            InferConst::Fresh(i) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::const_kind::InferConst",
+                            variant_name: "Fresh",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Tuple(1),
+                        },
+                    );
+                let id = _state.intern_schema(&SCHEMA);
+                inspect::Value::Schema { id, values: vec![inspect::Value::UInt(*i as u128)] }
+            }
         }
     }
 }

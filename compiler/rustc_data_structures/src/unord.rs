@@ -443,10 +443,14 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
             }
         };
 
-        crate::inspect::Value::Struct {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![("len".into(), len.structure(state)), ("entries".into(), entries)],
-        }
+        static FIELDS: [&str; 2] = ["len", "entries"];
+        static SCHEMA: crate::inspect::SchemaRef =
+            crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
+                path: "rustc_data_structures::unord::UnordSet",
+                fields: &FIELDS,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        crate::inspect::Value::Schema { id, values: vec![len.structure(state), entries] }
     }
 
     #[inline]
@@ -696,10 +700,14 @@ impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> fo
             }
         };
 
-        crate::inspect::Value::Struct {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![("len".into(), len.structure(state)), ("entries".into(), entries)],
-        }
+        static FIELDS: [&str; 2] = ["len", "entries"];
+        static SCHEMA: crate::inspect::SchemaRef =
+            crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
+                path: "rustc_data_structures::unord::UnordMap",
+                fields: &FIELDS,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        crate::inspect::Value::Schema { id, values: vec![len.structure(state), entries] }
     }
 
     #[inline]
@@ -801,10 +809,14 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
             }
         };
 
-        crate::inspect::Value::Struct {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![("len".into(), len.structure(state)), ("counts".into(), counts)],
-        }
+        static FIELDS: [&str; 2] = ["len", "counts"];
+        static SCHEMA: crate::inspect::SchemaRef =
+            crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
+                path: "rustc_data_structures::unord::UnordBag",
+                fields: &FIELDS,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        crate::inspect::Value::Schema { id, values: vec![len.structure(state), counts] }
     }
 
     #[inline]

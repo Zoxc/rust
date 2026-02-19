@@ -353,10 +353,14 @@ impl<K: HashStable<CTX> + StableOrd, V: HashStable<CTX>, CTX> HashStable<CTX> fo
         &self,
         state: &mut StructureState<'_, CTX, W>,
     ) -> crate::inspect::Value {
-        crate::inspect::Value::Struct {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![("data".into(), self.data.structure(state))],
-        }
+        static FIELDS: [&str; 1] = ["data"];
+        static SCHEMA: crate::inspect::SchemaRef =
+            crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
+                path: "rustc_data_structures::sorted_map::SortedMap",
+                fields: &FIELDS,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        crate::inspect::Value::Schema { id, values: vec![self.data.structure(state)] }
     }
 
     #[inline]

@@ -115,10 +115,16 @@ mod temp_stable_hash_impls {
         ) -> ::rustc_data_structures::inspect::Value {
             // ModuleCodegen contents are transient for hashing; represent as an
             // unit variant in `inspect::Value`.
-            ::rustc_data_structures::inspect::Value::Enum {
-                path: ::std::any::type_name::<Self>().into(),
-                variant: ::rustc_data_structures::inspect::EnumVariant::Unit("Transient".into()),
-            }
+            static SCHEMA: ::rustc_data_structures::inspect::SchemaRef =
+                ::rustc_data_structures::inspect::SchemaRef::new(
+                    ::rustc_data_structures::inspect::Schema::Enum {
+                        path: "rustc_codegen_ssa::common::ModuleCodegen",
+                        variant_name: "Transient",
+                        variant: ::rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                    },
+                );
+            let id = _state.intern_schema(&SCHEMA);
+            ::rustc_data_structures::inspect::Value::Schema { id, values: Vec::new() }
         }
     }
 }

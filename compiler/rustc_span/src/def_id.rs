@@ -425,10 +425,15 @@ impl<CTX: HashStableContext> HashStable<CTX> for LocalDefId {
         &self,
         state: &mut StructureState<'_, CTX, W>,
     ) -> inspect::Value {
-        inspect::Value::StructTuple {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![self.to_def_id().structure(state)],
-        }
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(
+                rustc_data_structures::inspect::Schema::StructTuple {
+                    path: "rustc_span::def_id::LocalDefId",
+                    field_count: 1,
+                },
+            );
+        let id = state.intern_schema(&SCHEMA);
+        inspect::Value::Schema { id, values: vec![self.to_def_id().structure(state)] }
     }
 
     #[inline]

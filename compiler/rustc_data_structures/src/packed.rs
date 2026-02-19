@@ -66,10 +66,13 @@ impl<CTX> HashStable<CTX> for Pu128 {
         &self,
         state: &mut StructureState<'_, CTX, W>,
     ) -> crate::inspect::Value {
-        crate::inspect::Value::StructTuple {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![{ self.0 }.structure(state)],
-        }
+        static SCHEMA: crate::inspect::SchemaRef =
+            crate::inspect::SchemaRef::new(crate::inspect::Schema::StructTuple {
+                path: "rustc_data_structures::packed::Pu128",
+                field_count: 1,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        crate::inspect::Value::Schema { id, values: vec![{ self.0 }.structure(state)] }
     }
 
     #[inline]

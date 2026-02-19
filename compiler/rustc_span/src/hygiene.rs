@@ -32,7 +32,6 @@ use rustc_data_structures::fingerprint::Fingerprint;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
-use rustc_data_structures::inspect::Write as _InspectWrite;
 use rustc_data_structures::sync::Lock;
 use rustc_data_structures::unhash::UnhashMap;
 use rustc_hashes::Hash64;
@@ -1522,17 +1521,26 @@ fn update_disambiguator(expn_data: &mut ExpnData, mut ctx: impl HashStableContex
 impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
     fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
         // Represent SyntaxContext by either nil (root) or [expn_id.structure, transparency.structure]
-        let variant = if self.is_root() {
-            inspect::EnumVariant::Unit("Root".into())
+        if self.is_root() {
+            static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_span::hygiene::SyntaxContext",
+                    variant_name: "Root",
+                    variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                });
+            let id = _state.intern_schema(&SCHEMA);
+            inspect::Value::Schema { id, values: Vec::new() }
         } else {
+            static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_span::hygiene::SyntaxContext",
+                    variant_name: "Mark",
+                    variant: rustc_data_structures::inspect::EnumVariantSchema::Tuple(2),
+                });
+            let id = _state.intern_schema(&SCHEMA);
             let (expn_id, transparency) = self.outer_mark();
-            inspect::EnumVariant::Tuple(
-                "Mark".into(),
-                vec![expn_id.structure(_state), transparency.structure(_state)],
-            )
-        };
-
-        inspect::Value::Enum { path: std::any::type_name::<Self>().into(), variant }
+            inspect::Value::Schema { id, values: vec![expn_id.structure(_state), transparency.structure(_state)] }
+        }
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -1553,11 +1561,18 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
 impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
     fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
         // Represent ExpnId structurally as [krate.structure, local_id]
-        inspect::Value::Struct {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![
-                ("krate".into(), self.krate.structure(_state)),
-                ("local_id".into(), inspect::Value::UInt(self.local_id.as_u32() as u128)),
+        static FIELDS: [&str; 2] = ["krate", "local_id"];
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
+                path: "rustc_span::hygiene::ExpnId",
+                fields: &FIELDS,
+            });
+        let id = _state.intern_schema(&SCHEMA);
+        inspect::Value::Schema {
+            id,
+            values: vec![
+                self.krate.structure(_state),
+                inspect::Value::UInt(self.local_id.as_u32() as u128),
             ],
         }
     }
@@ -1577,10 +1592,13 @@ impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
 
 impl<CTX: HashStableContext> HashStable<CTX> for LocalExpnId {
     fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
-        inspect::Value::StructTuple {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![self.to_expn_id().structure(state)],
-        }
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
+                path: "rustc_span::hygiene::LocalExpnId",
+                field_count: 1,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        inspect::Value::Schema { id, values: vec![self.to_expn_id().structure(state)] }
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

@@ -179,12 +179,19 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
         state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> inspect::Value {
         // Represent ADT definition by its DefId and invariant layout information.
-        inspect::Value::Struct {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![
-                (std::borrow::Cow::Borrowed("did"), self.did.structure(state)),
-                (std::borrow::Cow::Borrowed("flags"), self.flags.structure(state)),
-                (std::borrow::Cow::Borrowed("discr_type"), self.repr.discr_type().structure(state)),
+        static FIELDS: [&str; 3] = ["did", "flags", "discr_type"];
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
+                path: "rustc_middle::ty::adt::AdtDefData",
+                fields: &FIELDS,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        inspect::Value::Schema {
+            id,
+            values: vec![
+                self.did.structure(state),
+                self.flags.structure(state),
+                self.repr.discr_type().structure(state),
             ],
         }
     }

@@ -266,12 +266,16 @@ where
         &self,
         state: &mut StructureState<'_, HCX, W>,
     ) -> crate::inspect::Value {
-        crate::inspect::Value::Struct {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![
-                ("pointer".into(), self.pointer().structure(state)),
-                ("tag".into(), self.tag().structure(state)),
-            ],
+        static FIELDS: [&str; 2] = ["pointer", "tag"];
+        static SCHEMA: crate::inspect::SchemaRef =
+            crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
+                path: "rustc_data_structures::tagged_ptr::TaggedRef",
+                fields: &FIELDS,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        crate::inspect::Value::Schema {
+            id,
+            values: vec![self.pointer().structure(state), self.tag().structure(state)],
         }
     }
 

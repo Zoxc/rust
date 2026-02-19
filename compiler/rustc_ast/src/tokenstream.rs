@@ -141,10 +141,14 @@ impl<D: SpanDecoder> Decodable<D> for LazyAttrTokenStream {
 impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
     fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
         // Preserve wrapper type; avoid a Debug-only string representation.
-        inspect::Value::Enum {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("Opaque")),
-        }
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Enum {
+                path: "rustc_ast::tokenstream::LazyAttrTokenStream",
+                variant_name: "Opaque",
+                variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+            });
+        let id = _state.intern_schema(&SCHEMA);
+        inspect::Value::Schema { id, values: Vec::new() }
     }
 
     fn hash_stable(&self, _hcx: &mut CTX, _hasher: &mut StableHasher) {
@@ -841,10 +845,14 @@ where
         for sub_tt in self.iter() {
             out.push(inspect::Value::from(sub_tt.structure(state)));
         }
-        inspect::Value::Struct {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![(std::borrow::Cow::Borrowed("trees"), inspect::Value::Array(out))],
-        }
+        static FIELDS: [&str; 1] = ["trees"];
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
+                path: "rustc_ast::tokenstream::TokenStream",
+                fields: &FIELDS,
+            });
+        let id = state.intern_schema(&SCHEMA);
+        inspect::Value::Schema { id, values: vec![inspect::Value::Array(out)] }
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

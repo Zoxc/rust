@@ -53,20 +53,37 @@ impl<CTX> HashStable<CTX> for Stability {
         &self,
         state: &mut StructureState<'_, CTX, W>,
     ) -> inspect::Value {
-        use inspect::EnumVariant;
+        static SCHEMA_STABLE: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Enum {
+            path: "rustc_target::target_features::Stability",
+            variant_name: "Stable",
+            variant: inspect::EnumVariantSchema::Unit,
+        });
+        static SCHEMA_UNSTABLE: inspect::SchemaRef =
+            inspect::SchemaRef::new(inspect::Schema::Enum {
+                path: "rustc_target::target_features::Stability",
+                variant_name: "Unstable",
+                variant: inspect::EnumVariantSchema::Tuple(1),
+            });
+        static FIELDS_FORBIDDEN: [&str; 1] = ["reason"];
+        static SCHEMA_FORBIDDEN: inspect::SchemaRef =
+            inspect::SchemaRef::new(inspect::Schema::Enum {
+                path: "rustc_target::target_features::Stability",
+                variant_name: "Forbidden",
+                variant: inspect::EnumVariantSchema::Named(&FIELDS_FORBIDDEN),
+            });
 
-        let variant = match self {
-            Stability::Stable => EnumVariant::Unit("Stable".into()),
+        let (schema, values) = match self {
+            Stability::Stable => (&SCHEMA_STABLE, Vec::new()),
             Stability::Unstable(nightly_feature) => {
-                EnumVariant::Tuple("Unstable".into(), vec![nightly_feature.structure(state)])
+                (&SCHEMA_UNSTABLE, vec![nightly_feature.structure(state)])
             }
-            Stability::Forbidden { reason } => EnumVariant::Named(
-                "Forbidden".into(),
-                vec![("reason".into(), inspect::Value::String((*reason).into()))],
-            ),
+            Stability::Forbidden { reason } => {
+                (&SCHEMA_FORBIDDEN, vec![inspect::Value::String((*reason).into())])
+            }
         };
 
-        inspect::Value::Enum { path: std::any::type_name::<Self>().into(), variant }
+        let id = state.intern_schema(schema);
+        inspect::Value::Schema { id, values }
     }
 }
 

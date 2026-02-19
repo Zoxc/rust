@@ -83,15 +83,25 @@ impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
         // representation.
         let guard = self.value.borrow();
         if guard.is_none() {
-            crate::inspect::Value::Enum {
-                path: std::any::type_name::<Self>().into(),
-                variant: crate::inspect::EnumVariant::Unit("Stolen".into()),
-            }
+            static SCHEMA: crate::inspect::SchemaRef =
+                crate::inspect::SchemaRef::new(crate::inspect::Schema::Enum {
+                    path: "rustc_data_structures::steal::Steal",
+                    variant_name: "Stolen",
+                    variant: crate::inspect::EnumVariantSchema::Unit,
+                });
+            let id = state.intern_schema(&SCHEMA);
+            crate::inspect::Value::Schema { id, values: Vec::new() }
         } else {
             // SAFETY: we just checked that the option is `Some`.
-            crate::inspect::Value::StructTuple {
-                path: std::any::type_name::<Self>().into(),
-                fields: vec![guard.as_ref().unwrap().structure(state)],
+            static SCHEMA: crate::inspect::SchemaRef =
+                crate::inspect::SchemaRef::new(crate::inspect::Schema::StructTuple {
+                    path: "rustc_data_structures::steal::Steal",
+                    field_count: 1,
+                });
+            let id = state.intern_schema(&SCHEMA);
+            crate::inspect::Value::Schema {
+                id,
+                values: vec![guard.as_ref().unwrap().structure(state)],
             }
         }
     }

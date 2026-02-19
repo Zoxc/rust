@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::fmt;
 use std::ops::Deref;
 
@@ -692,39 +691,78 @@ impl<CTX> HashStable<CTX> for InferTy {
     ) -> Value {
         use InferTy::*;
         match self {
-            TyVar(_) => inspect::Value::Enum {
-                path: Cow::Borrowed(std::any::type_name::<Self>()),
-                variant: inspect::EnumVariant::Unit(Cow::Borrowed("TyVar")),
-            },
-            IntVar(_) => inspect::Value::Enum {
-                path: Cow::Borrowed(std::any::type_name::<Self>()),
-                variant: inspect::EnumVariant::Unit(Cow::Borrowed("IntVar")),
-            },
-            FloatVar(_) => inspect::Value::Enum {
-                path: Cow::Borrowed(std::any::type_name::<Self>()),
-                variant: inspect::EnumVariant::Unit(Cow::Borrowed("FloatVar")),
-            },
-            FreshTy(v) => inspect::Value::Enum {
-                path: Cow::Borrowed(std::any::type_name::<Self>()),
-                variant: inspect::EnumVariant::Tuple(
-                    Cow::Borrowed("FreshTy"),
-                    vec![Value::UInt((*v) as u128)],
-                ),
-            },
-            FreshIntTy(v) => inspect::Value::Enum {
-                path: Cow::Borrowed(std::any::type_name::<Self>()),
-                variant: inspect::EnumVariant::Tuple(
-                    Cow::Borrowed("FreshIntTy"),
-                    vec![Value::UInt((*v) as u128)],
-                ),
-            },
-            FreshFloatTy(v) => inspect::Value::Enum {
-                path: Cow::Borrowed(std::any::type_name::<Self>()),
-                variant: inspect::EnumVariant::Tuple(
-                    Cow::Borrowed("FreshFloatTy"),
-                    vec![Value::UInt((*v) as u128)],
-                ),
-            },
+            TyVar(_) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::ty_kind::InferTy",
+                            variant_name: "TyVar",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                        },
+                    );
+                let id = _state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: Vec::new() }
+            }
+            IntVar(_) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::ty_kind::InferTy",
+                            variant_name: "IntVar",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                        },
+                    );
+                let id = _state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: Vec::new() }
+            }
+            FloatVar(_) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::ty_kind::InferTy",
+                            variant_name: "FloatVar",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                        },
+                    );
+                let id = _state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: Vec::new() }
+            }
+            FreshTy(v) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::ty_kind::InferTy",
+                            variant_name: "FreshTy",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Tuple(1),
+                        },
+                    );
+                let id = _state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: vec![Value::UInt((*v) as u128)] }
+            }
+            FreshIntTy(v) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::ty_kind::InferTy",
+                            variant_name: "FreshIntTy",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Tuple(1),
+                        },
+                    );
+                let id = _state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: vec![Value::UInt((*v) as u128)] }
+            }
+            FreshFloatTy(v) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::ty_kind::InferTy",
+                            variant_name: "FreshFloatTy",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Tuple(1),
+                        },
+                    );
+                let id = _state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: vec![Value::UInt((*v) as u128)] }
+            }
         }
     }
 }

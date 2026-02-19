@@ -255,55 +255,111 @@ where
         state: &mut StructureState<'_, CTX, W>,
     ) -> Value {
         use RegionKind::*;
-        let path = std::borrow::Cow::Borrowed(std::any::type_name::<Self>());
         match self {
-            ReErased => Value::Enum {
-                path: path.clone(),
-                variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("ReErased")),
-            },
-            ReStatic => Value::Enum {
-                path: path.clone(),
-                variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("ReStatic")),
-            },
-            ReError(_) => Value::Enum {
-                path: path.clone(),
-                variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("ReError")),
-            },
-            ReBound(d, r) => Value::Enum {
-                path: path.clone(),
-                variant: inspect::EnumVariant::Named(
-                    std::borrow::Cow::Borrowed("ReBound"),
-                    vec![
-                        (std::borrow::Cow::Borrowed("debruijn"), d.structure(state)),
-                        (std::borrow::Cow::Borrowed("region"), r.structure(state)),
-                    ],
-                ),
-            },
-            ReEarlyParam(r) => Value::Enum {
-                path: path.clone(),
-                variant: inspect::EnumVariant::Named(
-                    std::borrow::Cow::Borrowed("ReEarlyParam"),
-                    vec![(std::borrow::Cow::Borrowed("param"), r.structure(state))],
-                ),
-            },
-            ReLateParam(r) => Value::Enum {
-                path: path.clone(),
-                variant: inspect::EnumVariant::Named(
-                    std::borrow::Cow::Borrowed("ReLateParam"),
-                    vec![(std::borrow::Cow::Borrowed("param"), r.structure(state))],
-                ),
-            },
-            RePlaceholder(r) => Value::Enum {
-                path: path.clone(),
-                variant: inspect::EnumVariant::Named(
-                    std::borrow::Cow::Borrowed("RePlaceholder"),
-                    vec![(std::borrow::Cow::Borrowed("placeholder"), r.structure(state))],
-                ),
-            },
-            ReVar(_) => Value::Enum {
-                path,
-                variant: inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed("ReVar")),
-            },
+            ReErased => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::region_kind::RegionKind",
+                            variant_name: "ReErased",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                        },
+                    );
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: Vec::new() }
+            }
+            ReStatic => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::region_kind::RegionKind",
+                            variant_name: "ReStatic",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                        },
+                    );
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: Vec::new() }
+            }
+            ReError(_) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::region_kind::RegionKind",
+                            variant_name: "ReError",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                        },
+                    );
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: Vec::new() }
+            }
+            ReBound(d, r) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::region_kind::RegionKind",
+                            variant_name: "ReBound",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                                "debruijn", "region",
+                            ]),
+                        },
+                    );
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: vec![d.structure(state), r.structure(state)] }
+            }
+            ReEarlyParam(r) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::region_kind::RegionKind",
+                            variant_name: "ReEarlyParam",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                                "param",
+                            ]),
+                        },
+                    );
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: vec![r.structure(state)] }
+            }
+            ReLateParam(r) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::region_kind::RegionKind",
+                            variant_name: "ReLateParam",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                                "param",
+                            ]),
+                        },
+                    );
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: vec![r.structure(state)] }
+            }
+            RePlaceholder(r) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::region_kind::RegionKind",
+                            variant_name: "RePlaceholder",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                                "placeholder",
+                            ]),
+                        },
+                    );
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: vec![r.structure(state)] }
+            }
+            ReVar(_) => {
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Enum {
+                            path: "rustc_type_ir::region_kind::RegionKind",
+                            variant_name: "ReVar",
+                            variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                        },
+                    );
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema { id, values: Vec::new() }
+            }
         }
     }
 }

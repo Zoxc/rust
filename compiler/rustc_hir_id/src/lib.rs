@@ -64,10 +64,15 @@ impl<CTX: HashStableContext> HashStable<CTX> for OwnerId {
         state: &mut StructureState<'_, CTX, W>,
     ) -> inspect::Value {
         // Represent OwnerId by its contained LocalDefId
-        inspect::Value::StructTuple {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![self.def_id.structure(state)],
-        }
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(
+                rustc_data_structures::inspect::Schema::StructTuple {
+                    path: "rustc_hir_id::OwnerId",
+                    field_count: 1,
+                },
+            );
+        let id = state.intern_schema(&SCHEMA);
+        inspect::Value::Schema { id, values: vec![self.def_id.structure(state)] }
     }
 
     #[inline]

@@ -20,8 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::fx::FxHashMap;
 /// A compact representation of values for inspection purposes.
 ///
-/// Models scalars and Rust aggregate types: `Struct`, `StructTuple` and
-/// `Enum` (with `EnumVariant`).
+/// Models scalars, collections, and schema-backed aggregate values.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum Value {
     /// Boolean.
@@ -46,36 +45,6 @@ pub enum Value {
         id: SchemaId,
         values: Vec<Value>,
     },
-
-    /// Named-field struct value.
-    Struct {
-        path: Cow<'static, str>,
-        fields: Vec<(Cow<'static, str>, Value)>,
-    },
-
-    /// Tuple struct / tuple variant value.
-    StructTuple {
-        path: Cow<'static, str>,
-        fields: Vec<Value>,
-    },
-
-    /// Enum value: `path` is the enum path and `variant` describes the
-    /// active variant.
-    Enum {
-        path: Cow<'static, str>,
-        variant: EnumVariant,
-    },
-}
-
-/// Describes a single enum variant instance.
-#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum EnumVariant {
-    /// Unit variant (no fields).
-    Unit(Cow<'static, str>),
-    /// Named fields (struct-like variant).
-    Named(Cow<'static, str>, Vec<(Cow<'static, str>, Value)>),
-    /// Positional fields (tuple-like variant).
-    Tuple(Cow<'static, str>, Vec<Value>),
 }
 
 impl Value {
@@ -110,6 +79,10 @@ pub struct SchemaRef(UnsafeCell<Schema>);
 impl SchemaRef {
     pub const fn new(schema: Schema) -> Self {
         SchemaRef(UnsafeCell::new(schema))
+
+    #[inline]
+    pub fn get(&self) -> &Schema {
+        &self.0
     }
 }
 
@@ -162,6 +135,12 @@ impl Write for FileWriter {
             let _ = f.write_all(&value.to_le_bytes());
         }
     }
+
+    fn write_bytes(&mut self, bytes: &[u8]) {
+        if let Some(f) = &mut self.0 {
+            let _ = f.write_all(bytes);
+        }
+    }
 }
 
 // Implement `Write` for an optional mutable file reference so callers can
@@ -176,6 +155,12 @@ impl<'a> Write for Option<&'a mut File> {
     fn write_i128(&mut self, value: i128) {
         if let Some(f) = self {
             let _ = f.write_all(&value.to_le_bytes());
+        }
+    }
+
+    fn write_bytes(&mut self, bytes: &[u8]) {
+        if let Some(f) = self {
+            let _ = f.write_all(bytes);
         }
     }
 }

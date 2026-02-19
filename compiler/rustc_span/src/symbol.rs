@@ -2894,9 +2894,17 @@ impl<CTX> HashStable<CTX> for Symbol {
         _state: &mut StructureState<'_, CTX, W>,
     ) -> inspect::Value {
         // Preserve the `Symbol` wrapper in inspection output.
-        inspect::Value::StructTuple {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![inspect::Value::String(self.as_str().to_string().into())],
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(
+                rustc_data_structures::inspect::Schema::StructTuple {
+                    path: "rustc_span::Symbol",
+                    field_count: 1,
+                },
+            );
+        let id = _state.intern_schema(&SCHEMA);
+        inspect::Value::Schema {
+            id,
+            values: vec![inspect::Value::String(self.as_str().to_string().into())],
         }
     }
 
@@ -2966,9 +2974,17 @@ impl<CTX> HashStable<CTX> for ByteSymbol {
         _state: &mut StructureState<'_, CTX, W>,
     ) -> inspect::Value {
         // Preserve the `ByteSymbol` wrapper in inspection output.
-        inspect::Value::StructTuple {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![inspect::Value::Binary(self.as_byte_str().to_vec())],
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(
+                rustc_data_structures::inspect::Schema::StructTuple {
+                    path: "rustc_span::ByteSymbol",
+                    field_count: 1,
+                },
+            );
+        let id = _state.intern_schema(&SCHEMA);
+        inspect::Value::Schema {
+            id,
+            values: vec![inspect::Value::Binary(self.as_byte_str().to_vec())],
         }
     }
 

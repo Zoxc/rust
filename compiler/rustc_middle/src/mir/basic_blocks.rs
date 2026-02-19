@@ -180,11 +180,15 @@ impl<CTX> HashStable<CTX> for Cache {
         _state: &mut StructureState<'_, CTX, W>,
     ) -> rustc_data_structures::inspect::Value {
         // Cache is transient and ignored for hashing; preserve wrapper type.
-        rustc_data_structures::inspect::Value::Enum {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            variant: rustc_data_structures::inspect::EnumVariant::Unit(std::borrow::Cow::Borrowed(
-                "Transient",
-            )),
-        }
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(
+                rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_middle::mir::basic_blocks::Cache",
+                    variant_name: "Transient",
+                    variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                },
+            );
+        let id = _state.intern_schema(&SCHEMA);
+        rustc_data_structures::inspect::Value::Schema { id, values: Vec::new() }
     }
 }

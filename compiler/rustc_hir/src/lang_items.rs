@@ -154,9 +154,15 @@ impl<CTX> HashStable<CTX> for LangItem {
         &self,
         _state: &mut StructureState<'_, CTX, W>,
     ) -> inspect::Value {
-        inspect::Value::Enum {
-            path: std::any::type_name::<Self>().into(),
-            variant: inspect::EnumVariant::Unit(self.variant_name().into()),
+        static FIELDS: [&str; 1] = ["variant"];
+        static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Struct {
+            path: "rustc_hir::lang_items::LangItem",
+            fields: &FIELDS,
+        });
+        let id = _state.intern_schema(&SCHEMA);
+        inspect::Value::Schema {
+            id,
+            values: vec![inspect::Value::from_static_str(self.variant_name())],
         }
     }
 }

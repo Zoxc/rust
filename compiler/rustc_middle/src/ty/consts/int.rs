@@ -177,9 +177,14 @@ impl<CTX> crate::ty::HashStable<CTX> for ScalarInt {
         _state: &mut StructureState<'_, CTX, W>,
     ) -> inspect::Value {
         // Represent the raw bytes (little-endian) as binary per canonical representation
-        inspect::Value::StructTuple {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![inspect::Value::Binary(self.to_bits_unchecked().to_le_bytes().to_vec())],
+        static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::StructTuple {
+            path: "rustc_middle::ty::consts::int::ScalarInt",
+            field_count: 1,
+        });
+        let id = _state.intern_schema(&SCHEMA);
+        inspect::Value::Schema {
+            id,
+            values: vec![inspect::Value::Binary(self.to_bits_unchecked().to_le_bytes().to_vec())],
         }
     }
 }

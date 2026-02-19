@@ -131,15 +131,27 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
         &self,
         state: &mut StructureState<'_, CTX, W>,
     ) -> inspect::Value {
-        use std::borrow::Cow;
+        static FIELDS: [&str; 2] = ["internee", "stable_hash"];
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(
+                rustc_data_structures::inspect::Schema::Struct {
+                    path: "rustc_type_ir::ty_info::WithCachedTypeInfo",
+                    fields: &FIELDS,
+                },
+            );
+        let id = state.intern_schema(&SCHEMA);
 
-        inspect::Value::Struct {
-            path: Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![
-                (Cow::Borrowed("internee"), self.internee.structure(state)),
-                #[cfg(feature = "nightly")]
-                (Cow::Borrowed("stable_hash"), self.stable_hash.structure(state)),
-            ],
+        #[cfg(feature = "nightly")]
+        {
+            inspect::Value::Schema {
+                id,
+                values: vec![self.internee.structure(state), self.stable_hash.structure(state)],
+            }
+        }
+
+        #[cfg(not(feature = "nightly"))]
+        {
+            inspect::Value::Schema { id, values: vec![self.internee.structure(state)] }
         }
     }
 }

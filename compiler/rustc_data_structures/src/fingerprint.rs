@@ -177,9 +177,15 @@ impl<CTX> HashStable<CTX> for Fingerprint {
     ) -> crate::inspect::Value {
         // Preserve the `Fingerprint` type while still using its canonical
         // 16-byte representation.
-        crate::inspect::Value::StructTuple {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![crate::inspect::Value::Binary(self.to_le_bytes().to_vec())],
+        static SCHEMA: crate::inspect::SchemaRef =
+            crate::inspect::SchemaRef::new(crate::inspect::Schema::StructTuple {
+                path: "rustc_data_structures::fingerprint::Fingerprint",
+                field_count: 1,
+            });
+        let id = _state.intern_schema(&SCHEMA);
+        crate::inspect::Value::Schema {
+            id,
+            values: vec![crate::inspect::Value::Binary(self.to_le_bytes().to_vec())],
         }
     }
 

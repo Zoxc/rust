@@ -150,12 +150,21 @@ impl<HCX: HashStableContext> HashStable<HCX> for LintExpectationId {
     ) -> Value {
         match self {
             LintExpectationId::Stable { hir_id, attr_index, lint_index: Some(lint_index) } => {
-                Value::Struct {
-                    path: Cow::Borrowed(std::any::type_name::<Self>()),
-                    fields: vec![
-                        (Cow::Borrowed("hir_id"), hir_id.structure(state)),
-                        (Cow::Borrowed("attr_index"), Value::UInt(*attr_index as u128)),
-                        (Cow::Borrowed("lint_index"), Value::UInt(*lint_index as u128)),
+                static FIELDS: [&str; 3] = ["hir_id", "attr_index", "lint_index"];
+                static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+                    rustc_data_structures::inspect::SchemaRef::new(
+                        rustc_data_structures::inspect::Schema::Struct {
+                            path: "rustc_lint_defs::LintExpectationId",
+                            fields: &FIELDS,
+                        },
+                    );
+                let id = state.intern_schema(&SCHEMA);
+                Value::Schema {
+                    id,
+                    values: vec![
+                        hir_id.structure(state),
+                        Value::UInt(*attr_index as u128),
+                        Value::UInt(*lint_index as u128),
                     ],
                 }
             }
@@ -659,13 +668,16 @@ impl<HCX> HashStable<HCX> for LintId {
         _state: &mut StructureState<'_, HCX, W>,
     ) -> Value {
         // Represent `LintId` structurally to preserve the wrapper type.
-        Value::Struct {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            fields: vec![(
-                std::borrow::Cow::Borrowed("name"),
-                Value::String(self.lint_name_raw().into()),
-            )],
-        }
+        static FIELDS: [&str; 1] = ["name"];
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(
+                rustc_data_structures::inspect::Schema::Struct {
+                    path: "rustc_lint_defs::LintId",
+                    fields: &FIELDS,
+                },
+            );
+        let id = _state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![Value::String(self.lint_name_raw().into())] }
     }
 }
 

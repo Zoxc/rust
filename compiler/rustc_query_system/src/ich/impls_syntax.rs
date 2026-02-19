@@ -1,10 +1,7 @@
 //! This module contains `HashStable` implementations for various data types
 //! from various crates in no particular order.
 
-// Use fully-qualified paths for `inspect::Value` to avoid name collisions.
-use std::borrow::Cow;
-
-use inspect::Value;
+use inspect::{Schema, SchemaRef, Value};
 use rustc_data_structures::inspect;
 use rustc_data_structures::stable_hasher::{HashStable, StableHasher, StructureState};
 use rustc_span::{SourceFile, Symbol, sym};
@@ -23,9 +20,10 @@ impl<'a> HashStable<StableHashingContext<'a>> for ast::NodeId {
         &self,
         _state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> Value {
-        // NodeIds are un-stable across sessions; represent as a tag struct so
-        // the type name is preserved in inspection output.
-        Value::Struct { path: Cow::Borrowed("NodeId"), fields: Vec::new() }
+        // NodeIds are un-stable across sessions; represent as a tag.
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct { path: "NodeId", fields: &[] });
+        let _ = &SCHEMA;
+        Value::Tuple(Vec::new())
     }
 }
 
@@ -120,15 +118,17 @@ impl<'a> HashStable<StableHashingContext<'a>> for SourceFile {
         &self,
         state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> Value {
-        // Use the stable_id and other session-invariant fields as the structural representation.
-        // Represent as a named struct so the type name is not lost.
-        Value::Struct {
-            path: Cow::Borrowed("SourceFile"),
-            fields: vec![
-                (Cow::Borrowed("stable_id"), self.stable_id.structure(state)),
-                (Cow::Borrowed("src_hash"), self.src_hash.structure(state)),
-                (Cow::Borrowed("lines_len"), self.lines().len().structure(state)),
-                (Cow::Borrowed("cnum"), self.cnum.structure(state)),
+        static FIELDS: [&str; 4] = ["stable_id", "src_hash", "lines_len", "cnum"];
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "SourceFile", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema {
+            id,
+            values: vec![
+                self.stable_id.structure(state),
+                self.src_hash.structure(state),
+                self.lines().len().structure(state),
+                self.cnum.structure(state),
             ],
         }
     }
@@ -146,17 +146,15 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::Features {
         &self,
         state: &mut StructureState<'s, StableHashingContext<'tcx>, W>,
     ) -> Value {
-        Value::Struct {
-            path: Cow::Borrowed("rustc_feature::Features"),
-            fields: vec![
-                (
-                    Cow::Borrowed("enabled_lang_features"),
-                    self.enabled_lang_features().structure(state),
-                ),
-                (
-                    Cow::Borrowed("enabled_lib_features"),
-                    self.enabled_lib_features().structure(state),
-                ),
+        static FIELDS: [&str; 2] = ["enabled_lang_features", "enabled_lib_features"];
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "rustc_feature::Features", fields: &FIELDS });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema {
+            id,
+            values: vec![
+                self.enabled_lang_features().structure(state),
+                self.enabled_lib_features().structure(state),
             ],
         }
     }
@@ -175,12 +173,18 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLang
         state: &mut StructureState<'s, StableHashingContext<'tcx>, W>,
     ) -> Value {
         let rustc_feature::EnabledLangFeature { gate_name, attr_sp, stable_since } = self;
-        Value::Struct {
-            path: Cow::Borrowed("rustc_feature::EnabledLangFeature"),
-            fields: vec![
-                (Cow::Borrowed("gate_name"), gate_name.structure(state)),
-                (Cow::Borrowed("attr_sp"), attr_sp.structure(state)),
-                (Cow::Borrowed("stable_since"), stable_since.structure(state)),
+        static FIELDS: [&str; 3] = ["gate_name", "attr_sp", "stable_since"];
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
+            path: "rustc_feature::EnabledLangFeature",
+            fields: &FIELDS,
+        });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema {
+            id,
+            values: vec![
+                gate_name.structure(state),
+                attr_sp.structure(state),
+                stable_since.structure(state),
             ],
         }
     }
@@ -198,12 +202,12 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLibF
         state: &mut StructureState<'s, StableHashingContext<'tcx>, W>,
     ) -> Value {
         let rustc_feature::EnabledLibFeature { gate_name, attr_sp } = self;
-        Value::Struct {
-            path: Cow::Borrowed("rustc_feature::EnabledLibFeature"),
-            fields: vec![
-                (Cow::Borrowed("gate_name"), gate_name.structure(state)),
-                (Cow::Borrowed("attr_sp"), attr_sp.structure(state)),
-            ],
-        }
+        static FIELDS: [&str; 2] = ["gate_name", "attr_sp"];
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
+            path: "rustc_feature::EnabledLibFeature",
+            fields: &FIELDS,
+        });
+        let id = state.intern_schema(&SCHEMA);
+        Value::Schema { id, values: vec![gate_name.structure(state), attr_sp.structure(state)] }
     }
 }

@@ -227,12 +227,214 @@ impl<C> HashStable<C> for ExternAbi {
         _state: &mut StructureState<'_, C, W>,
     ) -> ::rustc_data_structures::inspect::Value {
         // Preserve enum semantics in inspection output.
-        ::rustc_data_structures::inspect::Value::Enum {
-            path: std::borrow::Cow::Borrowed(std::any::type_name::<Self>()),
-            variant: ::rustc_data_structures::inspect::EnumVariant::Unit(
-                std::borrow::Cow::Borrowed(self.as_str()),
-            ),
+
+        static SCHEMA_C: ::rustc_data_structures::inspect::SchemaRef =
+            ::rustc_data_structures::inspect::SchemaRef::new(
+                ::rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_abi::extern_abi::ExternAbi",
+                    variant_name: "C",
+                    variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                        "unwind",
+                    ]),
+                },
+            );
+        static SCHEMA_SYSTEM: ::rustc_data_structures::inspect::SchemaRef =
+            ::rustc_data_structures::inspect::SchemaRef::new(
+                ::rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_abi::extern_abi::ExternAbi",
+                    variant_name: "System",
+                    variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                        "unwind",
+                    ]),
+                },
+            );
+
+        // Unit variants share one schema per variant.
+        macro_rules! unit_schema {
+            ($name:literal) => {
+                ::rustc_data_structures::inspect::SchemaRef::new(
+                    ::rustc_data_structures::inspect::Schema::Enum {
+                        path: "rustc_abi::extern_abi::ExternAbi",
+                        variant_name: $name,
+                        variant: ::rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                    },
+                )
+            };
         }
+
+        static SCHEMA_RUST: ::rustc_data_structures::inspect::SchemaRef = unit_schema!("Rust");
+        static SCHEMA_RUSTCALL: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("RustCall");
+        static SCHEMA_RUSTCOLD: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("RustCold");
+        static SCHEMA_RUSTINVALID: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("RustInvalid");
+        static SCHEMA_RUSTPRESERVENONE: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("RustPreserveNone");
+        static SCHEMA_UNADJUSTED: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("Unadjusted");
+        static SCHEMA_CUSTOM: ::rustc_data_structures::inspect::SchemaRef = unit_schema!("Custom");
+        static SCHEMA_EFIAPI: ::rustc_data_structures::inspect::SchemaRef = unit_schema!("EfiApi");
+        static SCHEMA_CMSE_NSC: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("CmseNonSecureCall");
+        static SCHEMA_CMSE_NSE: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("CmseNonSecureEntry");
+        static SCHEMA_GPUKERNEL: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("GpuKernel");
+        static SCHEMA_PTXKERNEL: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("PtxKernel");
+        static SCHEMA_AVRINT: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("AvrInterrupt");
+        static SCHEMA_AVRNBI: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("AvrNonBlockingInterrupt");
+        static SCHEMA_MSP430INT: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("Msp430Interrupt");
+        static SCHEMA_RISCVIM: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("RiscvInterruptM");
+        static SCHEMA_RISCVIS: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("RiscvInterruptS");
+        static SCHEMA_X86INT: ::rustc_data_structures::inspect::SchemaRef =
+            unit_schema!("X86Interrupt");
+
+        static SCHEMA_CDECL: ::rustc_data_structures::inspect::SchemaRef =
+            ::rustc_data_structures::inspect::SchemaRef::new(
+                ::rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_abi::extern_abi::ExternAbi",
+                    variant_name: "Cdecl",
+                    variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                        "unwind",
+                    ]),
+                },
+            );
+        static SCHEMA_STDCALL: ::rustc_data_structures::inspect::SchemaRef =
+            ::rustc_data_structures::inspect::SchemaRef::new(
+                ::rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_abi::extern_abi::ExternAbi",
+                    variant_name: "Stdcall",
+                    variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                        "unwind",
+                    ]),
+                },
+            );
+        static SCHEMA_FASTCALL: ::rustc_data_structures::inspect::SchemaRef =
+            ::rustc_data_structures::inspect::SchemaRef::new(
+                ::rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_abi::extern_abi::ExternAbi",
+                    variant_name: "Fastcall",
+                    variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                        "unwind",
+                    ]),
+                },
+            );
+        static SCHEMA_THISCALL: ::rustc_data_structures::inspect::SchemaRef =
+            ::rustc_data_structures::inspect::SchemaRef::new(
+                ::rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_abi::extern_abi::ExternAbi",
+                    variant_name: "Thiscall",
+                    variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                        "unwind",
+                    ]),
+                },
+            );
+        static SCHEMA_VECTORCALL: ::rustc_data_structures::inspect::SchemaRef =
+            ::rustc_data_structures::inspect::SchemaRef::new(
+                ::rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_abi::extern_abi::ExternAbi",
+                    variant_name: "Vectorcall",
+                    variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                        "unwind",
+                    ]),
+                },
+            );
+        static SCHEMA_SYSV64: ::rustc_data_structures::inspect::SchemaRef =
+            ::rustc_data_structures::inspect::SchemaRef::new(
+                ::rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_abi::extern_abi::ExternAbi",
+                    variant_name: "SysV64",
+                    variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                        "unwind",
+                    ]),
+                },
+            );
+        static SCHEMA_WIN64: ::rustc_data_structures::inspect::SchemaRef =
+            ::rustc_data_structures::inspect::SchemaRef::new(
+                ::rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_abi::extern_abi::ExternAbi",
+                    variant_name: "Win64",
+                    variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                        "unwind",
+                    ]),
+                },
+            );
+
+        static SCHEMA_AAPCS: ::rustc_data_structures::inspect::SchemaRef =
+            ::rustc_data_structures::inspect::SchemaRef::new(
+                ::rustc_data_structures::inspect::Schema::Enum {
+                    path: "rustc_abi::extern_abi::ExternAbi",
+                    variant_name: "Aapcs",
+                    variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[
+                        "unwind",
+                    ]),
+                },
+            );
+
+        let (schema, values): (
+            &'static ::rustc_data_structures::inspect::SchemaRef,
+            Vec<::rustc_data_structures::inspect::Value>,
+        ) = match self {
+            ExternAbi::C { unwind } => {
+                (&SCHEMA_C, vec![::rustc_data_structures::inspect::Value::Bool(*unwind)])
+            }
+            ExternAbi::System { unwind } => {
+                (&SCHEMA_SYSTEM, vec![::rustc_data_structures::inspect::Value::Bool(*unwind)])
+            }
+            ExternAbi::Aapcs { unwind } => {
+                (&SCHEMA_AAPCS, vec![::rustc_data_structures::inspect::Value::Bool(*unwind)])
+            }
+            ExternAbi::Rust => (&SCHEMA_RUST, Vec::new()),
+            ExternAbi::RustCall => (&SCHEMA_RUSTCALL, Vec::new()),
+            ExternAbi::RustCold => (&SCHEMA_RUSTCOLD, Vec::new()),
+            ExternAbi::RustInvalid => (&SCHEMA_RUSTINVALID, Vec::new()),
+            ExternAbi::RustPreserveNone => (&SCHEMA_RUSTPRESERVENONE, Vec::new()),
+            ExternAbi::Unadjusted => (&SCHEMA_UNADJUSTED, Vec::new()),
+            ExternAbi::Custom => (&SCHEMA_CUSTOM, Vec::new()),
+            ExternAbi::EfiApi => (&SCHEMA_EFIAPI, Vec::new()),
+            ExternAbi::CmseNonSecureCall => (&SCHEMA_CMSE_NSC, Vec::new()),
+            ExternAbi::CmseNonSecureEntry => (&SCHEMA_CMSE_NSE, Vec::new()),
+            ExternAbi::GpuKernel => (&SCHEMA_GPUKERNEL, Vec::new()),
+            ExternAbi::PtxKernel => (&SCHEMA_PTXKERNEL, Vec::new()),
+            ExternAbi::AvrInterrupt => (&SCHEMA_AVRINT, Vec::new()),
+            ExternAbi::AvrNonBlockingInterrupt => (&SCHEMA_AVRNBI, Vec::new()),
+            ExternAbi::Msp430Interrupt => (&SCHEMA_MSP430INT, Vec::new()),
+            ExternAbi::RiscvInterruptM => (&SCHEMA_RISCVIM, Vec::new()),
+            ExternAbi::RiscvInterruptS => (&SCHEMA_RISCVIS, Vec::new()),
+            ExternAbi::X86Interrupt => (&SCHEMA_X86INT, Vec::new()),
+
+            ExternAbi::Cdecl { unwind } => {
+                (&SCHEMA_CDECL, vec![::rustc_data_structures::inspect::Value::Bool(*unwind)])
+            }
+            ExternAbi::Stdcall { unwind } => {
+                (&SCHEMA_STDCALL, vec![::rustc_data_structures::inspect::Value::Bool(*unwind)])
+            }
+            ExternAbi::Fastcall { unwind } => {
+                (&SCHEMA_FASTCALL, vec![::rustc_data_structures::inspect::Value::Bool(*unwind)])
+            }
+            ExternAbi::Thiscall { unwind } => {
+                (&SCHEMA_THISCALL, vec![::rustc_data_structures::inspect::Value::Bool(*unwind)])
+            }
+            ExternAbi::Vectorcall { unwind } => {
+                (&SCHEMA_VECTORCALL, vec![::rustc_data_structures::inspect::Value::Bool(*unwind)])
+            }
+            ExternAbi::SysV64 { unwind } => {
+                (&SCHEMA_SYSV64, vec![::rustc_data_structures::inspect::Value::Bool(*unwind)])
+            }
+            ExternAbi::Win64 { unwind } => {
+                (&SCHEMA_WIN64, vec![::rustc_data_structures::inspect::Value::Bool(*unwind)])
+            }
+        };
+
+        let id = _state.intern_schema(schema);
+        ::rustc_data_structures::inspect::Value::Schema { id, values }
     }
 
     #[inline]

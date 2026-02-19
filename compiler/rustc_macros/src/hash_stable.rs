@@ -126,112 +126,130 @@ fn hash_stable_derive_with_mode(
 }
 
 fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro2::TokenStream {
-    // For enums we include the discriminant as the first element of the array.
     let is_enum = matches!(s.ast().data, syn::Data::Enum(_));
+    let type_ident = &s.ast().ident;
 
-    // Build match arms for each variant where we construct a vector `out`,
-    // push an optional discriminant for enums, then push structural
-    // representations of each (non-ignored) field.
+    // Build match arms for each variant where we intern a schema and then
+    // return a `Value::Schema` with positional field values.
     s.each_variant(|vi| {
-        // Variant ident for producing readable names.
         let var_ident = &vi.ast().ident;
 
         match &vi.ast().fields {
-            syn::Fields::Named(_) => {
-                let pushes = vi
-                    .bindings()
-                    .iter()
-                    .enumerate()
-                    .map(|(i, binding)| {
-                        let attrs = parse_attributes(binding.ast());
-                        let bind_ident = &binding.binding;
-                        let key = match &binding.ast().ident {
-                            Some(ident) => LitStr::new(&ident.to_string(), Span::call_site()),
-                            None => LitStr::new(&i.to_string(), Span::call_site()),
-                        };
-                        if attrs.ignore {
-                            quote! {}
-                        } else if let Some(project) = attrs.project {
-                            quote! {
-                                fields.push((::std::borrow::Cow::Borrowed(#key), (#bind_ident.#project).structure(__state)));
-                            }
-                        } else {
-                            quote! {
-                                fields.push((::std::borrow::Cow::Borrowed(#key), #bind_ident.structure(__state)));
-                            }
-                        }
-                    })
-                    .collect::<proc_macro2::TokenStream>();
+            syn::Fields::Named(named) => {
+                let mut field_names: Vec<LitStr> = Vec::new();
+                let mut pushes = proc_macro2::TokenStream::new();
+                for binding in vi.bindings().iter() {
+                    let attrs = parse_attributes(binding.ast());
+                    if attrs.ignore {
+                        continue;
+                    }
+
+                    let name = binding
+                        .ast()
+                        .ident
+                        .as_ref()
+                        .expect("named fields must have idents")
+                        .to_string();
+                    field_names.push(LitStr::new(&name, Span::call_site()));
+
+                    let bind_ident = &binding.binding;
+                    let push = if let Some(project) = attrs.project {
+                        quote! { values.push((#bind_ident.#project).structure(__state)); }
+                    } else {
+                        quote! { values.push(#bind_ident.structure(__state)); }
+                    };
+                    pushes.extend(push);
+                }
+
+                let field_count = field_names.len();
 
                 if is_enum {
-                            quote! {
-                                {
-                                    use ::std::borrow::Cow;
-                                    let mut fields: Vec<(Cow<'static, str>, ::rustc_data_structures::inspect::Value)> = Vec::new();
-                                    #pushes
-                                    ::rustc_data_structures::inspect::Value::Enum {
-                                        path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
-                                        variant: ::rustc_data_structures::inspect::EnumVariant::Named(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident))), fields),
-                                    }
-                                }
-                            }
-                } else {
                     quote! {
                         {
-                            use ::std::borrow::Cow;
-                            let mut fields: Vec<(Cow<'static, str>, ::rustc_data_structures::inspect::Value)> = Vec::new();
+                            static FIELDS: [&'static str; #field_count] = [#(#field_names),*];
+                            static SCHEMA: ::rustc_data_structures::inspect::SchemaRef =
+                                ::rustc_data_structures::inspect::SchemaRef::new(
+                                    ::rustc_data_structures::inspect::Schema::Enum {
+                                        path: concat!(module_path!(), "::", stringify!(#type_ident)),
+                                        variant_name: stringify!(#var_ident),
+                                        variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&FIELDS),
+                                    },
+                                );
+                            let __id = __state.intern_schema(&SCHEMA);
+                            let mut values: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
                             #pushes
-                            ::rustc_data_structures::inspect::Value::Struct {
-                                path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
-                                fields,
-                            }
+                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values }
+                        }
+                    }
+                } else {
+                    let _ = named;
+                    quote! {
+                        {
+                            static FIELDS: [&'static str; #field_count] = [#(#field_names),*];
+                            static SCHEMA: ::rustc_data_structures::inspect::SchemaRef =
+                                ::rustc_data_structures::inspect::SchemaRef::new(
+                                    ::rustc_data_structures::inspect::Schema::Struct {
+                                        path: concat!(module_path!(), "::", stringify!(#type_ident)),
+                                        fields: &FIELDS,
+                                    },
+                                );
+                            let __id = __state.intern_schema(&SCHEMA);
+                            let mut values: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
+                            #pushes
+                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values }
                         }
                     }
                 }
             }
             syn::Fields::Unnamed(_) => {
-                let pushes = vi
-                    .bindings()
-                    .iter()
-                    .map(|binding| {
-                        let attrs = parse_attributes(binding.ast());
-                        let bind_ident = &binding.binding;
-                        if attrs.ignore {
-                            quote! {}
-                        } else if let Some(project) = attrs.project {
-                            quote! {
-                                fields.push((#bind_ident.#project).structure(__state));
-                            }
-                        } else {
-                            quote! {
-                                fields.push(#bind_ident.structure(__state));
-                            }
-                        }
-                    })
-                    .collect::<proc_macro2::TokenStream>();
+                let mut count: u32 = 0;
+                let mut pushes = proc_macro2::TokenStream::new();
+                for binding in vi.bindings().iter() {
+                    let attrs = parse_attributes(binding.ast());
+                    if attrs.ignore {
+                        continue;
+                    }
+                    count += 1;
+                    let bind_ident = &binding.binding;
+                    let push = if let Some(project) = attrs.project {
+                        quote! { values.push((#bind_ident.#project).structure(__state)); }
+                    } else {
+                        quote! { values.push(#bind_ident.structure(__state)); }
+                    };
+                    pushes.extend(push);
+                }
 
                 if is_enum {
                     quote! {
                         {
-                            use ::std::borrow::Cow;
-                            let mut fields: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
+                            static SCHEMA: ::rustc_data_structures::inspect::SchemaRef =
+                                ::rustc_data_structures::inspect::SchemaRef::new(
+                                    ::rustc_data_structures::inspect::Schema::Enum {
+                                        path: concat!(module_path!(), "::", stringify!(#type_ident)),
+                                        variant_name: stringify!(#var_ident),
+                                        variant: ::rustc_data_structures::inspect::EnumVariantSchema::Tuple(#count),
+                                    },
+                                );
+                            let __id = __state.intern_schema(&SCHEMA);
+                            let mut values: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
                             #pushes
-                            ::rustc_data_structures::inspect::Value::Enum {
-                                path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
-                                variant: ::rustc_data_structures::inspect::EnumVariant::Tuple(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident))), fields),
-                            }
+                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values }
                         }
                     }
                 } else {
                     quote! {
                         {
-                            use ::std::borrow::Cow;
-                            let mut fields: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
+                            static SCHEMA: ::rustc_data_structures::inspect::SchemaRef =
+                                ::rustc_data_structures::inspect::SchemaRef::new(
+                                    ::rustc_data_structures::inspect::Schema::StructTuple {
+                                        path: concat!(module_path!(), "::", stringify!(#type_ident)),
+                                        field_count: #count,
+                                    },
+                                );
+                            let __id = __state.intern_schema(&SCHEMA);
+                            let mut values: Vec<::rustc_data_structures::inspect::Value> = Vec::new();
                             #pushes
-                            ::rustc_data_structures::inspect::Value::StructTuple {
-                                path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
-                                fields,
-                            }
+                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values }
                         }
                     }
                 }
@@ -240,18 +258,30 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                 if is_enum {
                     quote! {
                         {
-                            use ::std::borrow::Cow;
-                            ::rustc_data_structures::inspect::Value::Enum {
-                                path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()),
-                                variant: ::rustc_data_structures::inspect::EnumVariant::Unit(::std::borrow::Cow::Borrowed(concat!(stringify!(#var_ident)))),
-                            }
+                            static SCHEMA: ::rustc_data_structures::inspect::SchemaRef =
+                                ::rustc_data_structures::inspect::SchemaRef::new(
+                                    ::rustc_data_structures::inspect::Schema::Enum {
+                                        path: concat!(module_path!(), "::", stringify!(#type_ident)),
+                                        variant_name: stringify!(#var_ident),
+                                        variant: ::rustc_data_structures::inspect::EnumVariantSchema::Unit,
+                                    },
+                                );
+                            let __id = __state.intern_schema(&SCHEMA);
+                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values: Vec::new() }
                         }
                     }
                 } else {
                     quote! {
                         {
-                            use ::std::borrow::Cow;
-                            ::rustc_data_structures::inspect::Value::Struct { path: ::std::borrow::Cow::Borrowed(::std::any::type_name::<Self>()), fields: Vec::new() }
+                            static SCHEMA: ::rustc_data_structures::inspect::SchemaRef =
+                                ::rustc_data_structures::inspect::SchemaRef::new(
+                                    ::rustc_data_structures::inspect::Schema::Struct {
+                                        path: concat!(module_path!(), "::", stringify!(#type_ident)),
+                                        fields: &[],
+                                    },
+                                );
+                            let __id = __state.intern_schema(&SCHEMA);
+                            ::rustc_data_structures::inspect::Value::Schema { id: __id, values: Vec::new() }
                         }
                     }
                 }

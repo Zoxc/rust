@@ -316,10 +316,15 @@ impl<HCX> HashStable<HCX> for WorkProductId {
         state: &mut StructureState<'_, HCX, W>,
     ) -> inspect::Value {
         // Fingerprint already has a structure() impl that returns Binary(16)
-        inspect::Value::StructTuple {
-            path: std::any::type_name::<Self>().into(),
-            fields: vec![self.hash.structure(state)],
-        }
+        static SCHEMA: rustc_data_structures::inspect::SchemaRef =
+            rustc_data_structures::inspect::SchemaRef::new(
+                rustc_data_structures::inspect::Schema::StructTuple {
+                    path: "rustc_query_system::dep_graph::dep_node::WorkProductId",
+                    field_count: 1,
+                },
+            );
+        let id = state.intern_schema(&SCHEMA);
+        inspect::Value::Schema { id, values: vec![self.hash.structure(state)] }
     }
 }
 impl<HCX> ToStableHashKey<HCX> for WorkProductId {
