@@ -64,12 +64,11 @@ impl<CTX> HashStable<CTX> for Stability {
                 variant_name: "Unstable",
                 variant: inspect::EnumVariantSchema::Tuple(1),
             });
-        static FIELDS_FORBIDDEN: [&str; 1] = ["reason"];
         static SCHEMA_FORBIDDEN: inspect::SchemaRef =
             inspect::SchemaRef::new(inspect::Schema::Enum {
                 path: "rustc_target::target_features::Stability",
                 variant_name: "Forbidden",
-                variant: inspect::EnumVariantSchema::Named(&FIELDS_FORBIDDEN),
+                variant: inspect::EnumVariantSchema::Named(&["reason"]),
             });
 
         let (schema, values) = match self {

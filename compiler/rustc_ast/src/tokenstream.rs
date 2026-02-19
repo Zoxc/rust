@@ -845,11 +845,10 @@ where
         for sub_tt in self.iter() {
             out.push(inspect::Value::from(sub_tt.structure(state)));
         }
-        static FIELDS: [&str; 1] = ["trees"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
                 path: "rustc_ast::tokenstream::TokenStream",
-                fields: &FIELDS,
+                fields: &["trees"],
             });
         let id = state.intern_schema(&SCHEMA);
         inspect::Value::Schema { id, values: vec![inspect::Value::Array(out)] }

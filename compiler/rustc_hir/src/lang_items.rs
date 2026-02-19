@@ -154,10 +154,9 @@ impl<CTX> HashStable<CTX> for LangItem {
         &self,
         _state: &mut StructureState<'_, CTX, W>,
     ) -> inspect::Value {
-        static FIELDS: [&str; 1] = ["variant"];
         static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Struct {
             path: "rustc_hir::lang_items::LangItem",
-            fields: &FIELDS,
+            fields: &["variant"],
         });
         let id = _state.intern_schema(&SCHEMA);
         inspect::Value::Schema {

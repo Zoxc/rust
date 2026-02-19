@@ -73,11 +73,10 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
         // cheaply without the expensive `span_data_to_lines_and_cols` query.
         let lo = (span.lo - parent.lo).to_u32();
         let hi = (span.hi - parent.lo).to_u32();
-        static FIELDS: [&str; 4] = ["ctxt", "parent", "lo", "hi"];
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
             path: "Span",
             variant_name: "Relative",
-            variant: EnumVariantSchema::Named(&FIELDS),
+            variant: EnumVariantSchema::Named(&["ctxt", "parent", "lo", "hi"]),
         });
         let id = state.intern_schema(&SCHEMA);
         return Value::Schema {
@@ -92,11 +91,7 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
     // to it, as opposed to hashing the first position past it.
     let Some((file, line_lo, col_lo, line_hi, col_hi)) = caching.span_data_to_lines_and_cols(&span)
     else {
-        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
-            path: "Span",
-            variant_name: "Dummy",
-            variant: EnumVariantSchema::Unit,
-        });
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum { path: "Span", variant_name: "Dummy", variant: EnumVariantSchema::Unit });
         let id = state.intern_schema(&SCHEMA);
         return Value::Schema { id, values: Vec::new() };
     };
@@ -108,11 +103,10 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
         // only hash the relative position.
         let lo = span.lo.0.wrapping_sub(parent.lo.0);
         let hi = span.hi.0.wrapping_sub(parent.lo.0);
-        static FIELDS: [&str; 4] = ["ctxt", "parent", "lo", "hi"];
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
             path: "Span",
             variant_name: "Relative",
-            variant: EnumVariantSchema::Named(&FIELDS),
+            variant: EnumVariantSchema::Named(&["ctxt", "parent", "lo", "hi"]),
         });
         let id = state.intern_schema(&SCHEMA);
         return Value::Schema {
@@ -130,20 +124,19 @@ fn span_value<W: rustc_data_structures::inspect::Write>(
     // length of the span, but we only hash the end location. So hash both.
     let len = (span.hi - span.lo).0;
 
-    static FIELDS: [&str; 8] = [
-        "ctxt",
-        "parent",
-        "stable_id",
-        "col_lo",
-        "col_hi",
-        "line_lo",
-        "line_hi",
-        "len",
-    ];
     static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
         path: "Span",
         variant_name: "Valid",
-        variant: EnumVariantSchema::Named(&FIELDS),
+        variant: EnumVariantSchema::Named(&[
+            "ctxt",
+            "parent",
+            "stable_id",
+            "col_lo",
+            "col_hi",
+            "line_lo",
+            "line_hi",
+            "len",
+        ]),
     });
     let id = state.intern_schema(&SCHEMA);
     Value::Schema {

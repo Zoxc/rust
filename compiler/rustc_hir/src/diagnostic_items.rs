@@ -28,12 +28,11 @@ impl<CTX: crate::HashStableContext> HashStable<CTX> for DiagnosticItems {
     ) -> inspect::Value {
         // Represent by the name -> id mapping which is the primary data used for hashing,
         // but preserve the wrapper type.
-        static FIELDS: [&str; 1] = ["name_to_id"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
                 rustc_data_structures::inspect::Schema::Struct {
                     path: "rustc_hir::diagnostic_items::DiagnosticItems",
-                    fields: &FIELDS,
+                    fields: &["name_to_id"],
                 },
             );
         let id = state.intern_schema(&SCHEMA);

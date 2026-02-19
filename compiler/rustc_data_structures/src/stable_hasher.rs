@@ -262,9 +262,8 @@ impl<CTX> HashStable<CTX> for NonZero<u32> {
         &self,
         state: &mut StructureState<'s, CTX, W>,
     ) -> Value {
-        static FIELDS: [&str; 1] = ["value"];
         static SCHEMA: SchemaRef =
-            SchemaRef::new(Schema::Struct { path: "NonZero<u32>", fields: &FIELDS });
+            SchemaRef::new(Schema::Struct { path: "NonZero<u32>", fields: &["value"] });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema { id, values: vec![self.get().structure(state)] }
     }
@@ -278,9 +277,8 @@ impl<CTX> HashStable<CTX> for NonZero<u32> {
 impl<CTX> HashStable<CTX> for NonZero<usize> {
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        static FIELDS: [&str; 1] = ["value"];
         static SCHEMA: SchemaRef =
-            SchemaRef::new(Schema::Struct { path: "NonZero<usize>", fields: &FIELDS });
+            SchemaRef::new(Schema::Struct { path: "NonZero<usize>", fields: &["value"] });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema { id, values: vec![self.get().structure(state)] }
     }
@@ -609,8 +607,8 @@ where
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        static FIELDS: [&str; 1] = ["value"];
-        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct { path: "Box", fields: &FIELDS });
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "Box", fields: &["value"] });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema { id, values: vec![(**self).structure(state)] }
     }
@@ -624,8 +622,8 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for Box<T> {
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        static FIELDS: [&str; 1] = ["value"];
-        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct { path: "Rc", fields: &FIELDS });
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "Rc", fields: &["value"] });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema { id, values: vec![(**self).structure(state)] }
     }
@@ -639,8 +637,8 @@ impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::rc::Rc<T> {
 impl<T: ?Sized + HashStable<CTX>, CTX> HashStable<CTX> for ::std::sync::Arc<T> {
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        static FIELDS: [&str; 1] = ["value"];
-        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct { path: "Arc", fields: &FIELDS });
+        static SCHEMA: SchemaRef =
+            SchemaRef::new(Schema::Struct { path: "Arc", fields: &["value"] });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema { id, values: vec![(**self).structure(state)] }
     }
@@ -858,9 +856,8 @@ where
 {
     #[inline]
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        static FIELDS: [&str; 2] = ["start", "end"];
         static SCHEMA: SchemaRef =
-            SchemaRef::new(Schema::Struct { path: "RangeInclusive", fields: &FIELDS });
+            SchemaRef::new(Schema::Struct { path: "RangeInclusive", fields: &["start", "end"] });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema {
             id,
@@ -880,9 +877,8 @@ where
     T: HashStable<CTX>,
 {
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        static FIELDS: [&str; 1] = ["raw"];
         static SCHEMA: SchemaRef =
-            SchemaRef::new(Schema::Struct { path: "rustc_index::IndexSlice", fields: &FIELDS });
+            SchemaRef::new(Schema::Struct { path: "rustc_index::IndexSlice", fields: &["raw"] });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema { id, values: vec![self.raw[..].structure(state)] }
     }
@@ -900,9 +896,8 @@ where
     T: HashStable<CTX>,
 {
     fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<'_, CTX, W>) -> Value {
-        static FIELDS: [&str; 1] = ["raw"];
         static SCHEMA: SchemaRef =
-            SchemaRef::new(Schema::Struct { path: "rustc_index::IndexVec", fields: &FIELDS });
+            SchemaRef::new(Schema::Struct { path: "rustc_index::IndexVec", fields: &["raw"] });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema { id, values: vec![self.raw[..].structure(state)] }
     }
@@ -1008,9 +1003,8 @@ where
             map.insert(k.structure(state), v.structure(state));
         }
 
-        static FIELDS: [&str; 1] = ["map"];
         static SCHEMA: SchemaRef =
-            SchemaRef::new(Schema::Struct { path: "BTreeMap", fields: &FIELDS });
+            SchemaRef::new(Schema::Struct { path: "BTreeMap", fields: &["map"] });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema { id, values: vec![Value::Map(map)] }
     }
@@ -1033,9 +1027,8 @@ where
             entries.push(entry.structure(state));
         }
 
-        static FIELDS: [&str; 1] = ["entries"];
         static SCHEMA: SchemaRef =
-            SchemaRef::new(Schema::Struct { path: "BTreeSet", fields: &FIELDS });
+            SchemaRef::new(Schema::Struct { path: "BTreeSet", fields: &["entries"] });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema { id, values: vec![Value::Array(entries)] }
     }

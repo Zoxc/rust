@@ -179,11 +179,10 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
         state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> inspect::Value {
         // Represent ADT definition by its DefId and invariant layout information.
-        static FIELDS: [&str; 3] = ["did", "flags", "discr_type"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
                 path: "rustc_middle::ty::adt::AdtDefData",
-                fields: &FIELDS,
+                fields: &["did", "flags", "discr_type"],
             });
         let id = state.intern_schema(&SCHEMA);
         inspect::Value::Schema {

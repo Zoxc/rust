@@ -112,11 +112,10 @@ where
         state: &mut StructureState<'_, CTX, W>,
     ) -> crate::inspect::Value {
         // Preserve the `Interned` wrapper to indicate this is an interned pointer.
-        static FIELDS: [&str; 1] = ["value"];
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
                 path: "rustc_data_structures::intern::Interned",
-                fields: &FIELDS,
+                fields: &["value"],
             });
         let id = state.intern_schema(&SCHEMA);
         crate::inspect::Value::Schema { id, values: vec![self.0.structure(state)] }

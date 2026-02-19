@@ -1561,11 +1561,10 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
 impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
     fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<'_, CTX, W>) -> inspect::Value {
         // Represent ExpnId structurally as [krate.structure, local_id]
-        static FIELDS: [&str; 2] = ["krate", "local_id"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
                 path: "rustc_span::hygiene::ExpnId",
-                fields: &FIELDS,
+                fields: &["krate", "local_id"],
             });
         let id = _state.intern_schema(&SCHEMA);
         inspect::Value::Schema {

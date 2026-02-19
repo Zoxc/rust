@@ -89,12 +89,11 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for OwnerNodes<'
         // Represent by the cached hash including bodies which is the canonical representation
         // used above for hashing, but preserve the wrapper type.
         let OwnerNodes { opt_hash_including_bodies, nodes: _, bodies: _ } = *self;
-        static FIELDS: [&str; 1] = ["hash"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
                 rustc_data_structures::inspect::Schema::Struct {
                     path: "rustc_hir::hir::OwnerNodes",
-                    fields: &FIELDS,
+                    fields: &["hash"],
                 },
             );
         let id = state.intern_schema(&SCHEMA);
@@ -113,12 +112,11 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for DelayedLints {
         state: &mut StructureState<'_, HirCtx, W>,
     ) -> inspect::Value {
         let DelayedLints { opt_hash, .. } = *self;
-        static FIELDS: [&str; 1] = ["hash"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
                 rustc_data_structures::inspect::Schema::Struct {
                     path: "rustc_hir::lints::DelayedLints",
-                    fields: &FIELDS,
+                    fields: &["hash"],
                 },
             );
         let id = state.intern_schema(&SCHEMA);
@@ -139,12 +137,11 @@ impl<'tcx, HirCtx: crate::HashStableContext> HashStable<HirCtx> for AttributeMap
         state: &mut StructureState<'_, HirCtx, W>,
     ) -> inspect::Value {
         let AttributeMap { opt_hash, define_opaque: _, map: _ } = *self;
-        static FIELDS: [&str; 1] = ["hash"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
                 rustc_data_structures::inspect::Schema::Struct {
                     path: "rustc_hir::hir::AttributeMap",
-                    fields: &FIELDS,
+                    fields: &["hash"],
                 },
             );
         let id = state.intern_schema(&SCHEMA);
@@ -163,12 +160,11 @@ impl<HirCtx: crate::HashStableContext> HashStable<HirCtx> for Crate<'_> {
         state: &mut StructureState<'_, HirCtx, W>,
     ) -> inspect::Value {
         let Crate { owners: _, opt_hir_hash } = self;
-        static FIELDS: [&str; 1] = ["hash"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
                 rustc_data_structures::inspect::Schema::Struct {
                     path: "rustc_hir::hir::Crate",
-                    fields: &FIELDS,
+                    fields: &["hash"],
                 },
             );
         let id = state.intern_schema(&SCHEMA);

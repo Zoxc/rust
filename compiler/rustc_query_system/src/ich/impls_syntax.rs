@@ -118,9 +118,10 @@ impl<'a> HashStable<StableHashingContext<'a>> for SourceFile {
         &self,
         state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> Value {
-        static FIELDS: [&str; 4] = ["stable_id", "src_hash", "lines_len", "cnum"];
-        static SCHEMA: SchemaRef =
-            SchemaRef::new(Schema::Struct { path: "SourceFile", fields: &FIELDS });
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
+            path: "SourceFile",
+            fields: &["stable_id", "src_hash", "lines_len", "cnum"],
+        });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema {
             id,
@@ -146,9 +147,10 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::Features {
         &self,
         state: &mut StructureState<'s, StableHashingContext<'tcx>, W>,
     ) -> Value {
-        static FIELDS: [&str; 2] = ["enabled_lang_features", "enabled_lib_features"];
-        static SCHEMA: SchemaRef =
-            SchemaRef::new(Schema::Struct { path: "rustc_feature::Features", fields: &FIELDS });
+        static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
+            path: "rustc_feature::Features",
+            fields: &["enabled_lang_features", "enabled_lib_features"],
+        });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema {
             id,
@@ -173,10 +175,9 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLang
         state: &mut StructureState<'s, StableHashingContext<'tcx>, W>,
     ) -> Value {
         let rustc_feature::EnabledLangFeature { gate_name, attr_sp, stable_since } = self;
-        static FIELDS: [&str; 3] = ["gate_name", "attr_sp", "stable_since"];
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
             path: "rustc_feature::EnabledLangFeature",
-            fields: &FIELDS,
+            fields: &["gate_name", "attr_sp", "stable_since"],
         });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema {
@@ -202,10 +203,9 @@ impl<'tcx> HashStable<StableHashingContext<'tcx>> for rustc_feature::EnabledLibF
         state: &mut StructureState<'s, StableHashingContext<'tcx>, W>,
     ) -> Value {
         let rustc_feature::EnabledLibFeature { gate_name, attr_sp } = self;
-        static FIELDS: [&str; 2] = ["gate_name", "attr_sp"];
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
             path: "rustc_feature::EnabledLibFeature",
-            fields: &FIELDS,
+            fields: &["gate_name", "attr_sp"],
         });
         let id = state.intern_schema(&SCHEMA);
         Value::Schema { id, values: vec![gate_name.structure(state), attr_sp.structure(state)] }

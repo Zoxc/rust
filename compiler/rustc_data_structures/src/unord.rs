@@ -443,11 +443,10 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordSet<V> {
             }
         };
 
-        static FIELDS: [&str; 2] = ["len", "entries"];
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
                 path: "rustc_data_structures::unord::UnordSet",
-                fields: &FIELDS,
+                fields: &["len", "entries"],
             });
         let id = state.intern_schema(&SCHEMA);
         crate::inspect::Value::Schema { id, values: vec![len.structure(state), entries] }
@@ -700,11 +699,10 @@ impl<HCX, K: Hash + Eq + HashStable<HCX>, V: HashStable<HCX>> HashStable<HCX> fo
             }
         };
 
-        static FIELDS: [&str; 2] = ["len", "entries"];
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
                 path: "rustc_data_structures::unord::UnordMap",
-                fields: &FIELDS,
+                fields: &["len", "entries"],
             });
         let id = state.intern_schema(&SCHEMA);
         crate::inspect::Value::Schema { id, values: vec![len.structure(state), entries] }
@@ -809,11 +807,10 @@ impl<HCX, V: Hash + Eq + HashStable<HCX>> HashStable<HCX> for UnordBag<V> {
             }
         };
 
-        static FIELDS: [&str; 2] = ["len", "counts"];
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
                 path: "rustc_data_structures::unord::UnordBag",
-                fields: &FIELDS,
+                fields: &["len", "counts"],
             });
         let id = state.intern_schema(&SCHEMA);
         crate::inspect::Value::Schema { id, values: vec![len.structure(state), counts] }

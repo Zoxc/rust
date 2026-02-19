@@ -150,12 +150,11 @@ impl<HCX: HashStableContext> HashStable<HCX> for LintExpectationId {
     ) -> Value {
         match self {
             LintExpectationId::Stable { hir_id, attr_index, lint_index: Some(lint_index) } => {
-                static FIELDS: [&str; 3] = ["hir_id", "attr_index", "lint_index"];
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
                     rustc_data_structures::inspect::SchemaRef::new(
                         rustc_data_structures::inspect::Schema::Struct {
                             path: "rustc_lint_defs::LintExpectationId",
-                            fields: &FIELDS,
+                            fields: &["hir_id", "attr_index", "lint_index"],
                         },
                     );
                 let id = state.intern_schema(&SCHEMA);
@@ -668,12 +667,11 @@ impl<HCX> HashStable<HCX> for LintId {
         _state: &mut StructureState<'_, HCX, W>,
     ) -> Value {
         // Represent `LintId` structurally to preserve the wrapper type.
-        static FIELDS: [&str; 1] = ["name"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
                 rustc_data_structures::inspect::Schema::Struct {
                     path: "rustc_lint_defs::LintId",
-                    fields: &FIELDS,
+                    fields: &["name"],
                 },
             );
         let id = _state.intern_schema(&SCHEMA);

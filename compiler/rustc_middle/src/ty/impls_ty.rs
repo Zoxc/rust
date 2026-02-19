@@ -54,12 +54,11 @@ where
         state: &mut StructureState<'s, StableHashingContext<'a>, W>,
     ) -> inspect::Value {
         // Preserve the `RawList` wrapper while still showing list semantics.
-        static FIELDS: [&str; 1] = ["items"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
                 rustc_data_structures::inspect::Schema::Struct {
                     path: "rustc_middle::ty::list::RawList",
-                    fields: &FIELDS,
+                    fields: &["items"],
                 },
             );
         let id = state.intern_schema(&SCHEMA);
@@ -137,12 +136,11 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance
     ) -> inspect::Value {
         // Represent by its decomposed parts
         let (alloc, a, b) = self.into_parts();
-        static FIELDS: [&str; 3] = ["alloc", "a", "b"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
                 rustc_data_structures::inspect::Schema::Struct {
                     path: "rustc_middle::mir::interpret::CtfeProvenance",
-                    fields: &FIELDS,
+                    fields: &["alloc", "a", "b"],
                 },
             );
         let id = state.intern_schema(&SCHEMA);

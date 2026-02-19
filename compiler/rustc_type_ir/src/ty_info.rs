@@ -131,12 +131,11 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
         &self,
         state: &mut StructureState<'_, CTX, W>,
     ) -> inspect::Value {
-        static FIELDS: [&str; 2] = ["internee", "stable_hash"];
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
                 rustc_data_structures::inspect::Schema::Struct {
                     path: "rustc_type_ir::ty_info::WithCachedTypeInfo",
-                    fields: &FIELDS,
+                    fields: &["internee", "stable_hash"],
                 },
             );
         let id = state.intern_schema(&SCHEMA);

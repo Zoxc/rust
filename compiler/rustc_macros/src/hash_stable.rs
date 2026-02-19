@@ -163,16 +163,15 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
 
                 let field_count = field_names.len();
 
-                if is_enum {
+                    if is_enum {
                     quote! {
                         {
-                            static FIELDS: [&'static str; #field_count] = [#(#field_names),*];
                             static SCHEMA: ::rustc_data_structures::inspect::SchemaRef =
                                 ::rustc_data_structures::inspect::SchemaRef::new(
                                     ::rustc_data_structures::inspect::Schema::Enum {
                                         path: concat!(module_path!(), "::", stringify!(#type_ident)),
                                         variant_name: stringify!(#var_ident),
-                                        variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&FIELDS),
+                                        variant: ::rustc_data_structures::inspect::EnumVariantSchema::Named(&[#(#field_names),*]),
                                     },
                                 );
                             let __id = __state.intern_schema(&SCHEMA);
@@ -185,12 +184,11 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                     let _ = named;
                     quote! {
                         {
-                            static FIELDS: [&'static str; #field_count] = [#(#field_names),*];
                             static SCHEMA: ::rustc_data_structures::inspect::SchemaRef =
                                 ::rustc_data_structures::inspect::SchemaRef::new(
                                     ::rustc_data_structures::inspect::Schema::Struct {
                                         path: concat!(module_path!(), "::", stringify!(#type_ident)),
-                                        fields: &FIELDS,
+                                        fields: &[#(#field_names),*],
                                     },
                                 );
                             let __id = __state.intern_schema(&SCHEMA);
