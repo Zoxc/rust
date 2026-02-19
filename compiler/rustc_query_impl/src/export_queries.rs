@@ -16,6 +16,7 @@ use std::io::{ Write, Seek, SeekFrom};
 use std::path::PathBuf;
 use rustc_span::def_id::LOCAL_CRATE;
 use snap::write::FrameEncoder;
+use std::io::Write as IoWrite;
 // Cursor was used in an earlier approach; no longer needed.
 
 fn def_path_value<'tcx, W: rustc_data_structures::inspect::Write>(
@@ -154,9 +155,9 @@ pub(crate) fn collect_all_query_structures<'tcx>(
     // but instead hash each per-query `Map` value and store that hash.
     file: Option<&mut fs::File>,
 ) -> Result<inspect::Value, ()> {
-    let mut state: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> = StructureState {
+    let mut state: StructureState<'_, StableHashingContext<'_>, Option<&mut fs::File>> = StructureState {
         schema_list: Default::default(),
-        file,
+        writer: file,
         def_path: &|crate_num, index, state| def_path_value(tcx, crate_num, index, state),
         crate_num: &|crate_num, state| crate_num_value(tcx, crate_num, state),
         span_value: &|args, state| span_value(tcx, args, state),
@@ -326,11 +327,11 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
 }
 
 /// Assemble the final per-query structure map from the entries and metadata.
-pub(crate) fn assemble_query_structures<'tcx, K, QV, C, F, W>(
+pub(crate) fn assemble_query_structures<'tcx, K, QV, C, F>(
     _tcx: TyCtxt<'tcx>,
     name: String,
     cache: &C,
-    state: &mut StructureState<'_, StableHashingContext<'_>, W>,
+    state: &mut StructureState<'_, StableHashingContext<'_>, Option<&mut fs::File>>,
     mut get_value: F,
 ) -> (String, inspect::Value)
 where
@@ -339,7 +340,7 @@ where
     for<'s> K: HashStable<StableHashingContext<'s>>,
     QV: Sized,
     C::Value: Copy,
-    F: FnMut(&K, &C::Value, &mut StructureState<'_, StableHashingContext<'_>, W>) -> inspect::Value,
+    F: FnMut(&K, &C::Value, &mut StructureState<'_, StableHashingContext<'_>, Option<&mut fs::File>>) -> inspect::Value,
 {
     // Build entries by iterating the cache and using the provided closure
     // to obtain the value representation for each entry. The closure is
@@ -385,24 +386,26 @@ where
     let h = hasher.finish::<Hash128>();
     let value_field = inspect::Value::UInt(h.as_u128());
 
-    let stored_entries = if let Some(file) = state.file.as_deref_mut() {
+    let stored_entries = if let Some(file_slot) = &mut state.writer {
         // Serialize
         let ser = match bincode::serialize(&entries_value) {
             Ok(b) => b,
             Err(_) => return (name, inspect::Value::String("<serialize-failed>".into())),
         };
 
-
         // Stream-compress directly into the provided file using Snappy's
         // FrameEncoder. Capture the file offset before writing so we can
         // compute the compressed length as the difference in file position
         // after writing.
-        let offset = match file.seek(SeekFrom::Current(0)) {
+        // `file_slot` has type `&mut &mut fs::File` (due to matching on
+        // `&mut state.writer`), so dereference twice to obtain `&mut File`.
+        let f = &mut **file_slot;
+        let offset = match f.seek(SeekFrom::Current(0)) {
             Ok(o) => o,
             Err(_) => return (name, inspect::Value::String("<seek-failed>".into())),
         };
 
-        let mut encoder = FrameEncoder::new(file);
+        let mut encoder = FrameEncoder::new(f);
         if encoder.write_all(&ser).is_err() {
             return (name, inspect::Value::String("<compress-failed>".into()));
         }
@@ -441,7 +444,7 @@ where
     // Only include the `entries` field when we actually wrote a payload to a
     // file; if no file was provided we skip the `entries` field and only
     // provide the stable `value` hash so callers can still verify contents.
-    if state.file.is_some() {
+    if let Some(_) = &state.writer {
         out_map.push((inspect::Value::String("entries".into()), stored_entries));
     }
     out_map.push((inspect::Value::String("value".into()), value_field));

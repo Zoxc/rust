@@ -842,12 +842,12 @@ macro_rules! define_queries {
             // the per-query way of obtaining values (and respects `no_hash`).
             pub(crate) fn collect_structures<'tcx>(
                 tcx: TyCtxt<'tcx>,
-                state: &mut StructureState<'_, StableHashingContext<'_>>,
+                state: &mut StructureState<'_, StableHashingContext<'_>, Option<&mut std::fs::File>>,
             ) -> (String, inspect::Value) {
                 let query = QueryType::query_dispatcher(tcx);
                 let qcx = QueryCtxt::new(tcx);
                 let cache = query.query_cache(qcx);
-                crate::export_queries::assemble_query_structures::
+                    crate::export_queries::assemble_query_structures::
                     <
                         queries::$name::Key<'tcx>,
                         queries::$name::Value<'tcx>,
@@ -934,7 +934,7 @@ macro_rules! define_queries {
         const PER_QUERY_COLLECT_STRUCTURES_FNS: &[
             for<'tcx> fn(
                 TyCtxt<'tcx>,
-                &mut StructureState<'_, StableHashingContext<'_>>,
+                &mut StructureState<'_, StableHashingContext<'_>, Option<&mut std::fs::File>>,
             ) -> (String, inspect::Value)
         ] = &[$(query_impl::$name::collect_structures),*];
 

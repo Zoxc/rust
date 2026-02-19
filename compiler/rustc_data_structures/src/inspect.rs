@@ -11,6 +11,7 @@ use std::cell::UnsafeCell;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::hash::Hash;
+use std::io::Write as IoWrite;
 use std::marker::PhantomData;
 
 use ordered_float::OrderedFloat;
@@ -123,6 +124,46 @@ pub struct SpanArgs {
 
 pub trait Write {
     fn write_u128(&mut self, value: u128);
+}
+
+/// A simple writer wrapper used by inspection/serialization code which
+/// optionally writes to an underlying `File`.
+///
+/// This exists to provide a concrete `W` type that implements the
+/// `inspect::Write` trait so callers can pass a known writer into
+/// `StructureState<'_, CTX, W>` when a file export path is desired.
+pub struct FileWriter(pub Option<File>);
+
+impl FileWriter {
+    /// Create a new `FileWriter` owning the optional `File`.
+    pub fn new(file: Option<File>) -> Self {
+        FileWriter(file)
+    }
+
+    /// Take the inner file out of the writer.
+    pub fn into_inner(self) -> Option<File> {
+        self.0
+    }
+}
+
+impl Write for FileWriter {
+    fn write_u128(&mut self, value: u128) {
+        if let Some(f) = &mut self.0 {
+            // Best-effort write: ignore I/O errors here, callers handle
+            // higher-level failures via diagnostics. Write as little-endian.
+            let _ = f.write_all(&value.to_le_bytes());
+        }
+    }
+}
+
+// Implement `Write` for an optional mutable file reference so callers can
+// pass `Option<&mut File>` as the `W` type parameter on `StructureState`.
+impl<'a> Write for Option<&'a mut File> {
+    fn write_u128(&mut self, value: u128) {
+        if let Some(f) = self {
+            let _ = f.write_all(&value.to_le_bytes());
+        }
+    }
 }
 
 pub struct StructureState<'a, CTX, W> {

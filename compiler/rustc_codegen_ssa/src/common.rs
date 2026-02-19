@@ -109,9 +109,9 @@ mod temp_stable_hash_impls {
         fn hash_stable(&self, _: &mut HCX, _: &mut StableHasher) {
             // do nothing
         }
-        fn structure(
+        fn structure<'s, W: rustc_data_structures::inspect::Write>(
             &self,
-            _state: &mut StructureState<'_, HCX>,
+            _state: &mut StructureState<'s, HCX, W>,
         ) -> ::rustc_data_structures::inspect::Value {
             // ModuleCodegen contents are transient for hashing; represent as an
             // unit variant in `inspect::Value`.
