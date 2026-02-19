@@ -870,19 +870,17 @@ fn structure_hash<HCX, W: crate::inspect::Write, T: HashStable<HCX>>(
     value: &T,
     parent: &mut StructureState<'_, HCX, W>,
 ) -> rustc_hashes::Hash128 {
-    let mut tmp: crate::inspect::State<'_> = crate::inspect::State {
+    let mut inner_state: crate::inspect::State<'_> = crate::inspect::State {
         schema_list: Default::default(),
         span_value: parent.state.span_value,
         def_path: parent.state.def_path,
         crate_num: parent.state.crate_num,
     };
-    let mut tmp = StructureState {
-        state: &mut tmp,
-        writer: Hasher::new(),
-        _marker: PhantomData,
-    };
-    value.structure(&mut tmp);
-    tmp.writer.finish()
+    let mut inner_hasher = Hasher::new();
+    let mut st = StructureState::join(&mut inner_state, &mut inner_hasher);
+    value.structure(&mut st);
+    drop(st);
+    inner_hasher.finish()
 }
 
 // Do not implement IntoIterator for the collections in this module.

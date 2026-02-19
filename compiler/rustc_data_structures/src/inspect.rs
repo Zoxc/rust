@@ -251,7 +251,7 @@ pub struct StructureState<'a, CTX, W> {
 }
 
 impl<'a, CTX, W> StructureState<'a, CTX, W> {
-    pub fn join(state: &'a mut State<'a>,writer: &'a mut W) -> Self {
+    pub fn join(state: &'a mut State<'a>, writer: &'a mut W) -> Self {
         StructureState { state, writer, _marker: PhantomData }
     }
     pub fn split(&mut self) -> (&mut State<'a>, &mut W) {
@@ -259,7 +259,7 @@ impl<'a, CTX, W> StructureState<'a, CTX, W> {
     }
 }
 
-    impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
+impl<'a, CTX, W: Write> StructureState<'a, CTX, W> {
     pub fn intern_schema(&mut self, schema: &'static SchemaRef) -> SchemaId {
         let key = schema as *const SchemaRef as usize;
         if let Some(id) = self.state.schema_list.get(&key) {

@@ -22,7 +22,7 @@ fn def_path_value<'tcx>(
     tcx: TyCtxt<'tcx>,
     crate_num: u32,
     index: u32,
-    _state: &mut rustc_data_structures::inspect::State<'_>,
+    state: &mut rustc_data_structures::inspect::State<'_>,
     w: &mut dyn rustc_data_structures::inspect::Write,
 ) {
     // Construct a `DefId` from the supplied `u32` crate/def indices
@@ -32,18 +32,19 @@ fn def_path_value<'tcx>(
         index: rustc_span::def_id::DefIndex::from_u32(index),
     };
     let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
-        StructureState { state, writer: w, _marker: PhantomData };
+        StructureState::join(state, w);
     tmp.write_string(&tcx.def_path(def_id).to_string_no_crate_verbose());
 }
 
 fn crate_num_value<'tcx>(
     tcx: TyCtxt<'tcx>,
     crate_num: u32,
-    state: &mut dyn StructureStateOps<StableHashingContext<'_>>,
+    state: &mut rustc_data_structures::inspect::State<'_>,
+    w: &mut dyn rustc_data_structures::inspect::Write,
 ) {
     let stable = tcx.def_path_hash(CrateNum::from_u32(crate_num).as_def_id()).stable_crate_id();
     let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
-        StructureState { state, writer: w, _marker: PhantomData };
+        StructureState::join(state, w);
     tmp.write_uint(stable.as_u64() as u128);
 }
 
@@ -63,7 +64,7 @@ fn span_value<'tcx>(
             variant: EnumVariantSchema::Unit,
         });
         let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
-            StructureState { state, writer: w, _marker: PhantomData };
+            StructureState::join(state, w);
         tmp.write_schema_header(&SCHEMA);
         return;
     }
@@ -83,7 +84,7 @@ fn span_value<'tcx>(
             variant: EnumVariantSchema::Named(&["ctxt", "parent", "lo", "hi"]),
         });
         let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
-            StructureState { state, writer: w, _marker: PhantomData };
+            StructureState::join(state, w);
         // `SyntaxContext` does not implement `HashStable` on a `dyn StructureStateOps`.
         // For export, represent the context by its root-ness only.
         tmp.write_schema_header(&SCHEMA);
@@ -102,7 +103,7 @@ fn span_value<'tcx>(
     else {
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum { path: "Span", variant_name: "Dummy", variant: EnumVariantSchema::Unit });
         let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
-            StructureState { state, writer: w, _marker: PhantomData };
+            StructureState::join(state, w);
         tmp.write_schema_header(&SCHEMA);
         return;
     };
@@ -120,7 +121,7 @@ fn span_value<'tcx>(
             variant: EnumVariantSchema::Named(&["ctxt", "parent", "lo", "hi"]),
         });
         let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
-            StructureState { state, writer: w, _marker: PhantomData };
+            StructureState::join(state, w);
         tmp.write_schema_header(&SCHEMA);
         tmp.write_bool(span.ctxt.is_root());
         tmp.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
@@ -152,8 +153,8 @@ fn span_value<'tcx>(
             "len",
         ]),
     });
-    let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
-        StructureState { state, writer: w, _marker: PhantomData };
+        let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
+            StructureState::join(state, w);
     tmp.write_schema_header(&SCHEMA);
     tmp.write_bool(span.ctxt.is_root());
     tmp.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
@@ -184,11 +185,8 @@ pub(crate) fn collect_all_query_structures<'tcx>(
         crate_num: &|crate_num, st, w| crate_num_value(tcx, crate_num, st, w),
     };
 
-    let mut state: StructureState<'_, StableHashingContext<'_>, Option<&mut fs::File>> = StructureState {
-        state: &mut inner_state,
-        writer: file,
-        _marker: PhantomData,
-    };
+    let mut state: StructureState<'_, StableHashingContext<'_>, Option<&mut fs::File>> =
+        StructureState::join(&mut inner_state, &mut file);
 
     let mut out: Vec<(inspect::Value, inspect::Value)> = Vec::new();
 
