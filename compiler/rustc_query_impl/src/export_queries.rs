@@ -514,3 +514,66 @@ where
 
     Ok((name, inspect::Value::Map(out_map)))
 }
+
+macro_rules! per_query {
+    (
+        $(
+            $(#[$attr:meta])*
+            [$($modifiers:tt)*] fn $name:ident($($K:tt)*) -> $V:ty,
+        )*
+    ) => {
+        mod collect_structures {
+            use super::*;
+
+            $(pub(super) fn $name<'tcx>(
+                tcx: TyCtxt<'tcx>,
+                state: &mut StructureState<'_, StableHashingContext<'_>>,
+                file: &mut Option<&mut std::fs::File>,
+            ) -> Result<(String, inspect::Value), std::io::Error> {
+                let query = QueryType::query_dispatcher(tcx);
+                let qcx = QueryCtxt::new(tcx);
+                let cache = query.query_cache(qcx);
+                    crate::export_queries::assemble_query_structures::
+                    <
+                        queries::$name::Key<'tcx>,
+                        queries::$name::Value<'tcx>,
+                        queries::$name::Storage<'tcx>
+                    >(
+                    tcx,
+                    stringify!($name).to_string(),
+                    cache,
+                    state,
+                    file,
+                    |_value, _state, _writer| {
+                        if_query_no_hash!([$($modifiers)*] {
+                            ()
+                        } {
+                            ::rustc_data_structures::stable_hasher::HashStable::structure(
+                                &QueryType::restore_val(*_value), _state, _writer
+                            );
+                        })
+                    },
+                    |_value, _state, _writer| {
+                        if_query_no_hash!([$($modifiers)*] {
+                            ()
+                        } {
+                            ::rustc_data_structures::stable_hasher::HashStable::structure(
+                                &QueryType::restore_val(*_value), _state, _writer
+                            );
+                        })
+                    }
+                )
+            })*
+        }
+
+        const PER_QUERY_COLLECT_STRUCTURES_FNS: &[
+            for<'tcx> fn(
+                TyCtxt<'tcx>,
+                &mut StructureState<'_, StableHashingContext<'_>>,
+                &mut Option<&mut std::fs::File>,
+            ) -> Result<(String, inspect::Value), std::io::Error>
+        ] = &[$(query_impl::$name::collect_structures),*];
+    }
+}
+
+rustc_middle::rustc_with_all_queries! { per_query! }

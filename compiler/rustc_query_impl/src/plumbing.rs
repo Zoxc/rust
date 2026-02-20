@@ -834,51 +834,6 @@ macro_rules! define_queries {
                     QueryCtxt::new(tcx),
                 )
             }
-
-            // Collect structural representations for entries in this query's
-            // cache: pass the cache and a small closure to
-            // `export_queries::assemble_query_structures` so the assembly and
-            // metadata logic live in one place while the macro still provides
-            // the per-query way of obtaining values (and respects `no_hash`).
-            pub(crate) fn collect_structures<'tcx>(
-                tcx: TyCtxt<'tcx>,
-                state: &mut StructureState<'_, StableHashingContext<'_>>,
-                file: &mut Option<&mut std::fs::File>,
-            ) -> Result<(String, inspect::Value), std::io::Error> {
-                let query = QueryType::query_dispatcher(tcx);
-                let qcx = QueryCtxt::new(tcx);
-                let cache = query.query_cache(qcx);
-                    crate::export_queries::assemble_query_structures::
-                    <
-                        queries::$name::Key<'tcx>,
-                        queries::$name::Value<'tcx>,
-                        queries::$name::Storage<'tcx>
-                    >(
-                    tcx,
-                    stringify!($name).to_string(),
-                    cache,
-                    state,
-                    file,
-                    |_value, _state, _writer| {
-                        if_query_no_hash!([$($modifiers)*] {
-                            ()
-                        } {
-                            ::rustc_data_structures::stable_hasher::HashStable::structure(
-                                &QueryType::restore_val(*_value), _state, _writer
-                            );
-                        })
-                    },
-                    |_value, _state, _writer| {
-                        if_query_no_hash!([$($modifiers)*] {
-                            ()
-                        } {
-                            ::rustc_data_structures::stable_hasher::HashStable::structure(
-                                &QueryType::restore_val(*_value), _state, _writer
-                            );
-                        })
-                    }
-                )
-            }
         })*}
 
         pub(crate) fn engine(incremental: bool) -> QueryEngine {
@@ -938,16 +893,6 @@ macro_rules! define_queries {
         const QUERY_KEY_HASH_VERIFY: &[
             for<'tcx> fn(TyCtxt<'tcx>)
         ] = &[$(query_impl::$name::query_key_hash_verify),*];
-
-        use rustc_data_structures::inspect;
-        use ::rustc_data_structures::stable_hasher::StructureState;
-        const PER_QUERY_COLLECT_STRUCTURES_FNS: &[
-            for<'tcx> fn(
-                TyCtxt<'tcx>,
-                &mut StructureState<'_, StableHashingContext<'_>>,
-                &mut Option<&mut std::fs::File>,
-            ) -> Result<(String, inspect::Value), std::io::Error>
-        ] = &[$(query_impl::$name::collect_structures),*];
 
         /// Module containing a named function for each dep kind (including queries)
         /// that creates a `DepKindVTable`.
