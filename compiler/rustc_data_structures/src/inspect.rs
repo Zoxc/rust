@@ -12,11 +12,10 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::hash::Hash;
 use std::io;
-use std::marker::PhantomData;
+use std::marker::PhantomData;use crate::stable_hasher::StableHasher;
 
 use ordered_float::OrderedFloat;
 use rustc_hashes::Hash128;
-use rustc_stable_hash::StableSipHasher128;
 use serde::{Deserialize, Serialize};
 
 use crate::fx::FxHashMap;
@@ -246,7 +245,7 @@ impl Write for Hasher {
 /// This exists to provide a concrete `W` type that implements the
 /// `inspect::Write` trait so callers can pass a known writer into
 /// `StructureState<'_, CTX, W>` when a file export path is desired.
-pub struct IoWriter<T: io::Write> {
+pub struct IoWriter<T> {
     pub inner: T,
     pub err: Option<std::io::Error>,
 }
@@ -260,8 +259,11 @@ impl<T> IoWriter<T> {
     /// Take the inner writer out of the IoWriter and return any cached I/O
     /// error that occurred while writing. The inner writer is always
     /// returned so callers can continue to operate on it if desired.
-    pub fn into_inner(self) -> (T, Option<std::io::Error>) {
-        (self.inner, self.err)
+    pub fn into_inner(self) -> Result<T, std::io::Error> {
+        match self.err {
+            None => Ok(self.inner),
+            Some(err) => Err(err),
+        }
     }
 }
 
@@ -314,7 +316,7 @@ impl<'a, CTX> StructureState<'a, CTX> {
         id
     }
 
-    pub fn write_schema_header(&mut self, schema: &'static SchemaRef, writer: &mut impl Write) {
+    pub fn write_schema_header<W:Write+?Sized>(&mut self, schema: &'static SchemaRef, writer: &mut W) {
         write_tag(writer, ValueKind::Schema as u8);
         let id = self.intern_schema(schema);
         writer.write_raw_u128(id.0.into());

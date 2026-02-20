@@ -372,7 +372,7 @@ where
         let offset = f.seek(SeekFrom::Current(0))?;
 
         let mut encoder = FrameEncoder::new(f);
-        let mut writer = inspect::IoWriter::wrap(encoder);
+        let mut writer = inspect::IoWriter::new(encoder);
 
         writer.write_map_header(hashed.len());
 
@@ -381,11 +381,7 @@ where
             write_value(v, state, &mut writer);
         }
 
-        let (mut encoder, maybe_err) = writer.into_inner();
-        // Propagate any cached write error from IoWriter before flushing.
-        if let Some(e) = maybe_err {
-            return Err(e);
-        }
+        let mut encoder = writer.into_inner()?;
         encoder.flush()?;
         // `FrameEncoder::into_inner` returns a Result with the inner writer
         // or an IntoInnerError. Map any error into an `std::io::Error`.
