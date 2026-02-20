@@ -296,21 +296,68 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
 
     let footer = Footer { value, schemas: state.schema_vec.clone() };
 
-    let bytes = match bincode::serialize(&footer) {
-        Ok(b) => b,
-        Err(_) => return,
+    // Stream the bincode-serialized Footer through a snappy FrameEncoder so
+    // the footer is stored compressed. Record the compressed length so
+    // readers can locate and decompress the footer.
+    let footer_offset = match f.seek(SeekFrom::Current(0)) {
+        Ok(off) => off,
+        Err(_) => {
+            tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+                path: path.as_path(),
+                err: "failed to seek before writing footer".to_string(),
+            });
+            return;
+        }
     };
 
-    if f.write_all(&bytes).is_err() {
+    // Create a snappy encoder that writes directly to the file.
+    let mut encoder = FrameEncoder::new(&mut f);
+
+    if let Err(_) = bincode::serialize_into(&mut encoder, &footer) {
         tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
             path: path.as_path(),
-            err: "failed to write top-level value".to_string(),
+            err: "failed to serialize footer into snappy encoder".to_string(),
         });
         return;
     }
-    // Store only the length of the serialized top-level value (u64 LE).
+
+    if let Err(_) = encoder.flush() {
+        tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+            path: path.as_path(),
+            err: "failed to flush snappy encoder".to_string(),
+        });
+        return;
+    }
+
+    // Ensure encoder successfully returns the inner writer.
+    match encoder.into_inner() {
+        Ok(_inner) => {}
+        Err(e) => {
+            tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+                path: path.as_path(),
+                err: format!("snap into_inner error: {:?}", e),
+            });
+            return;
+        }
+    }
+
+    // Compute compressed footer length as the number of bytes written by the
+    // encoder.
+    let new_pos = match f.seek(SeekFrom::Current(0)) {
+        Ok(p) => p,
+        Err(_) => {
+            tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
+                path: path.as_path(),
+                err: "failed to seek after writing footer".to_string(),
+            });
+            return;
+        }
+    };
+    let compressed_footer_len = new_pos.saturating_sub(footer_offset);
+
+    // Store only the length of the compressed serialized footer (u64 LE).
     // Readers can use this length to locate and validate the footer.
-    let footer_len = bytes.len() as u64;
+    let footer_len = compressed_footer_len as u64;
     if f.write_all(&footer_len.to_le_bytes()).is_err() {
         tcx.sess.dcx().emit_warn(crate::error::ExportQueriesFileWriteFail {
             path: path.as_path(),
