@@ -345,7 +345,7 @@ pub(crate) fn assemble_query_structures<'tcx, K, QV, C, F>(
     cache: &C,
     state: &mut StructureState<'_, StableHashingContext<'_>>,
     file: &mut Option<&mut fs::File>,
-    write_value: FnMut(&C::Value, &mut StructureState<'_, StableHashingContext<'_>>, &mut FileWriter),
+    write_value: FnMut(&C::Value, &mut StructureState<'_, StableHashingContext<'_>>, &mut inspect::Writer<FrameEncoder<&mut File>>),
     hash_value: FnMut(&C::Value, &mut StructureState<'_, StableHashingContext<'_>>, &mut inspect::Hasher),
 ) -> Result<(String, inspect::Value), io::Error>
 where
