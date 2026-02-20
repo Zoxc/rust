@@ -1518,7 +1518,7 @@ fn update_disambiguator(expn_data: &mut ExpnData, mut ctx: impl HashStableContex
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<W>, writer: &mut W) {
+    fn structure<'a>(&self, _state: &mut StructureState<'a, CTX>, writer: &mut impl rustc_data_structures::inspect::Write) {
         // Represent SyntaxContext by either nil (root) or [expn_id.structure, transparency.structure]
         if self.is_root() {
             static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -1527,7 +1527,7 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
                     variant_name: "Root",
                     variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                 });
-            _state.write_schema_header(&SCHEMA);
+            _state.write_schema_header(&SCHEMA, writer);
         } else {
             static SCHEMA: rustc_data_structures::inspect::SchemaRef =
                 rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Enum {
@@ -1536,9 +1536,9 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
                     variant: rustc_data_structures::inspect::EnumVariantSchema::Tuple(2),
                 });
             let (expn_id, transparency) = self.outer_mark();
-            _state.write_schema_header(&SCHEMA);
-            expn_id.structure(_state);
-            transparency.structure(_state);
+            _state.write_schema_header(&SCHEMA, writer);
+            expn_id.structure(_state, writer);
+            transparency.structure(_state, writer);
         }
     }
 
@@ -1558,16 +1558,16 @@ impl<CTX: HashStableContext> HashStable<CTX> for SyntaxContext {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<W>, writer: &mut W) {
+    fn structure<'a>(&self, _state: &mut StructureState<'a, CTX>, writer: &mut impl rustc_data_structures::inspect::Write) {
         // Represent ExpnId structurally as [krate.structure, local_id]
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
                 path: "rustc_span::hygiene::ExpnId",
                 fields: &["krate", "local_id"],
             });
-        _state.write_schema_header(&SCHEMA);
-        self.krate.structure(_state);
-        _state.write_uint(self.local_id.as_u32() as u128);
+        _state.write_schema_header(&SCHEMA, writer);
+        self.krate.structure(_state, writer);
+        writer.write_uint(self.local_id.as_u32() as u128);
     }
 
     fn hash_stable(&self, ctx: &mut CTX, hasher: &mut StableHasher) {
@@ -1584,14 +1584,14 @@ impl<CTX: HashStableContext> HashStable<CTX> for ExpnId {
 }
 
 impl<CTX: HashStableContext> HashStable<CTX> for LocalExpnId {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure<'a>(&self, state: &mut StructureState<'a, CTX>, writer: &mut impl rustc_data_structures::inspect::Write) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
                 path: "rustc_span::hygiene::LocalExpnId",
                 field_count: 1,
             });
-        state.write_schema_header(&SCHEMA);
-        self.to_expn_id().structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.to_expn_id().structure(state, writer);
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {

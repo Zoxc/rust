@@ -406,12 +406,15 @@ rustc_data_structures::define_id_collections!(
 
 impl<CTX: HashStableContext> HashStable<CTX> for DefId {
     #[inline]
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, CTX, W>,
+        state: &mut StructureState<'a, CTX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
-        let (st, w) = state.split();
-        (st.def_path)(self.krate.as_u32(), self.index.as_u32(), st, w)
+        // `def_path` is a callback stored on `StructureState` that expects
+        // a `&mut StructureState` and a `&mut dyn Write`. Call it with our
+        // current state and writer.
+        (state.def_path)(self.krate.as_u32(), self.index.as_u32(), state, writer)
     }
 
     #[inline]
@@ -422,9 +425,10 @@ impl<CTX: HashStableContext> HashStable<CTX> for DefId {
 
 impl<CTX: HashStableContext> HashStable<CTX> for LocalDefId {
     #[inline]
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, CTX, W>,
+        state: &mut StructureState<'a, CTX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -433,8 +437,8 @@ impl<CTX: HashStableContext> HashStable<CTX> for LocalDefId {
                     field_count: 1,
                 },
             );
-        state.write_schema_header(&SCHEMA);
-        self.to_def_id().structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.to_def_id().structure(state, writer);
     }
 
     #[inline]

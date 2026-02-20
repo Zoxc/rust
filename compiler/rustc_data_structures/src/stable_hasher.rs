@@ -250,7 +250,7 @@ impl_stable_traits_for_trivial_type!(
 
 impl_stable_traits_for_trivial_type!(
     (),
-    |_: &(), s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| s
+    |_: &(), _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
         .write_tuple_header(0)
 );
 
@@ -1102,20 +1102,29 @@ where
     }
 }
 
-impl_stable_traits_for_trivial_type!(::std::ffi::OsStr, |s: &::std::ffi::OsStr, st, w| {
-    w.write_tuple_header(1);
-    w.write_string(&s.to_string_lossy());
-});
+impl_stable_traits_for_trivial_type!(
+    ::std::ffi::OsStr,
+    |s: &::std::ffi::OsStr, st, w: &mut dyn crate::inspect::Write| {
+        w.write_tuple_header(1);
+        w.write_string(&s.to_string_lossy());
+    }
+);
 
-impl_stable_traits_for_trivial_type!(::std::path::Path, |p: &::std::path::Path, st, w| {
-    w.write_tuple_header(1);
-    w.write_string(&p.to_string_lossy());
-});
+impl_stable_traits_for_trivial_type!(
+    ::std::path::Path,
+    |p: &::std::path::Path, st, w: &mut dyn crate::inspect::Write| {
+        w.write_tuple_header(1);
+        w.write_string(&p.to_string_lossy());
+    }
+);
 
-impl_stable_traits_for_trivial_type!(::std::path::PathBuf, |p: &::std::path::PathBuf, st, w| {
-    w.write_tuple_header(1);
-    w.write_string(&p.to_string_lossy());
-});
+impl_stable_traits_for_trivial_type!(
+    ::std::path::PathBuf,
+    |p: &::std::path::PathBuf, st, w: &mut dyn crate::inspect::Write| {
+        w.write_tuple_header(1);
+        w.write_string(&p.to_string_lossy());
+    }
+);
 
 // It is not safe to implement HashStable for HashSet, HashMap or any other collection type
 // with unstable but observable iteration order.

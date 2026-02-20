@@ -2888,9 +2888,10 @@ impl fmt::Display for Symbol {
 
 impl<CTX> HashStable<CTX> for Symbol {
     #[inline]
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        _state: &mut StructureState<'_, CTX, W>,
+        _state: &mut StructureState<'a, CTX>,
+        _writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // Preserve the `Symbol` wrapper in inspection output.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -2900,8 +2901,8 @@ impl<CTX> HashStable<CTX> for Symbol {
                     field_count: 1,
                 },
             );
-        _state.write_schema_header(&SCHEMA);
-        _state.write_string(self.as_str());
+        _state.write_schema_header(&SCHEMA, _writer);
+        _writer.write_string(self.as_str());
     }
 
     #[inline]
@@ -2965,9 +2966,10 @@ impl fmt::Debug for ByteSymbol {
 
 impl<CTX> HashStable<CTX> for ByteSymbol {
     #[inline]
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        _state: &mut StructureState<'_, CTX, W>,
+        _state: &mut StructureState<'a, CTX>,
+        _writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // Preserve the `ByteSymbol` wrapper in inspection output.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -2977,8 +2979,8 @@ impl<CTX> HashStable<CTX> for ByteSymbol {
                     field_count: 1,
                 },
             );
-        _state.write_schema_header(&SCHEMA);
-        _state.write_binary(self.as_byte_str());
+        _state.write_schema_header(&SCHEMA, _writer);
+        _writer.write_binary(self.as_byte_str());
     }
 
     #[inline]

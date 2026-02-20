@@ -118,10 +118,10 @@ fn hash_stable_derive_with_mode(
                 match *self { #body }
             }
             #[inline]
-            fn structure<'s, W: ::rustc_data_structures::inspect::Write>(
+            fn structure<'s>(
                 &self,
                 __state: &mut ::rustc_data_structures::stable_hasher::StructureState<'s, #context>,
-                __writer: &mut W,
+                __writer: &mut impl ::rustc_data_structures::inspect::Write,
             ) {
                 match *self { #structure }
             }
@@ -158,9 +158,9 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
 
                     let bind_ident = &binding.binding;
                     let push = if let Some(project) = attrs.project {
-                        quote! { (#bind_ident.#project).structure(__state); }
+                        quote! { (#bind_ident.#project).structure(__state, __writer); }
                     } else {
-                        quote! { #bind_ident.structure(__state); }
+                        quote! { #bind_ident.structure(__state, __writer); }
                     };
                     pushes.extend(push);
                 }
@@ -208,9 +208,9 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                     count += 1;
                     let bind_ident = &binding.binding;
                     let push = if let Some(project) = attrs.project {
-                        quote! { (#bind_ident.#project).structure(__state); }
+                        quote! { (#bind_ident.#project).structure(__state, __writer); }
                     } else {
-                        quote! { #bind_ident.structure(__state); }
+                        quote! { #bind_ident.structure(__state, __writer); }
                     };
                     pushes.extend(push);
                 }
@@ -258,7 +258,7 @@ fn hash_stable_structure_body(s: &mut synstructure::Structure<'_>) -> proc_macro
                                         variant: ::rustc_data_structures::inspect::EnumVariantSchema::Unit,
                                     },
                                 );
-                            __state.write_schema_header(&SCHEMA);
+                            __state.write_schema_header(&SCHEMA, __writer);
                         }
                     }
                 } else {

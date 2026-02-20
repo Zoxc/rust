@@ -45,9 +45,10 @@ where
         hash.hash_stable(hcx, hasher);
     }
 
-    fn structure<'s, W: rustc_data_structures::inspect::Write>(
+    fn structure<'s>(
         &self,
-        state: &mut StructureState<'s, StableHashingContext<'a>, W>,
+        state: &mut StructureState<'s, StableHashingContext<'a>>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // Preserve the `RawList` wrapper while still showing list semantics.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -57,9 +58,8 @@ where
                     fields: &["items"],
                 },
             );
-
-        state.write_schema_header(&SCHEMA);
-        self[..].structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self[..].structure(state, writer);
     }
 }
 
@@ -83,12 +83,13 @@ impl<'a, 'tcx> HashStable<StableHashingContext<'a>> for ty::GenericArg<'tcx> {
         self.kind().hash_stable(hcx, hasher);
     }
 
-    fn structure<'s, W: rustc_data_structures::inspect::Write>(
+    fn structure<'s>(
         &self,
-        state: &mut StructureState<'s, StableHashingContext<'a>, W>,
+        state: &mut StructureState<'s, StableHashingContext<'a>>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // Delegate to the kind's structural representation
-        self.kind().structure(state);
+        self.kind().structure(state, writer);
     }
 }
 
@@ -102,9 +103,10 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
         });
     }
 
-    fn structure<'s, W: rustc_data_structures::inspect::Write>(
+    fn structure<'s>(
         &self,
-        state: &mut StructureState<'s, StableHashingContext<'a>, W>,
+        state: &mut StructureState<'s, StableHashingContext<'a>>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // We cannot access tcx here; represent AllocId by its resolved allocation's structure when available.
         // Fall back to a tag indicating AllocId.
@@ -116,8 +118,7 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::AllocId {
                     variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                 },
             );
-
-        state.write_schema_header(&SCHEMA);
+        state.write_schema_header(&SCHEMA, writer);
     }
 }
 
@@ -126,9 +127,10 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance
         self.into_parts().hash_stable(hcx, hasher);
     }
 
-    fn structure<'s, W: rustc_data_structures::inspect::Write>(
+    fn structure<'s>(
         &self,
-        state: &mut StructureState<'s, StableHashingContext<'a>, W>,
+        state: &mut StructureState<'s, StableHashingContext<'a>>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // Represent by its decomposed parts
         let (alloc, a, b) = self.into_parts();
@@ -139,11 +141,10 @@ impl<'a> HashStable<StableHashingContext<'a>> for mir::interpret::CtfeProvenance
                     fields: &["alloc", "a", "b"],
                 },
             );
-
-        state.write_schema_header(&SCHEMA);
-        alloc.structure(state);
-        a.structure(state);
-        b.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        alloc.structure(state, writer);
+        a.structure(state, writer);
+        b.structure(state, writer);
     }
 }
 

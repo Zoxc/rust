@@ -2678,14 +2678,14 @@ impl<D: Decoder> Decodable<D> for BytePos {
 }
 
 impl<H: HashStableContext> HashStable<H> for RelativeBytePos {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure<'a>(&self, state: &mut StructureState<'a, H>, writer: &mut impl rustc_data_structures::inspect::Write) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
                 path: "rustc_span::RelativeBytePos",
                 field_count: 1,
             });
-        state.write_schema_header(&SCHEMA);
-        self.0.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.0.structure(state, writer);
     }
 
     fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
@@ -2694,14 +2694,14 @@ impl<H: HashStableContext> HashStable<H> for RelativeBytePos {
 }
 
 impl<H: HashStableContext> HashStable<H> for BytePos {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure<'a>(&self, state: &mut StructureState<'a, H>, writer: &mut impl rustc_data_structures::inspect::Write) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
                 path: "rustc_span::BytePos",
                 field_count: 1,
             });
-        state.write_schema_header(&SCHEMA);
-        self.0.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.0.structure(state, writer);
     }
 
     fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
@@ -2710,14 +2710,14 @@ impl<H: HashStableContext> HashStable<H> for BytePos {
 }
 
 impl<H: HashStableContext> HashStable<H> for CharPos {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure<'a>(&self, state: &mut StructureState<'a, H>, writer: &mut impl rustc_data_structures::inspect::Write) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::StructTuple {
                 path: "rustc_span::CharPos",
                 field_count: 1,
             });
-        state.write_schema_header(&SCHEMA);
-        self.0.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.0.structure(state, writer);
     }
 
     fn hash_stable(&self, hcx: &mut H, hasher: &mut StableHasher) {
