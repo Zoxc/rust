@@ -851,25 +851,29 @@ macro_rules! define_queries {
                     <
                         queries::$name::Key<'tcx>,
                         queries::$name::Value<'tcx>,
-                        queries::$name::Storage<'tcx>,
-                        _
+                        queries::$name::Storage<'tcx>
                     >(
                     tcx,
                     stringify!($name).to_string(),
                     cache,
                     state,
+                    file,
                     |_value, _state, _writer| {
                         if_query_no_hash!([$($modifiers)*] {
-                            None
+                            ()
                         } {
-                            QueryType::restore_val(*_value).structure(_state, _writer);
+                            ::rustc_data_structures::stable_hasher::HashStable::structure(
+                                &QueryType::restore_val(*_value), _state, _writer
+                            );
                         })
                     },
                     |_value, _state, _writer| {
                         if_query_no_hash!([$($modifiers)*] {
-                            None
+                            ()
                         } {
-                            QueryType::restore_val(*_value).structure(_state, _writer);
+                            ::rustc_data_structures::stable_hasher::HashStable::structure(
+                                &QueryType::restore_val(*_value), _state, _writer
+                            );
                         })
                     }
                 )
@@ -940,6 +944,7 @@ macro_rules! define_queries {
             for<'tcx> fn(
                 TyCtxt<'tcx>,
                 &mut StructureState<'_, StableHashingContext<'_>>,
+                &mut Option<&mut std::fs::File>,
             ) -> (String, inspect::Value)
         ] = &[$(query_impl::$name::collect_structures),*];
 

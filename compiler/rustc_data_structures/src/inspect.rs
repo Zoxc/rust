@@ -11,7 +11,7 @@ use std::cell::UnsafeCell;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::hash::Hash;
-use std::io::Write as IoWrite;
+use std::io;
 use std::marker::PhantomData;
 
 use ordered_float::OrderedFloat;
@@ -202,12 +202,12 @@ impl<'a> Write for &'a mut dyn Write {
 ///
 /// This is useful when callers need a deterministic, compact key for a
 /// structural stream without materializing the full byte buffer.
-pub struct Hasher(StableSipHasher128);
+pub struct Hasher(StableHasher);
 
 impl Hasher {
     #[inline]
     pub fn new() -> Self {
-        Hasher(StableSipHasher128::new())
+        Hasher(StableHasher::new())
     }
 
     #[inline]
@@ -248,7 +248,7 @@ impl Write for Hasher {
 /// `StructureState<'_, CTX, W>` when a file export path is desired.
 pub struct IoWriter<T: io::Write>(pub T);
 
-impl IoWriter {
+impl<T> IoWriter<T> {
     /// Create a new `IoWriter` owning the optional `File`.
     pub fn new(file: File) -> Self {
         IoWriter(file)
@@ -260,36 +260,19 @@ impl IoWriter {
     }
 }
 
-impl<T: io::Write> Write for IoWriter<T> {
+impl<T: IoWrite> Write for IoWriter<T> {
     fn write_raw_u128(&mut self, value: u128) {
-            // Best-effort write: ignore I/O errors here, callers handle
-            // higher-level failures via diagnostics. Write as little-endian.
-            let _ = f.write_all(&value.to_le_bytes())
-        }
+        // Best-effort write: ignore I/O errors here, callers handle
+        // higher-level failures via diagnostics. Write as little-endian.
+        let _ = self.0.write_all(&value.to_le_bytes());
     }
 
     fn write_raw_i128(&mut self, value: i128) {
-            let _ = f.write_all(&value.to_le_bytes());
+        let _ = self.0.write_all(&value.to_le_bytes());
     }
 
     fn write_raw_bytes(&mut self, bytes: &[u8]) {
-            let _ = f.write_all(bytes);
-    }
-}
-
-// Implement `Write` for an optional mutable file reference so callers can
-// pass `Option<&mut File>` as the `W` type parameter on `StructureState`.
-impl<'a> Write for &'a mut File {
-    fn write_raw_u128(&mut self, value: u128) {
-            let _ = f.write_all(&value.to_le_bytes());
-    }
-
-    fn write_raw_i128(&mut self, value: i128) {
-            let _ = f.write_all(&value.to_le_bytes());
-    }
-
-    fn write_raw_bytes(&mut self, bytes: &[u8]) {
-            let _ = f.write_all(bytes);
+        let _ = self.0.write_all(bytes);
     }
 }
 

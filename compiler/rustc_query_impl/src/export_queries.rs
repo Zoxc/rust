@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use rustc_data_structures::inspect::{self, EnumVariantSchema, Schema, SchemaRef, Value};
+use rustc_data_structures::inspect::{self, EnumVariantSchema, Schema, SchemaRef, Value, Write};
 use rustc_data_structures::stable_hasher::{HashStable, SpanArgs, StructureState};
 use rustc_hir::def_id::CrateNum;
 use rustc_middle::ty::TyCtxt;
@@ -112,8 +112,7 @@ fn span_value<'tcx>(
             variant_name: "Relative",
             variant: EnumVariantSchema::Named(&["ctxt", "parent", "lo", "hi"]),
         });
-        let mut tmp: StructureState<'_, StableHashingContext<'_>> = StructureState::join(state, w);
-        tmp.write_schema_header(&SCHEMA, w);
+        state.write_schema_header(&SCHEMA, w);
         w.write_bool(span.ctxt.is_root());
         w.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
         w.write_uint(lo as u128);
@@ -165,7 +164,7 @@ pub(crate) fn collect_all_query_structures<'tcx>(
     // we iterate over PER_QUERY_COLLECT_STRUCTURES_FNS. We need Seek to
     // obtain current offsets. If `None` is passed, we will not write payloads
     // but instead hash each per-query `Map` value and store that hash.
-    file: Option<&mut fs::File>,
+    mut file: Option<&mut fs::File>,
 ) -> Result<inspect::Value, ()> {
     // Construct a StructureState without the writer generic; pass writers explicitly
     let mut state: StructureState<'_, StableHashingContext<'_>> = StructureState {
@@ -339,15 +338,15 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
 }
 
 /// Assemble the final per-query structure map from the entries and metadata.
-pub(crate) fn assemble_query_structures<'tcx, K, QV, C, F>(
+pub(crate) fn assemble_query_structures<'tcx, K, QV, C>(
     _tcx: TyCtxt<'tcx>,
     name: String,
     cache: &C,
     state: &mut StructureState<'_, StableHashingContext<'_>>,
-    file: &mut Option<&mut fs::File>,
-    write_value: FnMut(&C::Value, &mut StructureState<'_, StableHashingContext<'_>>, &mut inspect::Writer<FrameEncoder<&mut File>>),
-    hash_value: FnMut(&C::Value, &mut StructureState<'_, StableHashingContext<'_>>, &mut inspect::Hasher),
-) -> Result<(String, inspect::Value), io::Error>
+    file: &mut Option<&mut std::fs::File>,
+    mut write_value: impl FnMut(&C::Value, &mut StructureState<'_, StableHashingContext<'_>>, &mut inspect::IoWriter<FrameEncoder<&mut std::fs::File>>),
+    mut hash_value: impl FnMut(&C::Value, &mut StructureState<'_, StableHashingContext<'_>>, &mut inspect::Hasher),
+) -> Result<(String, inspect::Value), std::io::Error>
 where
     C: rustc_query_system::query::QueryCache<Key = K>,
     K: Clone,
@@ -360,7 +359,7 @@ where
         cached.push((k.clone(), *v));
     });
 
-    let mut hashed = cached.iter().map(|(k, v)| {
+    let mut hashed: Vec<_> = cached.iter().map(|(k, v)| {
         let mut hasher = inspect::Hasher::new();
         k.structure(state, &mut hasher);
         let key_hash = hasher.finish();
@@ -370,44 +369,36 @@ where
         let value_hash = hasher.finish();
         (key_hash, value_hash, k, v)
         }).collect();
-hashed.sort_by_key(|v| v.0);
+    hashed.sort_by_key(|v| v.0);
 
     let stored_entries = if let Some(file_slot) = file.as_mut() {
-
-        // Stream-compress directly into the provided file using Snappy's
-        // FrameEncoder. Capture the file offset before writing so we can
-        // compute the compressed length as the difference in file position
-        // after writing.
-        // `file_slot` has type `&mut &mut fs::File`; dereference to obtain
-        // `&mut fs::File` for I/O operations.
-        let f: &mut fs::File = *file_slot;
+        let f: &mut std::fs::File = &mut **file_slot;
         let offset = f.seek(SeekFrom::Current(0))?;
 
-        let mut encoder = FrameEncoder::new(*file_slot);
-
-        let mut writer = inspect::IoWriter::new(encoder);
+        let mut encoder = FrameEncoder::new(f);
+        let mut writer = inspect::IoWriter(encoder);
 
         writer.write_map_header(hashed.len());
 
         for (_, _, k, v) in hashed.iter() {
             k.structure(state, &mut writer);
-            write_value(k, v, state, &mut writer);
+            write_value(v, state, &mut writer);
         }
 
-        let mut encoder = write.into_inner();
-
+        let mut encoder = writer.into_inner();
         encoder.flush()?;
-
         let _ = encoder.into_inner();
 
-        // Query the underlying file position to compute compressed length.
-        let new_pos = f.seek(SeekFrom::Current(0))?;
+        // `f` has been moved/used, but wait, `encoder.into_inner()` returns `&mut fs::File`
+        // Actually, we don't have `f` back here in scope unless we get it from `into_inner()`.
+        // Let's re-acquire the position:
+        let new_pos = file_slot.seek(SeekFrom::Current(0))?;
         let compressed_len = new_pos - offset;
 
-        (offset, compressed_len)
+        Some((offset, compressed_len))
     } else {
         None
-    }
+    };
 
     let key_type_name = std::any::type_name::<K>();
     let value_type_name = std::any::type_name::<QV>();
@@ -417,13 +408,6 @@ hashed.sort_by_key(|v| v.0);
     // Decide how to store the entries: either inline as a Map, or as a
     // compressed payload written into `file` (if provided), or as a stable
     // 128-bit hash when no file is provided.
-    let entries_value = inspect::Value::Map(entries_map);
-
-    // Always compute a stable hash for the entries; store it under the
-    // `value` field. If a file handle is provided, also serialize/compress
-    // and stream the entries to the file, returning the offset in the
-    // `entries` field. If no file is provided, keep the `entries` inline
-    // as a Map so consumers can inspect it directly.
 
     let mut hasher = StableHasher::new();
 
@@ -433,21 +417,6 @@ hashed.sort_by_key(|v| v.0);
     }
     let h = hasher.finish::<Hash128>();
     let hash_field = inspect::Value::UInt(h.as_u128());
-
-    // We no longer store a writer on StructureState. The optional file was
-    // provided externally; emulate prior behavior by checking `file` variable
-    // captured earlier.
-    let stored_entries = if let Some(file_slot) = file.as_mut() {
-        // Serialize
-        let ser = match bincode::serialize(&entries_value) {
-            Ok(b) => b,
-            Err(_) => return (name, inspect::Value::String("<serialize-failed>".into())),
-        };
-
-    } else {
-        // No file: keep the entries inline so callers can inspect them.
-        entries_value
-    };
 
     let mut out_map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
     // Only include the `entries` field when we actually wrote a payload to a
