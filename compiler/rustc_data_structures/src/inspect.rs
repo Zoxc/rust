@@ -252,10 +252,9 @@ pub struct IoWriter<T: io::Write> {
 }
 
 impl<T> IoWriter<T> {
-    /// Create a new `IoWriter` owning the optional `File`.
-    pub fn new(file: File) -> Self {
-        IoWriter { inner: file, err: None }
-    }
+    /// Create a new `IoWriter` owning the inner writer.
+    pub fn new(inner: T) -> Self {
+        IoWriter { inner, err: None }
     }
 
     /// Take the inner writer out of the IoWriter and return any cached I/O

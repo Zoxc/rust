@@ -166,22 +166,14 @@ pub(crate) fn collect_all_query_structures<'tcx>(
     // obtain current offsets. If `None` is passed, we will not write payloads
     // but instead hash each per-query `Map` value and store that hash.
     mut file: Option<&mut fs::File>,
-) -> Result<inspect::Value, ()> {
-    // Construct a StructureState without the writer generic; pass writers explicitly
-    let mut state: StructureState<'_, StableHashingContext<'_>> = StructureState {
-        schema_list: Default::default(),
-        span_value: &|args, st, w| span_value(tcx, args, st, w),
-        def_path: &|crate_num, index, st, w| def_path_value(tcx, crate_num, index, st, w),
-        crate_num: &|crate_num, st, w| crate_num_value(tcx, crate_num, st, w),
-        _marker: std::marker::PhantomData,
-    };
-
+    state: &mut StructureState<'_, StableHashingContext<'_>>,
+) -> Result<inspect::Value, std::io::Error> {
     // hashing/compression is handled per-query in `assemble_query_structures`
 
     let mut entries_map: BTreeMap<inspect::Value, inspect::Value> = BTreeMap::new();
 
     for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
-        let (name, value) = f(tcx, &mut state, &mut file)?;
+        let (name, value) = f(tcx, state, &mut file)?;
         entries_map.insert(inspect::Value::String(name.into()), value);
     }
 
@@ -222,13 +214,23 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
     // Compute a stable hash of the top-level structures (no file) and use
     // that as the unique filename. If the file already exists, return
     // without error.
+    // Construct a StructureState once and pass it down to collection functions.
+    let mut state: StructureState<'_, StableHashingContext<'_>> = StructureState {
+        schema_list: Default::default(),
+        span_value: &|args, st, w| span_value(tcx, args, st, w),
+        def_path: &|crate_num, index, st, w| def_path_value(tcx, crate_num, index, st, w),
+        crate_num: &|crate_num, st, w| crate_num_value(tcx, crate_num, st, w),
+        _marker: std::marker::PhantomData,
+    };
+
     let top_no_file = {
         let _prof_timer = tcx.sess.prof.verbose_generic_activity("export_queries_hash_pass");
 
-        match collect_all_query_structures(tcx, None) {
-        Ok(v) => v,
-        Err(_) => return,
-    }};
+        match collect_all_query_structures(tcx, None, &mut state) {
+            Ok(v) => v,
+            Err(_) => return,
+        }
+    };
 
     use std::hash::Hash;
     use rustc_hashes::Hash128;
@@ -276,7 +278,7 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
     // Collect and stream per-query payloads into `f`. This will write the
     // compressed per-query payloads and return a top-level `Value` where
     // those entries have been replaced with their offsets.
-    let value = match collect_all_query_structures(tcx, Some(&mut f)) {
+    let value = match collect_all_query_structures(tcx, Some(&mut f), &mut state) {
         Ok(v) => v,
         Err(_) => return,
     };
@@ -385,14 +387,17 @@ where
             return Err(e);
         }
         encoder.flush()?;
-        let (_inner_file, maybe_err) = encoder.into_inner();
-        if let Some(e) = maybe_err {
-            return Err(e);
+        // `FrameEncoder::into_inner` returns a Result with the inner writer
+        // or an IntoInnerError. Map any error into an `std::io::Error`.
+        match encoder.into_inner() {
+            Ok(_inner_file) => {}
+            Err(e) => {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("snap into_inner error: {:?}", e)));
+            }
         }
 
-        // `f` has been moved/used, but wait, `encoder.into_inner()` returns `&mut fs::File`
-        // Actually, we don't have `f` back here in scope unless we get it from `into_inner()`.
-        // Let's re-acquire the position:
+        // `f` has been moved/used, but `encoder.into_inner()` returns `&mut fs::File`.
+        // Re-acquire the position from the file slot.
         let new_pos = file_slot.seek(SeekFrom::Current(0))?;
         let compressed_len = new_pos - offset;
 
