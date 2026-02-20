@@ -31,8 +31,8 @@ fn def_path_value<'tcx>(
         krate: rustc_span::def_id::CrateNum::from_u32(crate_num),
         index: rustc_span::def_id::DefIndex::from_u32(index),
     };
-    let mut tmp: StructureState<'_, StableHashingContext<'_>> = StructureState::join(state, w);
-    tmp.write_string(&tcx.def_path(def_id).to_string_no_crate_verbose(), w);
+    // New API: directly call the def_path callback on the provided state/writer.
+    (state.def_path)(crate_num, index, state, w);
 }
 
 fn crate_num_value<'tcx>(
@@ -42,8 +42,7 @@ fn crate_num_value<'tcx>(
     w: &mut dyn rustc_data_structures::inspect::Write,
 ) {
     let stable = tcx.def_path_hash(CrateNum::from_u32(crate_num).as_def_id()).stable_crate_id();
-    let mut tmp: StructureState<'_, StableHashingContext<'_>> = StructureState::join(state, w);
-    tmp.write_uint(stable.as_u64() as u128, w);
+    w.write_uint(stable.as_u64() as u128);
 }
 
 fn span_value<'tcx>(
@@ -61,9 +60,8 @@ fn span_value<'tcx>(
             variant_name: "Dummy",
             variant: EnumVariantSchema::Unit,
         });
-        let mut tmp: StructureState<'_, StableHashingContext<'_>> = StructureState::join(state, w);
-        tmp.write_schema_header(&SCHEMA, w);
-        return;
+    state.write_schema_header(&SCHEMA, w);
+    return;
     }
 
     let parent = span.parent.map(|parent| tcx.def_span(parent).data_untracked());
@@ -80,10 +78,7 @@ fn span_value<'tcx>(
             variant_name: "Relative",
             variant: EnumVariantSchema::Named(&["ctxt", "parent", "lo", "hi"]),
         });
-        let mut tmp: StructureState<'_, StableHashingContext<'_>> = StructureState::join(state, w);
-        // `SyntaxContext` does not implement `HashStable` on a `dyn StructureStateOps`.
-        // For export, represent the context by its root-ness only.
-        tmp.write_schema_header(&SCHEMA, w);
+        state.write_schema_header(&SCHEMA, w);
         w.write_bool(span.ctxt.is_root());
         w.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
         w.write_uint(lo as u128);
@@ -98,9 +93,7 @@ fn span_value<'tcx>(
     let Some((file, line_lo, col_lo, line_hi, col_hi)) = caching.span_data_to_lines_and_cols(&span)
     else {
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum { path: "Span", variant_name: "Dummy", variant: EnumVariantSchema::Unit });
-        let mut tmp: StructureState<'_, StableHashingContext<'_>, &mut dyn rustc_data_structures::inspect::Write> =
-            StructureState::join(state, w);
-        tmp.write_schema_header(&SCHEMA);
+        state.write_schema_header(&SCHEMA, w);
         return;
     };
 
@@ -148,8 +141,7 @@ fn span_value<'tcx>(
             "len",
         ]),
     });
-        let mut tmp: StructureState<'_, StableHashingContext<'_>> = StructureState::join(state, w);
-    tmp.write_schema_header(&SCHEMA, w);
+        state.write_schema_header(&SCHEMA, w);
     w.write_bool(span.ctxt.is_root());
     w.write_uint(span.parent.map(|p| p.local_def_index.as_u32() as u128).unwrap_or(0));
     // `StableSourceFileId` is a newtype around `Hash128` with a private field.
@@ -179,8 +171,14 @@ pub(crate) fn collect_all_query_structures<'tcx>(
         crate_num: &|crate_num, st, w| crate_num_value(tcx, crate_num, st, w),
     };
 
-    let mut state: StructureState<'_, StableHashingContext<'_>, Option<&mut fs::File>> =
-        StructureState::join(&mut inner_state, &mut file);
+    // Construct a StructureState without the writer generic; pass writers explicitly
+    let mut state: StructureState<'_, StableHashingContext<'_>> = StructureState {
+        schema_list: Default::default(),
+        span_value: inner_state.span_value,
+        def_path: inner_state.def_path,
+        crate_num: inner_state.crate_num,
+        _marker: std::marker::PhantomData,
+    };
 
     let mut out: Vec<(inspect::Value, inspect::Value)> = Vec::new();
 
@@ -404,7 +402,10 @@ where
     let h = hasher.finish::<Hash128>();
     let value_field = inspect::Value::UInt(h.as_u128());
 
-    let stored_entries = if let Some(file_slot) = &mut state.writer {
+    // We no longer store a writer on StructureState. The optional file was
+    // provided externally; emulate prior behavior by checking `file` variable
+    // captured earlier.
+    let stored_entries = if let Some(file_slot) = &mut file {
         // Serialize
         let ser = match bincode::serialize(&entries_value) {
             Ok(b) => b,
@@ -417,7 +418,7 @@ where
         // after writing.
         // `file_slot` has type `&mut &mut fs::File` (due to matching on
         // `&mut state.writer`), so dereference twice to obtain `&mut File`.
-        let f = &mut **file_slot;
+        let f = file_slot;
         let offset = match f.seek(SeekFrom::Current(0)) {
             Ok(o) => o,
             Err(_) => return (name, inspect::Value::String("<seek-failed>".into())),
@@ -462,7 +463,7 @@ where
     // Only include the `entries` field when we actually wrote a payload to a
     // file; if no file was provided we skip the `entries` field and only
     // provide the stable `value` hash so callers can still verify contents.
-    if let Some(_) = &state.writer {
+    if file.is_some() {
         out_map.push((inspect::Value::String("entries".into()), stored_entries));
     }
     out_map.push((inspect::Value::String("value".into()), value_field));

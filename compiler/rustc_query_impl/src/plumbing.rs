@@ -842,7 +842,7 @@ macro_rules! define_queries {
             // the per-query way of obtaining values (and respects `no_hash`).
             pub(crate) fn collect_structures<'tcx>(
                 tcx: TyCtxt<'tcx>,
-                state: &mut StructureState<'_, StableHashingContext<'_>, Option<&mut std::fs::File>>,
+                state: &mut StructureState<'_, StableHashingContext<'_>>,
             ) -> (String, inspect::Value) {
                 let query = QueryType::query_dispatcher(tcx);
                 let qcx = QueryCtxt::new(tcx);
@@ -863,8 +863,11 @@ macro_rules! define_queries {
                             ::rustc_data_structures::inspect::Value::Array(vec![])
                         } {
                             use rustc_data_structures::stable_hasher::HashStable;
+                            use rustc_data_structures::inspect::Hasher as InspectHasher;
                             let unerased = QueryType::restore_val(*_value);
-                            unerased.structure(_state)
+                            let mut h = InspectHasher::new();
+                            unerased.structure(_state, &mut h);
+                            ::rustc_data_structures::inspect::Value::UInt(h.finish().as_u128())
                         })
                     }
                 )
@@ -934,7 +937,7 @@ macro_rules! define_queries {
         const PER_QUERY_COLLECT_STRUCTURES_FNS: &[
             for<'tcx> fn(
                 TyCtxt<'tcx>,
-                &mut StructureState<'_, StableHashingContext<'_>, Option<&mut std::fs::File>>,
+                &mut StructureState<'_, StableHashingContext<'_>>,
             ) -> (String, inspect::Value)
         ] = &[$(query_impl::$name::collect_structures),*];
 
