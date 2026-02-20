@@ -129,9 +129,10 @@ impl<CTX> HashStable<CTX> for InferConst {
         }
     }
 
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, CTX, W>,
+        state: &mut StructureState<'a, CTX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         match self {
             InferConst::Var(_) => {
@@ -143,7 +144,7 @@ impl<CTX> HashStable<CTX> for InferConst {
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             InferConst::Fresh(i) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -154,8 +155,8 @@ impl<CTX> HashStable<CTX> for InferConst {
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Tuple(1),
                         },
                     );
-                state.write_schema_header(&SCHEMA);
-                (*i).structure(state);
+                state.write_schema_header(&SCHEMA, writer);
+                (*i).structure(state, writer);
             }
         }
     }

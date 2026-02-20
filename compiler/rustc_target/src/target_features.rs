@@ -49,9 +49,10 @@ impl<CTX> HashStable<CTX> for Stability {
     }
 
     #[inline]
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, CTX, W>,
+        state: &mut StructureState<'a, CTX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         static SCHEMA_STABLE: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Enum {
             path: "rustc_target::target_features::Stability",
@@ -73,15 +74,15 @@ impl<CTX> HashStable<CTX> for Stability {
 
         match self {
             Stability::Stable => {
-                state.write_schema_header(&SCHEMA_STABLE);
+                state.write_schema_header(&SCHEMA_STABLE, writer);
             }
             Stability::Unstable(nightly_feature) => {
-                state.write_schema_header(&SCHEMA_UNSTABLE);
-                nightly_feature.structure(state);
+                state.write_schema_header(&SCHEMA_UNSTABLE, writer);
+                nightly_feature.structure(state, writer);
             }
             Stability::Forbidden { reason } => {
-                state.write_schema_header(&SCHEMA_FORBIDDEN);
-                state.write_string(reason);
+                state.write_schema_header(&SCHEMA_FORBIDDEN, writer);
+                writer.write_string(reason);
             }
         }
     }

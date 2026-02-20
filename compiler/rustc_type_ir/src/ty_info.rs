@@ -125,9 +125,10 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
         }
     }
 
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, CTX, W>,
+        state: &mut StructureState<'a, CTX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(
@@ -137,8 +138,8 @@ impl<T: HashStable<CTX>, CTX> HashStable<CTX> for WithCachedTypeInfo<T> {
                 },
             );
 
-        state.write_schema_header(&SCHEMA);
-        self.internee.structure(state);
-        self.stable_hash.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.internee.structure(state, writer);
+        self.stable_hash.structure(state, writer);
     }
 }

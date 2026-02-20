@@ -73,7 +73,11 @@ impl<T> Steal<T> {
 }
 
 impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure(
+        &self,
+        state: &mut StructureState<'_, CTX>,
+        writer: &mut impl crate::inspect::Write,
+    ) {
         // Attempt to read the inner value without triggering the
         // `borrow()` panic path. If the value has been stolen, return
         // a placeholder so callers can still obtain a stable structural
@@ -86,7 +90,7 @@ impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
                     variant_name: "Stolen",
                     variant: crate::inspect::EnumVariantSchema::Unit,
                 });
-            state.write_schema_header(&SCHEMA);
+            state.write_schema_header(&SCHEMA, writer);
         } else {
             // SAFETY: we just checked that the option is `Some`.
             static SCHEMA: crate::inspect::SchemaRef =
@@ -94,8 +98,8 @@ impl<CTX, T: HashStable<CTX>> HashStable<CTX> for Steal<T> {
                     path: "rustc_data_structures::steal::Steal",
                     field_count: 1,
                 });
-            state.write_schema_header(&SCHEMA);
-            guard.as_ref().unwrap().structure(state);
+            state.write_schema_header(&SCHEMA, writer);
+            guard.as_ref().unwrap().structure(state, writer);
         }
     }
 

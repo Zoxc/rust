@@ -262,15 +262,19 @@ where
     P: HashStable<HCX> + Aligned + ?Sized,
     T: Tag + HashStable<HCX>,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure(
+        &self,
+        state: &mut StructureState<'_, HCX>,
+        writer: &mut impl crate::inspect::Write,
+    ) {
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::Struct {
                 path: "rustc_data_structures::tagged_ptr::TaggedRef",
                 fields: &["pointer", "tag"],
             });
-        state.write_schema_header(&SCHEMA);
-        self.pointer().structure(state);
-        self.tag().structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.pointer().structure(state, writer);
+        self.tag().structure(state, writer);
     }
 
     fn hash_stable(&self, hcx: &mut HCX, hasher: &mut StableHasher) {

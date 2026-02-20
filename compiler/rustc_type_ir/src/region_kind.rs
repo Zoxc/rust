@@ -246,9 +246,10 @@ where
         }
     }
 
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, CTX, W>,
+        state: &mut StructureState<'a, CTX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         use RegionKind::*;
         match self {
@@ -261,7 +262,7 @@ where
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ReStatic => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -272,7 +273,7 @@ where
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ReError(_) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -283,7 +284,7 @@ where
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ReBound(d, r) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -296,9 +297,9 @@ where
                             ]),
                         },
                     );
-                state.write_schema_header(&SCHEMA);
-                d.structure(state);
-                r.structure(state);
+                state.write_schema_header(&SCHEMA, writer);
+                d.structure(state, writer);
+                r.structure(state, writer);
             }
             ReEarlyParam(r) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -311,8 +312,8 @@ where
                             ]),
                         },
                     );
-                state.write_schema_header(&SCHEMA);
-                r.structure(state);
+                state.write_schema_header(&SCHEMA, writer);
+                r.structure(state, writer);
             }
             ReLateParam(r) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -325,8 +326,8 @@ where
                             ]),
                         },
                     );
-                state.write_schema_header(&SCHEMA);
-                r.structure(state);
+                state.write_schema_header(&SCHEMA, writer);
+                r.structure(state, writer);
             }
             RePlaceholder(r) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -339,8 +340,8 @@ where
                             ]),
                         },
                     );
-                state.write_schema_header(&SCHEMA);
-                r.structure(state);
+                state.write_schema_header(&SCHEMA, writer);
+                r.structure(state, writer);
             }
             ReVar(_) => {
                 static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -351,7 +352,7 @@ where
                             variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
                         },
                     );
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
         }
     }

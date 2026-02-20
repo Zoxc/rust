@@ -42,9 +42,10 @@ impl fmt::Display for Svh {
 
 impl<T> stable_hasher::HashStable<T> for Svh {
     #[inline]
-    fn structure<W: crate::inspect::Write>(
+    fn structure(
         &self,
-        state: &mut stable_hasher::StructureState<'_, T, W>,
+        state: &mut stable_hasher::StructureState<'_, T>,
+        writer: &mut impl crate::inspect::Write,
     ) {
         let Svh { hash } = *self;
         static SCHEMA: crate::inspect::SchemaRef =
@@ -52,8 +53,8 @@ impl<T> stable_hasher::HashStable<T> for Svh {
                 path: "rustc_data_structures::svh::Svh",
                 field_count: 1,
             });
-        state.write_schema_header(&SCHEMA);
-        hash.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        hash.structure(state, writer);
     }
 
     fn hash_stable(&self, ctx: &mut T, hasher: &mut stable_hasher::StableHasher) {

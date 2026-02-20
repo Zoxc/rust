@@ -62,14 +62,18 @@ impl fmt::UpperHex for Pu128 {
 
 impl<CTX> HashStable<CTX> for Pu128 {
     #[inline]
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure(
+        &self,
+        state: &mut StructureState<'_, CTX>,
+        writer: &mut impl crate::inspect::Write,
+    ) {
         static SCHEMA: crate::inspect::SchemaRef =
             crate::inspect::SchemaRef::new(crate::inspect::Schema::StructTuple {
                 path: "rustc_data_structures::packed::Pu128",
                 field_count: 1,
             });
-        state.write_schema_header(&SCHEMA);
-        { self.0 }.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        { self.0 }.structure(state, writer);
     }
 
     #[inline]

@@ -155,7 +155,7 @@ macro_rules! impl_stable_traits_for_trivial_type {
                 _state: &mut StructureState<'_, CTX>,
                 _writer: &mut impl crate::inspect::Write,
             ) {
-                ($structure_fn)(self, _state, _writer);
+                ($structure_fn)(self, _state, _writer)
             }
 
             #[inline]
@@ -176,32 +176,90 @@ macro_rules! impl_stable_traits_for_trivial_type {
 
 // The macro is local to this module; no re-export needed.
 
-impl_stable_traits_for_trivial_type!(i8, |v, s, w| s.write_int(*v as i128));
-impl_stable_traits_for_trivial_type!(i16, |v, s, w| s.write_int(*v as i128));
-impl_stable_traits_for_trivial_type!(i32, |v, s, w| s.write_int(*v as i128));
-impl_stable_traits_for_trivial_type!(i64, |v, s, w| s.write_int(*v as i128));
-impl_stable_traits_for_trivial_type!(isize, |v, s, w| s.write_int(*v as i128));
+impl_stable_traits_for_trivial_type!(
+    i8,
+    |v: &i8, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_int(*v as i128)
+);
+impl_stable_traits_for_trivial_type!(
+    i16,
+    |v: &i16, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_int(*v as i128)
+);
+impl_stable_traits_for_trivial_type!(
+    i32,
+    |v: &i32, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_int(*v as i128)
+);
+impl_stable_traits_for_trivial_type!(
+    i64,
+    |v: &i64, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_int(*v as i128)
+);
+impl_stable_traits_for_trivial_type!(
+    isize,
+    |v: &isize, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_int(*v as i128)
+);
 
-impl_stable_traits_for_trivial_type!(u8, |v, s, w| s.write_uint(*v as u128));
-impl_stable_traits_for_trivial_type!(u16, |v, s, w| s.write_uint(*v as u128));
-impl_stable_traits_for_trivial_type!(u32, |v, s, w| s.write_uint(*v as u128));
-impl_stable_traits_for_trivial_type!(u64, |v, s, w| s.write_uint(*v as u128));
-impl_stable_traits_for_trivial_type!(usize, |v, s, w| s.write_uint(*v as u128));
+impl_stable_traits_for_trivial_type!(
+    u8,
+    |v: &u8, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_uint(*v as u128)
+);
+impl_stable_traits_for_trivial_type!(
+    u16,
+    |v: &u16, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_uint(*v as u128)
+);
+impl_stable_traits_for_trivial_type!(
+    u32,
+    |v: &u32, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_uint(*v as u128)
+);
+impl_stable_traits_for_trivial_type!(
+    u64,
+    |v: &u64, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_uint(*v as u128)
+);
+impl_stable_traits_for_trivial_type!(
+    usize,
+    |v: &usize, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_uint(*v as u128)
+);
 
-impl_stable_traits_for_trivial_type!(u128, |v, s, w| s.write_binary(&v.to_le_bytes()));
-impl_stable_traits_for_trivial_type!(i128, |v, s, w| s.write_binary(&v.to_le_bytes()));
+impl_stable_traits_for_trivial_type!(
+    u128,
+    |v: &u128, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_binary(&v.to_le_bytes())
+);
+impl_stable_traits_for_trivial_type!(
+    i128,
+    |v: &i128, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| w
+        .write_binary(&v.to_le_bytes())
+);
 
-impl_stable_traits_for_trivial_type!(char, |c, s, w| {
-    let mut buf = [0u8; 4];
-    let st = c.encode_utf8(&mut buf);
-    s.write_string(st);
-});
+impl_stable_traits_for_trivial_type!(
+    char,
+    |c: &char, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| {
+        let mut buf = [0u8; 4];
+        let st = c.encode_utf8(&mut buf);
+        w.write_string(st);
+    }
+);
 
-impl_stable_traits_for_trivial_type!((), |_, s, w| s.write_tuple_header(0));
+impl_stable_traits_for_trivial_type!(
+    (),
+    |_: &(), s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| s
+        .write_tuple_header(0)
+);
 
-impl_stable_traits_for_trivial_type!(Hash64, |h, s, w| {
-    s.write_binary(&h.as_u64().to_le_bytes());
-});
+impl_stable_traits_for_trivial_type!(
+    Hash64,
+    |h: &Hash64, _s: &mut StructureState<'_, CTX>, w: &mut dyn crate::inspect::Write| {
+        w.write_binary(&h.as_u64().to_le_bytes());
+    }
+);
 
 // We need a custom impl as the default hash function will only hash half the bits. For stable
 // hashing we want to hash the full 128-bit hash.
@@ -873,7 +931,7 @@ where
         state: &mut StructureState<'_, CTX>,
         writer: &mut impl crate::inspect::Write,
     ) {
-        (**self).structure(state)
+        (**self).structure(state, writer)
     }
 
     #[inline]
@@ -910,9 +968,9 @@ where
     ) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "RangeInclusive", fields: &["start", "end"] });
-        state.write_schema_header(&SCHEMA);
-        self.start().structure(state);
-        self.end().structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.start().structure(state, writer);
+        self.end().structure(state, writer);
     }
 
     #[inline]
@@ -949,7 +1007,11 @@ impl<I: Idx, T, CTX> HashStable<CTX> for IndexVec<I, T>
 where
     T: HashStable<CTX>,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure(
+        &self,
+        state: &mut StructureState<'_, CTX>,
+        writer: &mut impl crate::inspect::Write,
+    ) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "rustc_index::IndexVec", fields: &["raw"] });
         state.write_schema_header(&SCHEMA, writer);
@@ -965,7 +1027,11 @@ where
 }
 
 impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
-    fn structure<'s, W>(&self, state: &mut StructureState<'s>, writer: &mut W) {
+    fn structure<'s>(
+        &self,
+        state: &mut StructureState<'s, CTX>,
+        writer: &mut impl crate::inspect::Write,
+    ) {
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
             path: "rustc_index::bit_set::DenseBitSet",
             fields: &["domain_size", "indices"],
@@ -988,7 +1054,11 @@ impl<I: Idx, CTX> HashStable<CTX> for DenseBitSet<I> {
 }
 
 impl<R: Idx, C: Idx, CTX> HashStable<CTX> for bit_set::BitMatrix<R, C> {
-    fn structure<'s, W>(&self, state: &mut StructureState<'s>, writer: &mut W) {
+    fn structure<'s>(
+        &self,
+        state: &mut StructureState<'s, CTX>,
+        writer: &mut impl crate::inspect::Write,
+    ) {
         static SCHEMA: SchemaRef = SchemaRef::new(Schema::Struct {
             path: "rustc_index::bit_set::BitMatrix",
             fields: &["rows"],
@@ -1016,11 +1086,15 @@ impl<T, CTX> HashStable<CTX> for bit_set::FiniteBitSet<T>
 where
     T: HashStable<CTX> + bit_set::FiniteBitSetTy,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure(
+        &self,
+        state: &mut StructureState<'_, CTX>,
+        writer: &mut impl crate::inspect::Write,
+    ) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::StructTuple { path: "bit_set::FiniteBitSet", field_count: 1 });
-        state.write_schema_header(&SCHEMA);
-        self.0.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.0.structure(state, writer);
     }
 
     fn hash_stable(&self, hcx: &mut CTX, hasher: &mut StableHasher) {
@@ -1028,29 +1102,19 @@ where
     }
 }
 
-impl_stable_traits_for_trivial_type!(
-    ::std::ffi::OsStr,
-    |s: &::std::ffi::OsStr, st: &mut StructureState<'_, CTX, W>| {
-        st.write_tuple_header(1);
-        st.write_string(&s.to_string_lossy());
-    }
-);
+impl_stable_traits_for_trivial_type!(::std::ffi::OsStr, |s: &::std::ffi::OsStr, st, w| {
+    w.write_tuple_header(1);
+    w.write_string(&s.to_string_lossy());
+});
 
-impl_stable_traits_for_trivial_type!(
-    ::std::path::Path,
-    |p: &::std::path::Path, st: &mut StructureState<'_, CTX, W>| {
-        st.write_tuple_header(1);
-        st.write_string(&p.to_string_lossy());
-    }
-);
-impl_stable_traits_for_trivial_type!(::std::path::PathBuf, |p: &::std::path::PathBuf,
-                                                            st: &mut StructureState<
-    '_,
-    CTX,
-    W,
->| {
-    st.write_tuple_header(1);
-    st.write_string(&p.to_string_lossy());
+impl_stable_traits_for_trivial_type!(::std::path::Path, |p: &::std::path::Path, st, w| {
+    w.write_tuple_header(1);
+    w.write_string(&p.to_string_lossy());
+});
+
+impl_stable_traits_for_trivial_type!(::std::path::PathBuf, |p: &::std::path::PathBuf, st, w| {
+    w.write_tuple_header(1);
+    w.write_string(&p.to_string_lossy());
 });
 
 // It is not safe to implement HashStable for HashSet, HashMap or any other collection type
@@ -1064,14 +1128,18 @@ where
     K: HashStable<HCX> + StableOrd,
     V: HashStable<HCX>,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure(
+        &self,
+        state: &mut StructureState<'_, HCX>,
+        writer: &mut impl crate::inspect::Write,
+    ) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "BTreeMap", fields: &["map"] });
-        state.write_schema_header(&SCHEMA);
-        state.write_map_header(self.len());
+        state.write_schema_header(&SCHEMA, writer);
+        writer.write_map_header(self.len());
         for (k, v) in self.iter() {
-            k.structure(state);
-            v.structure(state);
+            k.structure(state, writer);
+            v.structure(state, writer);
         }
     }
 
@@ -1087,13 +1155,17 @@ impl<K, HCX> HashStable<HCX> for ::std::collections::BTreeSet<K>
 where
     K: HashStable<HCX> + StableOrd,
 {
-    fn structure<W: crate::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure(
+        &self,
+        state: &mut StructureState<'_, HCX>,
+        writer: &mut impl crate::inspect::Write,
+    ) {
         static SCHEMA: SchemaRef =
             SchemaRef::new(Schema::Struct { path: "BTreeSet", fields: &["entries"] });
-        state.write_schema_header(&SCHEMA);
-        state.write_array_header(self.len());
+        state.write_schema_header(&SCHEMA, writer);
+        writer.write_array_header(self.len());
         for entry in self.iter() {
-            entry.structure(state);
+            entry.structure(state, writer);
         }
     }
 
