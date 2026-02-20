@@ -140,9 +140,10 @@ impl LintExpectationId {
 
 impl<HCX: HashStableContext> HashStable<HCX> for LintExpectationId {
     #[inline]
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, HCX, W>,
+        state: &mut StructureState<'a, HCX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         match self {
             LintExpectationId::Stable { hir_id, attr_index, lint_index: Some(lint_index) } => {
@@ -154,10 +155,10 @@ impl<HCX: HashStableContext> HashStable<HCX> for LintExpectationId {
                         },
                     );
 
-                state.write_schema_header(&SCHEMA);
-                hir_id.structure(state);
-                attr_index.structure(state);
-                lint_index.structure(state);
+                state.write_schema_header(&SCHEMA, writer);
+                hir_id.structure(state, writer);
+                attr_index.structure(state, writer);
+                lint_index.structure(state, writer);
             }
             _ => unreachable!(
                 "HashStable should only be called for filled and stable `LintExpectationId`"

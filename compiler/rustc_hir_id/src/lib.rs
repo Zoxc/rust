@@ -58,9 +58,10 @@ impl rustc_index::Idx for OwnerId {
 
 impl<CTX: HashStableContext> HashStable<CTX> for OwnerId {
     #[inline]
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, CTX, W>,
+        state: &mut StructureState<'a, CTX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // Represent OwnerId by its contained LocalDefId
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -70,8 +71,8 @@ impl<CTX: HashStableContext> HashStable<CTX> for OwnerId {
                     field_count: 1,
                 },
             );
-        state.write_schema_header(&SCHEMA);
-        self.def_id.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.def_id.structure(state, writer);
     }
 
     #[inline]

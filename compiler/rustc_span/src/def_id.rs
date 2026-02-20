@@ -449,12 +449,12 @@ impl<CTX: HashStableContext> HashStable<CTX> for LocalDefId {
 
 impl<CTX: HashStableContext> HashStable<CTX> for CrateNum {
     #[inline]
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, CTX, W>,
+        state: &mut StructureState<'a, CTX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
-        let (st, w) = state.split();
-        (st.crate_num)(self.as_u32(), st, w)
+        (state.crate_num)(self.as_u32(), state, writer)
     }
 
     #[inline]

@@ -311,9 +311,10 @@ impl<HCX> HashStable<HCX> for WorkProductId {
         self.hash.hash_stable(hcx, hasher)
     }
 
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, HCX, W>,
+        state: &mut StructureState<'a, HCX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // Fingerprint already has a structure() impl that returns Binary(16)
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -324,8 +325,8 @@ impl<HCX> HashStable<HCX> for WorkProductId {
                 },
             );
 
-        state.write_schema_header(&SCHEMA);
-        self.hash.structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.hash.structure(state, writer);
     }
 }
 impl<HCX> ToStableHashKey<HCX> for WorkProductId {

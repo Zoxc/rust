@@ -172,9 +172,10 @@ impl<CTX> crate::ty::HashStable<CTX> for ScalarInt {
         self.size.get().hash_stable(hcx, hasher);
     }
 
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, CTX, W>,
+        state: &mut StructureState<'a, CTX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // Represent the raw bytes (little-endian) as binary per canonical representation
         static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::StructTuple {
@@ -182,8 +183,8 @@ impl<CTX> crate::ty::HashStable<CTX> for ScalarInt {
             field_count: 1,
         });
 
-        state.write_schema_header(&SCHEMA);
-        state.write_binary(&self.to_bits_unchecked().to_le_bytes());
+        state.write_schema_header(&SCHEMA, writer);
+        writer.write_binary(&self.to_bits_unchecked().to_le_bytes());
     }
 }
 

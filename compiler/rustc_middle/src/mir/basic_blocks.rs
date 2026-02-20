@@ -175,9 +175,10 @@ impl<CTX> HashStable<CTX> for Cache {
     #[inline]
     fn hash_stable(&self, _: &mut CTX, _: &mut StableHasher) {}
 
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, CTX, W>,
+        state: &mut StructureState<'a, CTX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // Cache is transient and ignored for hashing; preserve wrapper type.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -189,6 +190,6 @@ impl<CTX> HashStable<CTX> for Cache {
                 },
             );
 
-        state.write_schema_header(&SCHEMA);
+        state.write_schema_header(&SCHEMA, writer);
     }
 }

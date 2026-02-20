@@ -173,10 +173,7 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
         hash.hash_stable(hcx, hasher);
     }
 
-    fn structure<'s, W: rustc_data_structures::inspect::Write>(
-        &self,
-        state: &mut StructureState<'s, StableHashingContext<'a>, W>,
-    ) {
+    fn structure<'s>(&self, state: &mut StructureState<'s, StableHashingContext<'a>>, writer: &mut impl rustc_data_structures::inspect::Write) {
         // Represent ADT definition by its DefId and invariant layout information.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
@@ -184,10 +181,10 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDefData {
                 fields: &["did", "flags", "discr_type"],
             });
 
-        state.write_schema_header(&SCHEMA);
-        self.did.structure(state);
-        self.flags.structure(state);
-        self.repr.discr_type().structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.did.structure(state, writer);
+        self.flags.structure(state, writer);
+        self.repr.discr_type().structure(state, writer);
     }
 }
 
