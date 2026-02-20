@@ -6,7 +6,6 @@
 //! use of a MessagePack `Value` in this crate but adds structured
 //! variants for Rust ADTs.
 
-use crate::stable_hasher::StableHasher;
 use std::borrow::Cow;
 use std::cell::UnsafeCell;
 use std::collections::BTreeMap;
@@ -19,6 +18,7 @@ use rustc_hashes::Hash128;
 use serde::{Deserialize, Serialize};
 
 use crate::fx::FxHashMap;
+use crate::stable_hasher::StableHasher;
 /// A compact representation of values for inspection purposes.
 ///
 /// Models scalars, collections, and schema-backed aggregate values.
@@ -119,6 +119,65 @@ enum ValueKind {
     Tuple = 7,
     Map = 8,
     Schema = 9,
+}
+
+/// Returns the length of the longest LEB128 encoding for `T`, assuming `T` is an integer type
+const fn max_leb128_len<T>() -> usize {
+    // The longest LEB128 encoding for an integer uses 7 bits per byte.
+    (size_of::<T>() * 8).div_ceil(7)
+}
+
+#[inline]
+pub fn write_leb128_u128(out: &mut [u8; max_leb128_len::<u128>()], mut value: u128) -> usize {
+    let mut i = 0;
+
+    loop {
+        if value < 0x80 {
+            unsafe {
+                *out.get_unchecked_mut(i) = value as u8;
+            }
+
+            i += 1;
+            break;
+        } else {
+            unsafe {
+                *out.get_unchecked_mut(i) = ((value & 0x7f) | 0x80) as u8;
+            }
+
+            value >>= 7;
+            i += 1;
+        }
+    }
+
+    i
+}
+
+#[inline]
+pub fn write_leb128_i128(out: &mut [u8; max_leb128_len::<i128>()], mut value: i128) -> usize {
+    let mut i = 0;
+
+    loop {
+        let mut byte = (value as u8) & 0x7f;
+        value >>= 7;
+        let more =
+            !(((value == 0) && ((byte & 0x40) == 0)) || ((value == -1) && ((byte & 0x40) != 0)));
+
+        if more {
+            byte |= 0x80; // Mark this byte to show that more bytes will follow.
+        }
+
+        unsafe {
+            *out.get_unchecked_mut(i) = byte;
+        }
+
+        i += 1;
+
+        if !more {
+            break;
+        }
+    }
+
+    i
 }
 
 #[inline]
@@ -273,7 +332,9 @@ impl<T: io::Write> Write for IoWriter<T> {
         // allows callers to attempt to flush/inspect the inner writer and
         // observe the error via `into_inner` when finished.
         if self.err.is_none() {
-            if let Err(e) = self.inner.write_all(&value.to_le_bytes()) {
+            let mut buf = [0; _];
+            let len = write_leb128_u128(&mut buf, value);
+            if let Err(e) = self.inner.write_all(&buf[0..len]) {
                 self.err = Some(e);
             }
         }
@@ -281,7 +342,9 @@ impl<T: io::Write> Write for IoWriter<T> {
 
     fn write_raw_i128(&mut self, value: i128) {
         if self.err.is_none() {
-            if let Err(e) = self.inner.write_all(&value.to_le_bytes()) {
+            let mut buf = [0; _];
+            let len = write_leb128_i128(&mut buf, value);
+            if let Err(e) = self.inner.write_all(&buf[0..len]) {
                 self.err = Some(e);
             }
         }
@@ -297,7 +360,7 @@ impl<T: io::Write> Write for IoWriter<T> {
 }
 
 pub struct StructureState<'a, CTX> {
-    pub schema_list: FxHashMap<usize, (SchemaId, &'static SchemaRef)>,
+    pub schema_list: FxHashMap<usize, SchemaId>,
     // Store direct references to the interned `Schema` values in insertion
     // order. This is useful for emitting the schema table as a contiguous
     // vector and avoids re-traversing the hash map.
@@ -312,15 +375,12 @@ impl<'a, CTX> StructureState<'a, CTX> {
     pub fn intern_schema(&mut self, schema: &'static SchemaRef) -> SchemaId {
         let key = schema as *const SchemaRef as usize;
         if let Some(id) = self.schema_list.get(&key) {
-            return id.0;
+            return *id;
         }
 
         let id = SchemaId(self.schema_list.len() as u32);
-        self.schema_list.insert(key, (id, schema));
-        // Push the concrete Schema reference so callers can iterate them in
-        // insertion order without accessing the UnsafeCell again.
-        let concrete: &'static Schema = schema.get();
-        self.schema_vec.push(concrete);
+        self.schema_list.insert(key, id);
+        self.schema_vec.push(schema.get());
         id
     }
 
