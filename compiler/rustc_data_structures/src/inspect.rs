@@ -246,33 +246,52 @@ impl Write for Hasher {
 /// This exists to provide a concrete `W` type that implements the
 /// `inspect::Write` trait so callers can pass a known writer into
 /// `StructureState<'_, CTX, W>` when a file export path is desired.
-pub struct IoWriter<T: io::Write>(pub T);
+pub struct IoWriter<T: io::Write> {
+    pub inner: T,
+    pub err: Option<std::io::Error>,
+}
 
 impl<T> IoWriter<T> {
     /// Create a new `IoWriter` owning the optional `File`.
     pub fn new(file: File) -> Self {
-        IoWriter(file)
+        IoWriter { inner: file, err: None }
+    }
     }
 
-    /// Take the inner file out of the writer.
-    pub fn into_inner(self) -> T {
-        self.0
+    /// Take the inner writer out of the IoWriter and return any cached I/O
+    /// error that occurred while writing. The inner writer is always
+    /// returned so callers can continue to operate on it if desired.
+    pub fn into_inner(self) -> (T, Option<std::io::Error>) {
+        (self.inner, self.err)
     }
 }
 
 impl<T: io::Write> Write for IoWriter<T> {
     fn write_raw_u128(&mut self, value: u128) {
-        // Best-effort write: ignore I/O errors here, callers handle
-        // higher-level failures via diagnostics. Write as little-endian.
-        let _ = self.0.write_all(&value.to_le_bytes());
+        // Best-effort write: cache the first I/O error and continue. This
+        // allows callers to attempt to flush/inspect the inner writer and
+        // observe the error via `into_inner` when finished.
+        if self.err.is_none() {
+            if let Err(e) = self.inner.write_all(&value.to_le_bytes()) {
+                self.err = Some(e);
+            }
+        }
     }
 
     fn write_raw_i128(&mut self, value: i128) {
-        let _ = self.0.write_all(&value.to_le_bytes());
+        if self.err.is_none() {
+            if let Err(e) = self.inner.write_all(&value.to_le_bytes()) {
+                self.err = Some(e);
+            }
+        }
     }
 
     fn write_raw_bytes(&mut self, bytes: &[u8]) {
-        let _ = self.0.write_all(bytes);
+        if self.err.is_none() {
+            if let Err(e) = self.inner.write_all(bytes) {
+                self.err = Some(e);
+            }
+        }
     }
 }
 

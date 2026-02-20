@@ -370,7 +370,7 @@ where
         let offset = f.seek(SeekFrom::Current(0))?;
 
         let mut encoder = FrameEncoder::new(f);
-        let mut writer = inspect::IoWriter(encoder);
+        let mut writer = inspect::IoWriter::wrap(encoder);
 
         writer.write_map_header(hashed.len());
 
@@ -379,9 +379,16 @@ where
             write_value(v, state, &mut writer);
         }
 
-        let mut encoder = writer.into_inner();
+        let (mut encoder, maybe_err) = writer.into_inner();
+        // Propagate any cached write error from IoWriter before flushing.
+        if let Some(e) = maybe_err {
+            return Err(e);
+        }
         encoder.flush()?;
-        let _ = encoder.into_inner();
+        let (_inner_file, maybe_err) = encoder.into_inner();
+        if let Some(e) = maybe_err {
+            return Err(e);
+        }
 
         // `f` has been moved/used, but wait, `encoder.into_inner()` returns `&mut fs::File`
         // Actually, we don't have `f` back here in scope unless we get it from `into_inner()`.
