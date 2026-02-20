@@ -866,18 +866,13 @@ fn hash_iter_order_independent<
     }
 }
 
-fn structure_hash<HCX, T: HashStable<HCX>>(value: &T, parent: &mut StructureState<'_, HCX>) ->
-    rustc_hashes::Hash128 {
-    let mut inner_state = StructureState {
-        schema_list: Default::default(),
-        span_value: parent.span_value,
-        def_path: parent.def_path,
-        crate_num: parent.crate_num,
-        _marker: PhantomData,
-    };
-    let mut inner_hasher = Hasher::new();
-    value.structure(&mut inner_state, &mut inner_hasher);
-    inner_hasher.finish()
+fn structure_hash<HCX, T: HashStable<HCX>>(
+    value: &T,
+    state: &mut StructureState<'_, HCX>,
+) -> rustc_hashes::Hash128 {
+    let mut hasher = Hasher::new();
+    value.structure(state, &mut hasher);
+    hasher.finish()
 }
 
 // Do not implement IntoIterator for the collections in this module.
