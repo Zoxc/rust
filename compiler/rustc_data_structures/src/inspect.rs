@@ -6,13 +6,14 @@
 //! use of a MessagePack `Value` in this crate but adds structured
 //! variants for Rust ADTs.
 
+use crate::stable_hasher::StableHasher;
 use std::borrow::Cow;
 use std::cell::UnsafeCell;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::hash::Hash;
 use std::io;
-use std::marker::PhantomData;use crate::stable_hasher::StableHasher;
+use std::marker::PhantomData;
 
 use ordered_float::OrderedFloat;
 use rustc_hashes::Hash128;
@@ -298,6 +299,10 @@ impl<T: io::Write> Write for IoWriter<T> {
 
 pub struct StructureState<'a, CTX> {
     pub schema_list: FxHashMap<usize, (SchemaId, &'static SchemaRef)>,
+    // Store direct references to the interned `Schema` values in insertion
+    // order. This is useful for emitting the schema table as a contiguous
+    // vector and avoids re-traversing the hash map.
+    pub schema_vec: Vec<&'static Schema>,
     pub span_value: &'a dyn Fn(SpanArgs, &mut StructureState<'_, CTX>, &mut dyn Write),
     pub def_path: &'a dyn Fn(u32, u32, &mut StructureState<'_, CTX>, &mut dyn Write),
     pub crate_num: &'a dyn Fn(u32, &mut StructureState<'_, CTX>, &mut dyn Write),
@@ -313,10 +318,18 @@ impl<'a, CTX> StructureState<'a, CTX> {
 
         let id = SchemaId(self.schema_list.len() as u32);
         self.schema_list.insert(key, (id, schema));
+        // Push the concrete Schema reference so callers can iterate them in
+        // insertion order without accessing the UnsafeCell again.
+        let concrete: &'static Schema = schema.get();
+        self.schema_vec.push(concrete);
         id
     }
 
-    pub fn write_schema_header<W:Write+?Sized>(&mut self, schema: &'static SchemaRef, writer: &mut W) {
+    pub fn write_schema_header<W: Write + ?Sized>(
+        &mut self,
+        schema: &'static SchemaRef,
+        writer: &mut W,
+    ) {
         write_tag(writer, ValueKind::Schema as u8);
         let id = self.intern_schema(schema);
         writer.write_raw_u128(id.0.into());

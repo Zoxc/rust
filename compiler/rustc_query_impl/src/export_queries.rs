@@ -217,6 +217,7 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
     // Construct a StructureState once and pass it down to collection functions.
     let mut state: StructureState<'_, StableHashingContext<'_>> = StructureState {
         schema_list: Default::default(),
+        schema_vec: Vec::new(),
         span_value: &|args, st, w| span_value(tcx, args, st, w),
         def_path: &|crate_num, index, st, w| def_path_value(tcx, crate_num, index, st, w),
         crate_num: &|crate_num, st, w| crate_num_value(tcx, crate_num, st, w),
