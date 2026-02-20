@@ -22,7 +22,7 @@ fn def_path_value<'tcx>(
     tcx: TyCtxt<'tcx>,
     crate_num: u32,
     index: u32,
-    state: &mut rustc_data_structures::inspect::State<'_>,
+    state: &mut rustc_data_structures::inspect::StructureState<'_, StableHashingContext<'_>>,
     w: &mut dyn rustc_data_structures::inspect::Write,
 ) {
     // Construct a `DefId` from the supplied `u32` crate/def indices
@@ -38,7 +38,7 @@ fn def_path_value<'tcx>(
 fn crate_num_value<'tcx>(
     tcx: TyCtxt<'tcx>,
     crate_num: u32,
-    state: &mut rustc_data_structures::inspect::State<'_>,
+    state: &mut rustc_data_structures::inspect::StructureState<'_, StableHashingContext<'_>>,
     w: &mut dyn rustc_data_structures::inspect::Write,
 ) {
     let stable = tcx.def_path_hash(CrateNum::from_u32(crate_num).as_def_id()).stable_crate_id();
@@ -48,7 +48,7 @@ fn crate_num_value<'tcx>(
 fn span_value<'tcx>(
     tcx: TyCtxt<'tcx>,
     span_args: SpanArgs,
-    state: &mut rustc_data_structures::inspect::State<'_>,
+    state: &mut rustc_data_structures::inspect::StructureState<'_, StableHashingContext<'_>>,
     w: &mut dyn rustc_data_structures::inspect::Write,
 ) {
     let span = Span::from_args(span_args);
@@ -60,8 +60,8 @@ fn span_value<'tcx>(
             variant_name: "Dummy",
             variant: EnumVariantSchema::Unit,
         });
-    state.write_schema_header(&SCHEMA, w);
-    return;
+        state.write_schema_header(&SCHEMA, w);
+        return;
     }
 
     let parent = span.parent.map(|parent| tcx.def_span(parent).data_untracked());
@@ -164,19 +164,12 @@ pub(crate) fn collect_all_query_structures<'tcx>(
     // but instead hash each per-query `Map` value and store that hash.
     file: Option<&mut fs::File>,
 ) -> Result<inspect::Value, ()> {
-    let mut inner_state: rustc_data_structures::inspect::State<'_> = rustc_data_structures::inspect::State {
+    // Construct a StructureState without the writer generic; pass writers explicitly
+    let mut state: StructureState<'_, StableHashingContext<'_>> = StructureState {
         schema_list: Default::default(),
         span_value: &|args, st, w| span_value(tcx, args, st, w),
         def_path: &|crate_num, index, st, w| def_path_value(tcx, crate_num, index, st, w),
         crate_num: &|crate_num, st, w| crate_num_value(tcx, crate_num, st, w),
-    };
-
-    // Construct a StructureState without the writer generic; pass writers explicitly
-    let mut state: StructureState<'_, StableHashingContext<'_>> = StructureState {
-        schema_list: Default::default(),
-        span_value: inner_state.span_value,
-        def_path: inner_state.def_path,
-        crate_num: inner_state.crate_num,
         _marker: std::marker::PhantomData,
     };
 
@@ -185,7 +178,7 @@ pub(crate) fn collect_all_query_structures<'tcx>(
     // hashing/compression is handled per-query in `assemble_query_structures`
 
     for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
-        let (name, value) = f(tcx, &mut state);
+        let (name, value) = f(tcx, &mut state, &mut file);
         out.push((inspect::Value::String(name.into()), value));
     }
 
@@ -347,7 +340,8 @@ pub(crate) fn assemble_query_structures<'tcx, K, QV, C, F>(
     _tcx: TyCtxt<'tcx>,
     name: String,
     cache: &C,
-    state: &mut StructureState<'_, StableHashingContext<'_>, Option<&mut fs::File>>,
+    state: &mut StructureState<'_, StableHashingContext<'_>>,
+    file: &mut Option<&mut fs::File>,
     mut get_value: F,
 ) -> (String, inspect::Value)
 where
@@ -356,7 +350,7 @@ where
     for<'s> K: HashStable<StableHashingContext<'s>>,
     QV: Sized,
     C::Value: Copy,
-    F: FnMut(&K, &C::Value, &mut StructureState<'_, StableHashingContext<'_>, Option<&mut fs::File>>) -> inspect::Value,
+    F: FnMut(&K, &C::Value, &mut StructureState<'_, StableHashingContext<'_>>) -> inspect::Value,
 {
     // Build entries by iterating the cache and using the provided closure
     // to obtain the value representation for each entry. The closure is
@@ -373,8 +367,14 @@ where
     });
 
     for (k, v) in cached.iter() {
-        let k_val = k.structure(state);
-        let v_val = get_value(k, v, state);
+        // Use an inspect::Hasher to compute a deterministic structural hash
+        // for the key and use that as the inspect::Value::UInt map key.
+        let mut key_hasher = rustc_data_structures::inspect::Hasher::new();
+        k.structure(state, &mut key_hasher);
+        let key_hash = key_hasher.finish();
+        let k_val = inspect::Value::UInt(key_hash.as_u128());
+
+        let v_val = get_value(k, v, state, file);
         entries_map.insert(k_val, v_val);
     }
 
@@ -405,7 +405,7 @@ where
     // We no longer store a writer on StructureState. The optional file was
     // provided externally; emulate prior behavior by checking `file` variable
     // captured earlier.
-    let stored_entries = if let Some(file_slot) = &mut file {
+    let stored_entries = if let Some(file_slot) = file.as_mut() {
         // Serialize
         let ser = match bincode::serialize(&entries_value) {
             Ok(b) => b,
@@ -416,9 +416,9 @@ where
         // FrameEncoder. Capture the file offset before writing so we can
         // compute the compressed length as the difference in file position
         // after writing.
-        // `file_slot` has type `&mut &mut fs::File` (due to matching on
-        // `&mut state.writer`), so dereference twice to obtain `&mut File`.
-        let f = file_slot;
+        // `file_slot` has type `&mut &mut fs::File`; dereference to obtain
+        // `&mut fs::File` for I/O operations.
+        let f: &mut fs::File = *file_slot;
         let offset = match f.seek(SeekFrom::Current(0)) {
             Ok(o) => o,
             Err(_) => return (name, inspect::Value::String("<seek-failed>".into())),

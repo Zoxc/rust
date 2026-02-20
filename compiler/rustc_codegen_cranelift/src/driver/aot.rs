@@ -51,9 +51,10 @@ impl<HCX> HashStable<HCX> for OngoingModuleCodegen {
         // do nothing
     }
 
-    fn structure<'s, W: rustc_data_structures::inspect::Write>(
+    fn structure<'s>(
         &self,
-        _state: &mut StructureState<'s, HCX, W>,
+        _state: &mut StructureState<'s, HCX>,
+        _writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // OngoingModuleCodegen is transient/runtime-only; represent as a
         // unit variant.
@@ -66,7 +67,7 @@ impl<HCX> HashStable<HCX> for OngoingModuleCodegen {
                 },
             );
 
-        _state.write_schema_header(&SCHEMA);
+        _state.write_schema_header(&SCHEMA, _writer);
     }
 }
 
