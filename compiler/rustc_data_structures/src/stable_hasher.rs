@@ -267,7 +267,7 @@ impl<CTX> HashStable<CTX> for Hash128 {
     #[inline]
     fn structure(
         &self,
-        state: &mut StructureState<'_, CTX>,
+        _state: &mut StructureState<'_, CTX>,
         writer: &mut impl crate::inspect::Write,
     ) {
         // Represent the 128-bit hash as a 16-byte binary.
@@ -944,7 +944,7 @@ impl<T, CTX> HashStable<CTX> for ::std::mem::Discriminant<T> {
     #[inline]
     fn structure<'s>(
         &self,
-        state: &mut StructureState<'s, CTX>,
+        _state: &mut StructureState<'s, CTX>,
         writer: &mut impl crate::inspect::Write,
     ) {
         writer.write_string(&format!("{:?}", self));
@@ -1104,7 +1104,7 @@ where
 
 impl_stable_traits_for_trivial_type!(
     ::std::ffi::OsStr,
-    |s: &::std::ffi::OsStr, st, w: &mut dyn crate::inspect::Write| {
+    |s: &::std::ffi::OsStr, _st, w: &mut dyn crate::inspect::Write| {
         w.write_tuple_header(1);
         w.write_string(&s.to_string_lossy());
     }
@@ -1112,7 +1112,7 @@ impl_stable_traits_for_trivial_type!(
 
 impl_stable_traits_for_trivial_type!(
     ::std::path::Path,
-    |p: &::std::path::Path, st, w: &mut dyn crate::inspect::Write| {
+    |p: &::std::path::Path, _st, w: &mut dyn crate::inspect::Write| {
         w.write_tuple_header(1);
         w.write_string(&p.to_string_lossy());
     }
@@ -1120,7 +1120,7 @@ impl_stable_traits_for_trivial_type!(
 
 impl_stable_traits_for_trivial_type!(
     ::std::path::PathBuf,
-    |p: &::std::path::PathBuf, st, w: &mut dyn crate::inspect::Write| {
+    |p: &::std::path::PathBuf, _st, w: &mut dyn crate::inspect::Write| {
         w.write_tuple_header(1);
         w.write_string(&p.to_string_lossy());
     }

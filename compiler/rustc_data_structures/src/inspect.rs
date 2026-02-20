@@ -10,7 +10,6 @@ use crate::stable_hasher::StableHasher;
 use std::borrow::Cow;
 use std::cell::UnsafeCell;
 use std::collections::BTreeMap;
-use std::fs::File;
 use std::hash::Hash;
 use std::io;
 use std::marker::PhantomData;

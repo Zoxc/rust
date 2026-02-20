@@ -7,7 +7,6 @@ use std::collections::hash_map::{Entry, OccupiedError};
 use std::hash::Hash;
 use std::iter::{Product, Sum};
 use std::ops::Index;
-use std::marker::PhantomData;
 
 use rustc_macros::{Decodable_NoContext, Encodable_NoContext};
 

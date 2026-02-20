@@ -1,6 +1,4 @@
-use std::marker::PhantomData;
-
-use rustc_data_structures::inspect::{self, EnumVariantSchema, Schema, SchemaRef, Value, Write};
+use rustc_data_structures::inspect::{self, EnumVariantSchema, Schema, SchemaRef, Write};
 use rustc_data_structures::stable_hasher::{HashStable, SpanArgs, StructureState};
 use rustc_hir::def_id::CrateNum;
 use rustc_middle::ty::TyCtxt;
@@ -36,18 +34,17 @@ fn def_path_value<'tcx>(
         krate: rustc_span::def_id::CrateNum::from_u32(crate_num),
         index: rustc_span::def_id::DefIndex::from_u32(index),
     };
-    // New API: directly call the def_path callback on the provided state/writer.
-    (state.def_path)(crate_num, index, state, w);
+        w.write_string(&tcx.def_path(def_id).to_string_no_crate_verbose(), w);
 }
 
 fn crate_num_value<'tcx>(
     tcx: TyCtxt<'tcx>,
     crate_num: u32,
-    state: &mut rustc_data_structures::inspect::StructureState<'_, StableHashingContext<'_>>,
+    _state: &mut rustc_data_structures::inspect::StructureState<'_, StableHashingContext<'_>>,
     w: &mut dyn rustc_data_structures::inspect::Write,
 ) {
     let stable = tcx.def_path_hash(CrateNum::from_u32(crate_num).as_def_id()).stable_crate_id();
-    w.write_uint(stable.as_u64() as u128);
+    w.write_binary(stable.as_u64().to_le_bytes());
 }
 
 fn span_value<'tcx>(
@@ -384,7 +381,7 @@ where
         let f: &mut std::fs::File = &mut **file_slot;
         let offset = f.seek(SeekFrom::Current(0))?;
 
-        let mut encoder = FrameEncoder::new(f);
+        let encoder = FrameEncoder::new(f);
         let mut writer = inspect::IoWriter::new(encoder);
 
         writer.write_map_header(hashed.len());
