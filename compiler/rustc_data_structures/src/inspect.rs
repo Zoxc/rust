@@ -196,63 +196,6 @@ impl<'a> Write for &'a mut dyn Write {
     fn write_raw_bytes(&mut self, bytes: &[u8]) {
         (&mut **self).write_raw_bytes(bytes)
     }
-
-    #[inline]
-    fn write_bool(&mut self, v: bool) {
-        write_tag(&mut **self, ValueKind::Bool as u8);
-        let byte = if v { 1u8 } else { 0u8 };
-        (&mut **self).write_raw_bytes(&[byte]);
-    }
-
-    #[inline]
-    fn write_int(&mut self, v: i128) {
-        write_tag(&mut **self, ValueKind::Int as u8);
-        (&mut **self).write_raw_i128(v);
-    }
-
-    #[inline]
-    fn write_uint(&mut self, v: u128) {
-        write_tag(&mut **self, ValueKind::UInt as u8);
-        (&mut **self).write_raw_u128(v);
-    }
-
-    #[inline]
-    fn write_f64(&mut self, v: f64) {
-        write_tag(&mut **self, ValueKind::F64 as u8);
-        (&mut **self).write_raw_bytes(&v.to_bits().to_le_bytes());
-    }
-
-    #[inline]
-    fn write_binary(&mut self, v: &[u8]) {
-        write_tag(&mut **self, ValueKind::Binary as u8);
-        (&mut **self).write_raw_u128(v.len() as u128);
-        (&mut **self).write_raw_bytes(v);
-    }
-
-    #[inline]
-    fn write_string(&mut self, s: &str) {
-        write_tag(&mut **self, ValueKind::String as u8);
-        (&mut **self).write_raw_u128(s.len() as u128);
-        (&mut **self).write_raw_bytes(s.as_bytes());
-    }
-
-    #[inline]
-    fn write_array_header(&mut self, len: usize) {
-        write_tag(&mut **self, ValueKind::Array as u8);
-        (&mut **self).write_raw_u128(len as u128);
-    }
-
-    #[inline]
-    fn write_tuple_header(&mut self, len: usize) {
-        write_tag(&mut **self, ValueKind::Tuple as u8);
-        (&mut **self).write_raw_u128(len as u128);
-    }
-
-    #[inline]
-    fn write_map_header(&mut self, len: usize) {
-        write_tag(&mut **self, ValueKind::Map as u8);
-        (&mut **self).write_raw_u128(len as u128);
-    }
 }
 
 /// A `inspect::Write` implementation that hashes the written bytes.
@@ -303,61 +246,50 @@ impl Write for Hasher {
 /// This exists to provide a concrete `W` type that implements the
 /// `inspect::Write` trait so callers can pass a known writer into
 /// `StructureState<'_, CTX, W>` when a file export path is desired.
-pub struct FileWriter(pub Option<File>);
+pub struct IoWriter<T: io::Write>(pub T);
 
-impl FileWriter {
-    /// Create a new `FileWriter` owning the optional `File`.
-    pub fn new(file: Option<File>) -> Self {
-        FileWriter(file)
+impl IoWriter {
+    /// Create a new `IoWriter` owning the optional `File`.
+    pub fn new(file: File) -> Self {
+        IoWriter(file)
     }
 
     /// Take the inner file out of the writer.
-    pub fn into_inner(self) -> Option<File> {
+    pub fn into_inner(self) -> T {
         self.0
     }
 }
 
-impl Write for FileWriter {
+impl<T: io::Write> Write for IoWriter<T> {
     fn write_raw_u128(&mut self, value: u128) {
-        if let Some(f) = &mut self.0 {
             // Best-effort write: ignore I/O errors here, callers handle
             // higher-level failures via diagnostics. Write as little-endian.
-            let _ = f.write_all(&value.to_le_bytes());
+            let _ = f.write_all(&value.to_le_bytes())
         }
     }
 
     fn write_raw_i128(&mut self, value: i128) {
-        if let Some(f) = &mut self.0 {
             let _ = f.write_all(&value.to_le_bytes());
-        }
     }
 
     fn write_raw_bytes(&mut self, bytes: &[u8]) {
-        if let Some(f) = &mut self.0 {
             let _ = f.write_all(bytes);
-        }
     }
 }
 
 // Implement `Write` for an optional mutable file reference so callers can
 // pass `Option<&mut File>` as the `W` type parameter on `StructureState`.
-impl<'a> Write for Option<&'a mut File> {
+impl<'a> Write for &'a mut File {
     fn write_raw_u128(&mut self, value: u128) {
-        if let Some(f) = self {
             let _ = f.write_all(&value.to_le_bytes());
-        }
     }
 
     fn write_raw_i128(&mut self, value: i128) {
-        if let Some(f) = self {
             let _ = f.write_all(&value.to_le_bytes());
-        }
     }
 
     fn write_raw_bytes(&mut self, bytes: &[u8]) {
-        if let Some(f) = self {
             let _ = f.write_all(bytes);
-        }
     }
 }
 

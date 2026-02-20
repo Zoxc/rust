@@ -858,16 +858,18 @@ macro_rules! define_queries {
                     stringify!($name).to_string(),
                     cache,
                     state,
-                    |_key, _value, _state| {
+                    |_value, _state, _writer| {
                         if_query_no_hash!([$($modifiers)*] {
-                            ::rustc_data_structures::inspect::Value::Array(vec![])
+                            None
                         } {
-                            use rustc_data_structures::stable_hasher::HashStable;
-                            use rustc_data_structures::inspect::Hasher as InspectHasher;
-                            let unerased = QueryType::restore_val(*_value);
-                            let mut h = InspectHasher::new();
-                            unerased.structure(_state, &mut h);
-                            ::rustc_data_structures::inspect::Value::UInt(h.finish().as_u128())
+                            QueryType::restore_val(*_value).structure(_state, _writer);
+                        })
+                    },
+                    |_value, _state, _writer| {
+                        if_query_no_hash!([$($modifiers)*] {
+                            None
+                        } {
+                            QueryType::restore_val(*_value).structure(_state, _writer);
                         })
                     }
                 )
