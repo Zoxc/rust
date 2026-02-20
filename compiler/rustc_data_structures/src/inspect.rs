@@ -260,7 +260,7 @@ impl<T> IoWriter<T> {
     }
 }
 
-impl<T: IoWrite> Write for IoWriter<T> {
+impl<T: io::Write> Write for IoWriter<T> {
     fn write_raw_u128(&mut self, value: u128) {
         // Best-effort write: ignore I/O errors here, callers handle
         // higher-level failures via diagnostics. Write as little-endian.

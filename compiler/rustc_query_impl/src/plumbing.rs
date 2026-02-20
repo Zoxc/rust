@@ -843,7 +843,8 @@ macro_rules! define_queries {
             pub(crate) fn collect_structures<'tcx>(
                 tcx: TyCtxt<'tcx>,
                 state: &mut StructureState<'_, StableHashingContext<'_>>,
-            ) -> (String, inspect::Value) {
+                file: &mut Option<&mut std::fs::File>,
+            ) -> Result<(String, inspect::Value), std::io::Error> {
                 let query = QueryType::query_dispatcher(tcx);
                 let qcx = QueryCtxt::new(tcx);
                 let cache = query.query_cache(qcx);
@@ -945,7 +946,7 @@ macro_rules! define_queries {
                 TyCtxt<'tcx>,
                 &mut StructureState<'_, StableHashingContext<'_>>,
                 &mut Option<&mut std::fs::File>,
-            ) -> (String, inspect::Value)
+            ) -> Result<(String, inspect::Value), std::io::Error>
         ] = &[$(query_impl::$name::collect_structures),*];
 
         /// Module containing a named function for each dep kind (including queries)

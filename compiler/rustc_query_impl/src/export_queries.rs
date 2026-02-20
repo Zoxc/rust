@@ -181,7 +181,7 @@ pub(crate) fn collect_all_query_structures<'tcx>(
     let mut entries_map: BTreeMap<inspect::Value, inspect::Value> = BTreeMap::new();
 
     for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
-        let (name, value) = f(tcx, &mut state, &mut file);
+        let (name, value) = f(tcx, &mut state, &mut file)?;
         entries_map.insert(inspect::Value::String(name.into()), value);
     }
 
