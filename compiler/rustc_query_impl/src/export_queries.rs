@@ -18,14 +18,14 @@ use std::path::PathBuf;
 use rustc_span::def_id::LOCAL_CRATE;
 use snap::write::FrameEncoder;
 use std::io::Write as IoWrite;
-use serde::Serialize;
+// `serde::Serialize` is used below via fully-qualified path; don't import it here.
 // Cursor was used in an earlier approach; no longer needed.
 
 fn def_path_value<'tcx>(
     tcx: TyCtxt<'tcx>,
     crate_num: u32,
     index: u32,
-    state: &mut rustc_data_structures::inspect::StructureState<'_, StableHashingContext<'_>>,
+    _state: &mut rustc_data_structures::inspect::StructureState<'_, StableHashingContext<'_>>,
     w: &mut dyn rustc_data_structures::inspect::Write,
 ) {
     // Construct a `DefId` from the supplied `u32` crate/def indices
@@ -34,7 +34,7 @@ fn def_path_value<'tcx>(
         krate: rustc_span::def_id::CrateNum::from_u32(crate_num),
         index: rustc_span::def_id::DefIndex::from_u32(index),
     };
-        w.write_string(&tcx.def_path(def_id).to_string_no_crate_verbose(), w);
+    w.write_string(&tcx.def_path(def_id).to_string_no_crate_verbose());
 }
 
 fn crate_num_value<'tcx>(
@@ -44,7 +44,7 @@ fn crate_num_value<'tcx>(
     w: &mut dyn rustc_data_structures::inspect::Write,
 ) {
     let stable = tcx.def_path_hash(CrateNum::from_u32(crate_num).as_def_id()).stable_crate_id();
-    w.write_binary(stable.as_u64().to_le_bytes());
+    w.write_binary(&stable.as_u64().to_le_bytes());
 }
 
 fn span_value<'tcx>(
@@ -286,7 +286,9 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
     // schema table into a `Footer` that we serialize with bincode. This
     // keeps the schema list contiguous with the exported value so readers
     // can reconstruct schemas without re-parsing the rest of the file.
-    #[derive(Serialize)]
+    // Local Footer type needs serde Serialize for bincode. Use full path to
+    // serde to avoid accidental name resolution issues and derive it.
+    #[derive(::serde::Serialize)]
     struct Footer {
         value: inspect::Value,
         schemas: Vec<&'static inspect::Schema>,

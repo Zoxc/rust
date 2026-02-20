@@ -22,4 +22,5 @@ rustc_thread_pool = { path = "../rustc_thread_pool" }
 tracing = "0.1"
 bincode = "1"
 snap = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 # tidy-alphabetical-end
