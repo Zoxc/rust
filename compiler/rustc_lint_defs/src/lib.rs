@@ -655,9 +655,10 @@ impl<HCX> HashStable<HCX> for LintId {
     }
 
     #[inline]
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, HCX, W>,
+        state: &mut StructureState<'a, HCX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         // Represent `LintId` structurally to preserve the wrapper type.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
@@ -668,8 +669,8 @@ impl<HCX> HashStable<HCX> for LintId {
                 },
             );
 
-        state.write_schema_header(&SCHEMA);
-        self.lint_name_raw().structure(state);
+        state.write_schema_header(&SCHEMA, writer);
+        self.lint_name_raw().structure(state, writer);
     }
 }
 

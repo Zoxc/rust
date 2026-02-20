@@ -926,10 +926,7 @@ mod binding_form_impl {
             }
         }
 
-        fn structure<'s, W: rustc_data_structures::inspect::Write>(
-            &self,
-            state: &mut StructureState<'s, StableHashingContext<'a>, W>,
-        ) {
+        fn structure<'s>(&self, state: &mut StructureState<'s, StableHashingContext<'a>>, writer: &mut impl rustc_data_structures::inspect::Write) {
             use super::BindingForm::*;
 
             match self {
@@ -939,8 +936,8 @@ mod binding_form_impl {
                         variant_name: "Var",
                         variant: inspect::EnumVariantSchema::Tuple(1),
                     });
-                    state.write_schema_header(&SCHEMA);
-                    binding.structure(state);
+                    state.write_schema_header(&SCHEMA, writer);
+                    binding.structure(state, writer);
                 }
                 ImplicitSelf(kind) => {
                     static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Enum {
@@ -948,8 +945,8 @@ mod binding_form_impl {
                         variant_name: "ImplicitSelf",
                         variant: inspect::EnumVariantSchema::Tuple(1),
                     });
-                    state.write_schema_header(&SCHEMA);
-                    kind.structure(state);
+                    state.write_schema_header(&SCHEMA, writer);
+                    kind.structure(state, writer);
                 }
                 RefForGuard(local) => {
                     static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Enum {
@@ -957,8 +954,8 @@ mod binding_form_impl {
                         variant_name: "RefForGuard",
                         variant: inspect::EnumVariantSchema::Tuple(1),
                     });
-                    state.write_schema_header(&SCHEMA);
-                    local.structure(state);
+                    state.write_schema_header(&SCHEMA, writer);
+                    local.structure(state, writer);
                 }
             }
         }

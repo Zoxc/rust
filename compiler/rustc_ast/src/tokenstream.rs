@@ -139,7 +139,7 @@ impl<D: SpanDecoder> Decodable<D> for LazyAttrTokenStream {
 }
 
 impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, _state: &mut StructureState<W>, writer: &mut W) {
+    fn structure<'a>(&self, _state: &mut StructureState<'a, CTX>, writer: &mut impl rustc_data_structures::inspect::Write) {
         // Preserve wrapper type; avoid a Debug-only string representation.
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Enum {
@@ -147,7 +147,7 @@ impl<CTX> HashStable<CTX> for LazyAttrTokenStream {
                 variant_name: "Opaque",
                 variant: rustc_data_structures::inspect::EnumVariantSchema::Unit,
             });
-        _state.write_schema_header(&SCHEMA);
+        _state.write_schema_header(&SCHEMA, writer);
     }
 
     fn hash_stable(&self, _hcx: &mut CTX, _hasher: &mut StableHasher) {
@@ -839,16 +839,16 @@ impl<CTX> HashStable<CTX> for TokenStream
 where
     CTX: crate::HashStableContext,
 {
-    fn structure<W: rustc_data_structures::inspect::Write>(&self, state: &mut StructureState<W>, writer: &mut W) {
+    fn structure<'a>(&self, state: &mut StructureState<'a, CTX>, writer: &mut impl rustc_data_structures::inspect::Write) {
         static SCHEMA: rustc_data_structures::inspect::SchemaRef =
             rustc_data_structures::inspect::SchemaRef::new(rustc_data_structures::inspect::Schema::Struct {
                 path: "rustc_ast::tokenstream::TokenStream",
                 fields: &["trees"],
             });
-        state.write_schema_header(&SCHEMA);
-        state.write_array_header(self.0.len());
+        state.write_schema_header(&SCHEMA, writer);
+        writer.write_array_header(self.0.len());
         for sub_tt in self.iter() {
-            sub_tt.structure(state);
+            sub_tt.structure(state, writer);
         }
     }
 

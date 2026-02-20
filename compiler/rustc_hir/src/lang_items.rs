@@ -150,17 +150,18 @@ impl<CTX> HashStable<CTX> for LangItem {
         ::std::hash::Hash::hash(self, hasher);
     }
 
-    fn structure<W: rustc_data_structures::inspect::Write>(
+    fn structure<'s>(
         &self,
-        state: &mut StructureState<'_, CTX, W>,
+        state: &mut StructureState<'s, CTX>,
+        writer: &mut impl rustc_data_structures::inspect::Write,
     ) {
         static SCHEMA: inspect::SchemaRef = inspect::SchemaRef::new(inspect::Schema::Struct {
             path: "rustc_hir::lang_items::LangItem",
             fields: &["variant"],
         });
 
-        state.write_schema_header(&SCHEMA);
-        state.write_string(self.variant_name());
+        state.write_schema_header(&SCHEMA, writer);
+        writer.write_string(self.variant_name());
     }
 }
 

@@ -222,9 +222,10 @@ impl Hash for ExternAbi {
 #[cfg(feature = "nightly")]
 impl<C> HashStable<C> for ExternAbi {
     #[inline]
-    fn structure<W: ::rustc_data_structures::inspect::Write>(
+    fn structure<'a>(
         &self,
-        state: &mut StructureState<'_, C, W>,
+        state: &mut StructureState<'a, C>,
+        writer: &mut impl ::rustc_data_structures::inspect::Write,
     ) {
         use rustc_data_structures::inspect::{EnumVariantSchema, Schema, SchemaRef};
 
@@ -245,8 +246,8 @@ impl<C> HashStable<C> for ExternAbi {
                     variant_name: "C",
                     variant: EnumVariantSchema::Named(&["unwind"]),
                 });
-                state.write_schema_header(&SCHEMA);
-                state.write_bool(*unwind);
+                state.write_schema_header(&SCHEMA, writer);
+                writer.write_bool(*unwind);
             }
             ExternAbi::System { unwind } => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -254,8 +255,8 @@ impl<C> HashStable<C> for ExternAbi {
                     variant_name: "System",
                     variant: EnumVariantSchema::Named(&["unwind"]),
                 });
-                state.write_schema_header(&SCHEMA);
-                state.write_bool(*unwind);
+                state.write_schema_header(&SCHEMA, writer);
+                writer.write_bool(*unwind);
             }
             ExternAbi::Aapcs { unwind } => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -263,8 +264,8 @@ impl<C> HashStable<C> for ExternAbi {
                     variant_name: "Aapcs",
                     variant: EnumVariantSchema::Named(&["unwind"]),
                 });
-                state.write_schema_header(&SCHEMA);
-                state.write_bool(*unwind);
+                state.write_schema_header(&SCHEMA, writer);
+                writer.write_bool(*unwind);
             }
 
             ExternAbi::Cdecl { unwind } => {
@@ -273,8 +274,8 @@ impl<C> HashStable<C> for ExternAbi {
                     variant_name: "Cdecl",
                     variant: EnumVariantSchema::Named(&["unwind"]),
                 });
-                state.write_schema_header(&SCHEMA);
-                state.write_bool(*unwind);
+                state.write_schema_header(&SCHEMA, writer);
+                writer.write_bool(*unwind);
             }
             ExternAbi::Stdcall { unwind } => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -282,8 +283,8 @@ impl<C> HashStable<C> for ExternAbi {
                     variant_name: "Stdcall",
                     variant: EnumVariantSchema::Named(&["unwind"]),
                 });
-                state.write_schema_header(&SCHEMA);
-                state.write_bool(*unwind);
+                state.write_schema_header(&SCHEMA, writer);
+                writer.write_bool(*unwind);
             }
             ExternAbi::Fastcall { unwind } => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -291,8 +292,8 @@ impl<C> HashStable<C> for ExternAbi {
                     variant_name: "Fastcall",
                     variant: EnumVariantSchema::Named(&["unwind"]),
                 });
-                state.write_schema_header(&SCHEMA);
-                state.write_bool(*unwind);
+                state.write_schema_header(&SCHEMA, writer);
+                writer.write_bool(*unwind);
             }
             ExternAbi::Thiscall { unwind } => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -300,8 +301,8 @@ impl<C> HashStable<C> for ExternAbi {
                     variant_name: "Thiscall",
                     variant: EnumVariantSchema::Named(&["unwind"]),
                 });
-                state.write_schema_header(&SCHEMA);
-                state.write_bool(*unwind);
+                state.write_schema_header(&SCHEMA, writer);
+                writer.write_bool(*unwind);
             }
             ExternAbi::Vectorcall { unwind } => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -309,8 +310,8 @@ impl<C> HashStable<C> for ExternAbi {
                     variant_name: "Vectorcall",
                     variant: EnumVariantSchema::Named(&["unwind"]),
                 });
-                state.write_schema_header(&SCHEMA);
-                state.write_bool(*unwind);
+                state.write_schema_header(&SCHEMA, writer);
+                writer.write_bool(*unwind);
             }
             ExternAbi::SysV64 { unwind } => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -318,8 +319,8 @@ impl<C> HashStable<C> for ExternAbi {
                     variant_name: "SysV64",
                     variant: EnumVariantSchema::Named(&["unwind"]),
                 });
-                state.write_schema_header(&SCHEMA);
-                state.write_bool(*unwind);
+                state.write_schema_header(&SCHEMA, writer);
+                writer.write_bool(*unwind);
             }
             ExternAbi::Win64 { unwind } => {
                 static SCHEMA: SchemaRef = SchemaRef::new(Schema::Enum {
@@ -327,81 +328,81 @@ impl<C> HashStable<C> for ExternAbi {
                     variant_name: "Win64",
                     variant: EnumVariantSchema::Named(&["unwind"]),
                 });
-                state.write_schema_header(&SCHEMA);
-                state.write_bool(*unwind);
+                state.write_schema_header(&SCHEMA, writer);
+                writer.write_bool(*unwind);
             }
 
             ExternAbi::Rust => {
                 static SCHEMA: SchemaRef = unit_schema!("Rust");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::RustCall => {
                 static SCHEMA: SchemaRef = unit_schema!("RustCall");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::RustCold => {
                 static SCHEMA: SchemaRef = unit_schema!("RustCold");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::RustInvalid => {
                 static SCHEMA: SchemaRef = unit_schema!("RustInvalid");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::RustPreserveNone => {
                 static SCHEMA: SchemaRef = unit_schema!("RustPreserveNone");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::Unadjusted => {
                 static SCHEMA: SchemaRef = unit_schema!("Unadjusted");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::Custom => {
                 static SCHEMA: SchemaRef = unit_schema!("Custom");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::EfiApi => {
                 static SCHEMA: SchemaRef = unit_schema!("EfiApi");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::CmseNonSecureCall => {
                 static SCHEMA: SchemaRef = unit_schema!("CmseNonSecureCall");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::CmseNonSecureEntry => {
                 static SCHEMA: SchemaRef = unit_schema!("CmseNonSecureEntry");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::GpuKernel => {
                 static SCHEMA: SchemaRef = unit_schema!("GpuKernel");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::PtxKernel => {
                 static SCHEMA: SchemaRef = unit_schema!("PtxKernel");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::AvrInterrupt => {
                 static SCHEMA: SchemaRef = unit_schema!("AvrInterrupt");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::AvrNonBlockingInterrupt => {
                 static SCHEMA: SchemaRef = unit_schema!("AvrNonBlockingInterrupt");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::Msp430Interrupt => {
                 static SCHEMA: SchemaRef = unit_schema!("Msp430Interrupt");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::RiscvInterruptM => {
                 static SCHEMA: SchemaRef = unit_schema!("RiscvInterruptM");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::RiscvInterruptS => {
                 static SCHEMA: SchemaRef = unit_schema!("RiscvInterruptS");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
             ExternAbi::X86Interrupt => {
                 static SCHEMA: SchemaRef = unit_schema!("X86Interrupt");
-                state.write_schema_header(&SCHEMA);
+                state.write_schema_header(&SCHEMA, writer);
             }
         }
     }
