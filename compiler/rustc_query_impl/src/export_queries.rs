@@ -14,6 +14,7 @@ use rustc_span::{CachingSourceMapView, Pos, Span};
 // macro into the plumbing module; do not import it here.
 use crate::PER_QUERY_COLLECT_STRUCTURES_FNS;
 use std::fs;
+use std::collections::BTreeMap;
 use std::io::{Seek, SeekFrom};
 use std::path::PathBuf;
 use rustc_span::def_id::LOCAL_CRATE;
@@ -175,20 +176,13 @@ pub(crate) fn collect_all_query_structures<'tcx>(
         _marker: std::marker::PhantomData,
     };
 
-    let mut out: Vec<(inspect::Value, inspect::Value)> = Vec::new();
-
     // hashing/compression is handled per-query in `assemble_query_structures`
+
+    let mut entries_map: BTreeMap<inspect::Value, inspect::Value> = BTreeMap::new();
 
     for f in PER_QUERY_COLLECT_STRUCTURES_FNS.iter() {
         let (name, value) = f(tcx, &mut state, &mut file);
-        out.push((inspect::Value::String(name.into()), value));
-    }
-
-    // Convert Vec into BTreeMap for the Map variant
-    let mut entries_map: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
-        ::std::collections::BTreeMap::new();
-    for (k, v) in out.into_iter() {
-        entries_map.insert(k, v);
+        entries_map.insert(inspect::Value::String(name.into()), value);
     }
 
     Ok(inspect::Value::Map(entries_map))
@@ -418,33 +412,38 @@ where
     let h = hasher.finish::<Hash128>();
     let hash_field = inspect::Value::UInt(h.as_u128());
 
-    let mut out_map: Vec<(inspect::Value, inspect::Value)> = Vec::new();
+    let mut out_map: BTreeMap<inspect::Value, inspect::Value> = BTreeMap::new();
     // Only include the `entries` field when we actually wrote a payload to a
     // file; if no file was provided we skip the `entries` field and only
     // provide the stable `value` hash so callers can still verify contents.
     if let Some((offset, compressed_len)) = stored_entries {
         // Store both offset and length of the compressed payload.
-        let mut m: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
-            ::std::collections::BTreeMap::new();
+        let mut m: BTreeMap<inspect::Value, inspect::Value> = BTreeMap::new();
         m.insert(
             inspect::Value::String("offset".into()),
             inspect::Value::UInt(offset as u128),
         );
         m.insert(inspect::Value::String("len".into()), inspect::Value::UInt(compressed_len as u128));
 
-        out_map.push((inspect::Value::String("entries".into()),   inspect::Value::Map(m)));
+        out_map.insert(inspect::Value::String("entries".into()), inspect::Value::Map(m));
     }
-    out_map.push((inspect::Value::String("hash".into()), hash_field));
-    out_map.push((inspect::Value::String("key_type".into()), inspect::Value::String(key_type_name.into())));
-    out_map.push((inspect::Value::String("value_type".into()), inspect::Value::String(value_type_name.into())));
-    out_map.push((inspect::Value::String("key_size".into()), inspect::Value::UInt(key_size as u128)));
-    out_map.push((inspect::Value::String("value_size".into()), inspect::Value::UInt(value_size as u128)));
+    out_map.insert(inspect::Value::String("hash".into()), hash_field);
+    out_map.insert(
+        inspect::Value::String("key_type".into()),
+        inspect::Value::String(key_type_name.into()),
+    );
+    out_map.insert(
+        inspect::Value::String("value_type".into()),
+        inspect::Value::String(value_type_name.into()),
+    );
+    out_map.insert(
+        inspect::Value::String("key_size".into()),
+        inspect::Value::UInt(key_size as u128),
+    );
+    out_map.insert(
+        inspect::Value::String("value_size".into()),
+        inspect::Value::UInt(value_size as u128),
+    );
 
-    // Convert out_map Vec to BTreeMap before returning
-    let mut ret_map: ::std::collections::BTreeMap<inspect::Value, inspect::Value> =
-        ::std::collections::BTreeMap::new();
-    for (k, v) in out_map.into_iter() {
-        ret_map.insert(k, v);
-    }
-    Ok((name, inspect::Value::Map(ret_map)))
+    Ok((name, inspect::Value::Map(out_map)))
 }
