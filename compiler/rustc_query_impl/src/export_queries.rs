@@ -20,6 +20,7 @@ use std::path::PathBuf;
 use rustc_span::def_id::LOCAL_CRATE;
 use snap::write::FrameEncoder;
 use std::io::Write as IoWrite;
+use serde::Serialize;
 // Cursor was used in an earlier approach; no longer needed.
 
 fn def_path_value<'tcx>(
@@ -284,8 +285,19 @@ pub(crate) fn export_queries_if_enabled<'tcx>(tcx: TyCtxt<'tcx>) {
         Err(_) => return,
     };
 
-    // Now write the serialized top-level Value and footer length.
-    let bytes = match bincode::serialize(&value) {
+    // Package the final top-level `Value` together with the collected
+    // schema table into a `Footer` that we serialize with bincode. This
+    // keeps the schema list contiguous with the exported value so readers
+    // can reconstruct schemas without re-parsing the rest of the file.
+    #[derive(Serialize)]
+    struct Footer {
+        value: inspect::Value,
+        schemas: Vec<&'static inspect::Schema>,
+    }
+
+    let footer = Footer { value, schemas: state.schema_vec.clone() };
+
+    let bytes = match bincode::serialize(&footer) {
         Ok(b) => b,
         Err(_) => return,
     };
