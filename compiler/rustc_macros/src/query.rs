@@ -247,7 +247,7 @@ fn parse_query_modifiers(input: ParseStream<'_>) -> Result<QueryModifiers> {
 }
 
 fn doc_comment_from_desc(list: &Punctuated<Expr, token::Comma>) -> Result<Attribute> {
-    use ::syn::*;
+    use syn::*;
     let mut iter = list.iter();
     let format_str: String = match iter.next() {
         Some(&Expr::Lit(ExprLit { lit: Lit::Str(ref lit_str), .. })) => {
@@ -259,7 +259,7 @@ fn doc_comment_from_desc(list: &Punctuated<Expr, token::Comma>) -> Result<Attrib
     let mut doc_string = fmt_fragments.next().unwrap().to_string();
     iter.map(::quote::ToTokens::to_token_stream).zip(fmt_fragments).for_each(
         |(tts, next_fmt_fragment)| {
-            use ::core::fmt::Write;
+            use core::fmt::Write;
             write!(
                 &mut doc_string,
                 " `{}` {}",
@@ -419,36 +419,24 @@ pub(super) fn rustc_queries(input: TokenStream) -> TokenStream {
             ReturnType::Type(..) => quote! { #return_ty },
         };
 
-        let mut modifiers_out = vec![];
-
-        macro_rules! passthrough {
-            ( $( $modifier:ident ),+ $(,)? ) => {
-                $( if let Some($modifier) = &modifiers.$modifier {
-                    modifiers_out.push(quote! { (#$modifier) });
-                }; )+
-            }
-        }
-
-        passthrough!(
-            arena_cache,
-            cycle_fatal,
-            cycle_delay_bug,
-            cycle_stash,
-            no_hash,
-            anon,
-            eval_always,
-            feedable,
-            depth_limit,
-            separate_provide_extern,
-            return_result_from_ensure_ok,
-        );
-
-        // If there was a `cache_on_disk_if` modifier in the real input, pass
-        // on a synthetic `(cache_on_disk)` modifier that can be inspected by
-        // macro-rules macros.
-        if modifiers.cache_on_disk_if.is_some() {
-            modifiers_out.push(quote! { (cache_on_disk) });
-        }
+        let is_anon = modifiers.anon.is_some();
+        let is_eval_always = modifiers.eval_always.is_some();
+        let is_depth_limit = modifiers.depth_limit.is_some();
+        let is_feedable = modifiers.feedable.is_some();
+        let no_hash = modifiers.no_hash.is_some();
+        let cache_on_disk = modifiers.cache_on_disk_if.is_some();
+        let arena_cache = modifiers.arena_cache.is_some();
+        let separate_provide_extern = modifiers.separate_provide_extern.is_some();
+        let return_result_from_ensure_ok = modifiers.return_result_from_ensure_ok.is_some();
+        let cycle_error_handling = if modifiers.cycle_fatal.is_some() {
+            quote! { Fatal }
+        } else if modifiers.cycle_stash.is_some() {
+            quote! { Stash }
+        } else if modifiers.cycle_delay_bug.is_some() {
+            quote! { DelayBug }
+        } else {
+            quote! { Error }
+        };
 
         // This uses the span of the query definition for the commas,
         // which can be important if we later encounter any ambiguity
@@ -457,7 +445,18 @@ pub(super) fn rustc_queries(input: TokenStream) -> TokenStream {
         // at the entire `rustc_queries!` invocation, which wouldn't
         // be very useful.
         let span = name.span();
-        let modifiers_stream = quote_spanned! { span => #(#modifiers_out),* };
+        let modifiers_stream = quote_spanned! { span =>
+            is_anon: #is_anon,
+            is_eval_always: #is_eval_always,
+            is_depth_limit: #is_depth_limit,
+            is_feedable: #is_feedable,
+            no_hash: #no_hash,
+            cache_on_disk: #cache_on_disk,
+            arena_cache: #arena_cache,
+            separate_provide_extern: #separate_provide_extern,
+            return_result_from_ensure_ok: #return_result_from_ensure_ok,
+            cycle_error_handling: #cycle_error_handling
+        };
 
         // Add the query to the group
         query_stream.extend(quote! {

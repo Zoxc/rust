@@ -333,42 +333,20 @@ macro_rules! query_helper_param_ty {
     ($K:ty) => { $K };
 }
 
-// Expands to `$yes` if the `arena_cache` modifier is present, `$no` otherwise.
-macro_rules! if_arena_cache {
-    ([] $then:tt $no:tt) => { $no };
-    ([(arena_cache) $($modifiers:tt)*] $yes:tt $no:tt) => { $yes };
-    ([$other:tt $($modifiers:tt)*] $yes:tt $no:tt) => {
-        if_arena_cache!([$($modifiers)*] $yes $no)
+/// Expands to one of two token trees based on a boolean literal.
+macro_rules! if_tt {
+    (true $yes:tt $no:tt) => {
+        $yes
+    };
+    (false $yes:tt $no:tt) => {
+        $no
     };
 }
 
-// Expands to `$yes` if the `separate_provide_extern` modifier is present, `$no` otherwise.
-macro_rules! if_separate_provide_extern {
-    ([] $then:tt $no:tt) => { $no };
-    ([(separate_provide_extern) $($modifiers:tt)*] $yes:tt $no:tt) => { $yes };
-    ([$other:tt $($modifiers:tt)*] $yes:tt $no:tt) => {
-        if_separate_provide_extern!([$($modifiers)*] $yes $no)
-    };
-}
-
-// Expands to `$yes` if the `return_result_from_ensure_ok` modifier is present, `$no` otherwise.
-macro_rules! if_return_result_from_ensure_ok {
-    ([] $then:tt $no:tt) => { $no };
-    ([(return_result_from_ensure_ok) $($modifiers:tt)*] $yes:tt $no:tt) => { $yes };
-    ([$other:tt $($modifiers:tt)*] $yes:tt $no:tt) => {
-        if_return_result_from_ensure_ok!([$($modifiers)*] $yes $no)
-    };
-}
-
-// Expands to `$item` if the `feedable` modifier is present.
-macro_rules! item_if_feedable {
-    ([] $($item:tt)*) => {};
-    ([(feedable) $($rest:tt)*] $($item:tt)*) => {
-        $($item)*
-    };
-    ([$other:tt $($modifiers:tt)*] $($item:tt)*) => {
-        item_if_feedable! { [$($modifiers)*] $($item)* }
-    };
+/// Conditionally expands to some token trees based on a boolean literal.
+macro_rules! item_if_tt {
+    (true $($item:tt)*) => { $($item)* };
+    (false $($item:tt)*) => {};
 }
 
 macro_rules! define_callbacks {
@@ -377,7 +355,18 @@ macro_rules! define_callbacks {
         // `query_helper_param_ty!` can match on specific type names.
         $(
             $(#[$attr:meta])*
-            [$($modifiers:tt)*]
+            [
+                is_anon: $is_anon:tt,
+                is_eval_always: $is_eval_always:tt,
+                is_depth_limit: $is_depth_limit:tt,
+                is_feedable: $is_feedable:tt,
+                no_hash: $no_hash:tt,
+                cache_on_disk: $cache_on_disk:tt,
+                arena_cache: $arena_cache:tt,
+                separate_provide_extern: $separate_provide_extern:tt,
+                return_result_from_ensure_ok: $return_result_from_ensure_ok:tt,
+                cycle_error_handling: $cycle_error_handling:ident
+            ]
             fn $name:ident($($K:tt)*) -> $V:ty,
         )*
     ) => {
@@ -390,8 +379,8 @@ macro_rules! define_callbacks {
                 pub type Key<'tcx> = $($K)*;
                 pub type Value<'tcx> = $V;
 
-                pub type LocalKey<'tcx> = if_separate_provide_extern!(
-                    [$($modifiers)*]
+                pub type LocalKey<'tcx> = if_tt!(
+                    $separate_provide_extern
                     (<Key<'tcx> as $crate::query::AsLocalQueryKey>::LocalQueryKey)
                     (Key<'tcx>)
                 );
@@ -399,8 +388,8 @@ macro_rules! define_callbacks {
                 /// This type alias specifies the type returned from query providers and the type
                 /// used for decoding. For regular queries this is the declared returned type `V`,
                 /// but `arena_cache` will use `<V as ArenaCached>::Provided` instead.
-                pub type ProvidedValue<'tcx> = if_arena_cache!(
-                    [$($modifiers)*]
+                pub type ProvidedValue<'tcx> = if_tt!(
+                    $arena_cache
                     (<Value<'tcx> as $crate::query::arena_cached::ArenaCached<'tcx>>::Provided)
                     (Value<'tcx>)
                 );
@@ -416,8 +405,8 @@ macro_rules! define_callbacks {
                 ) -> Erased<Value<'tcx>> {
                     // For queries with the `arena_cache` modifier, store the
                     // provided value in an arena and get a reference to it.
-                    let value: Value<'tcx> = if_arena_cache!(
-                        [$($modifiers)*]
+                    let value: Value<'tcx> = if_tt!(
+                        $arena_cache
                         {
                             <Value<'tcx> as $crate::query::arena_cached::ArenaCached>::
                                 alloc_in_arena
@@ -476,8 +465,8 @@ macro_rules! define_callbacks {
         #[derive(Default)]
         pub struct QueryArenas<'tcx> {
             $(
-                pub $name: if_arena_cache!(
-                    [$($modifiers)*]
+                pub $name: if_tt!(
+                    $arena_cache
                     // Use the `ArenaCached` helper trait to determine the arena's value type.
                     (TypedArena<<$V as $crate::query::arena_cached::ArenaCached<'tcx>>::Allocated>)
                     // No arena for this query, so the field type is `()`.
@@ -493,13 +482,13 @@ macro_rules! define_callbacks {
                 pub fn $name(
                     self,
                     key: query_helper_param_ty!($($K)*),
-                ) -> if_return_result_from_ensure_ok!(
-                    [$($modifiers)*]
+                ) -> if_tt!(
+                    $return_result_from_ensure_ok
                     (Result<(), ErrorGuaranteed>)
                     ()
                 ) {
-                    if_return_result_from_ensure_ok!(
-                        [$($modifiers)*]
+                    if_tt!(
+                        $return_result_from_ensure_ok
                         (crate::query::inner::query_ensure_error_guaranteed)
                         (crate::query::inner::query_ensure)
                     )(
@@ -556,8 +545,8 @@ macro_rules! define_callbacks {
         }
 
         $(
-            item_if_feedable! {
-                [$($modifiers)*]
+            item_if_tt! {
+                $is_feedable
                 impl<'tcx, K: $crate::query::IntoQueryParam<$name::Key<'tcx>> + Copy>
                     TyCtxtFeed<'tcx, K>
                 {
@@ -598,8 +587,8 @@ macro_rules! define_callbacks {
 
         pub struct ExternProviders {
             $(
-                pub $name: if_separate_provide_extern!(
-                    [$($modifiers)*]
+                pub $name: if_tt!(
+                    $separate_provide_extern
                     (for<'tcx> fn(TyCtxt<'tcx>, $name::Key<'tcx>) -> $name::ProvidedValue<'tcx>)
                     ()
                 ),
@@ -622,8 +611,8 @@ macro_rules! define_callbacks {
             fn default() -> Self {
                 ExternProviders {
                     $(
-                        $name: if_separate_provide_extern!(
-                            [$($modifiers)*]
+                        $name: if_tt!(
+                            $separate_provide_extern
                             (|_, key| $crate::query::plumbing::default_extern_query(
                                 stringify!($name),
                                 &key

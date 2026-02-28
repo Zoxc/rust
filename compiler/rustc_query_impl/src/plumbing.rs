@@ -144,129 +144,41 @@ pub fn query_key_hash_verify_all<'tcx>(tcx: TyCtxt<'tcx>) {
     }
 }
 
-macro_rules! cycle_error_handling {
-    ([]) => {{
-        rustc_middle::query::CycleErrorHandling::Error
-    }};
-    ([(cycle_fatal) $($rest:tt)*]) => {{
-        rustc_middle::query::CycleErrorHandling::Fatal
-    }};
-    ([(cycle_stash) $($rest:tt)*]) => {{
-        rustc_middle::query::CycleErrorHandling::Stash
-    }};
-    ([(cycle_delay_bug) $($rest:tt)*]) => {{
-        rustc_middle::query::CycleErrorHandling::DelayBug
-    }};
-    ([$other:tt $($modifiers:tt)*]) => {
-        cycle_error_handling!([$($modifiers)*])
+/// Expands to one of two token trees based on a boolean literal.
+macro_rules! if_tt {
+    (true $yes:tt $no:tt) => {
+        $yes
+    };
+    (false $yes:tt $no:tt) => {
+        $no
     };
 }
 
-macro_rules! is_anon {
-    ([]) => {{
-        false
-    }};
-    ([(anon) $($rest:tt)*]) => {{
-        true
-    }};
-    ([$other:tt $($modifiers:tt)*]) => {
-        is_anon!([$($modifiers)*])
-    };
-}
-
-macro_rules! is_eval_always {
-    ([]) => {{
-        false
-    }};
-    ([(eval_always) $($rest:tt)*]) => {{
-        true
-    }};
-    ([$other:tt $($modifiers:tt)*]) => {
-        is_eval_always!([$($modifiers)*])
-    };
-}
-
-macro_rules! is_depth_limit {
-    ([]) => {{
-        false
-    }};
-    ([(depth_limit) $($rest:tt)*]) => {{
-        true
-    }};
-    ([$other:tt $($modifiers:tt)*]) => {
-        is_depth_limit!([$($modifiers)*])
-    };
-}
-
-macro_rules! is_feedable {
-    ([]) => {{
-        false
-    }};
-    ([(feedable) $($rest:tt)*]) => {{
-        true
-    }};
-    ([$other:tt $($modifiers:tt)*]) => {
-        is_feedable!([$($modifiers)*])
-    };
+/// Conditionally expands to some token trees based on a boolean literal.
+macro_rules! item_if_tt {
+    (true $($item:tt)*) => { $($item)* };
+    (false $($item:tt)*) => {};
 }
 
 macro_rules! hash_result {
-    ([][$V:ty]) => {{
+    (false [$V:ty]) => {{
         Some(|hcx, result| {
             let result = rustc_middle::query::erase::restore_val::<$V>(*result);
             rustc_middle::dep_graph::hash_result(hcx, &result)
         })
     }};
-    ([(no_hash) $($rest:tt)*][$V:ty]) => {{
-        None
-    }};
-    ([$other:tt $($modifiers:tt)*][$($args:tt)*]) => {
-        hash_result!([$($modifiers)*][$($args)*])
-    };
+    (true [$V:ty]) => {{ None }};
 }
 
 macro_rules! call_provider {
-    ([][$tcx:expr, $name:ident, $key:expr]) => {{
-        ($tcx.query_system.local_providers.$name)($tcx, $key)
-    }};
-    ([(separate_provide_extern) $($rest:tt)*][$tcx:expr, $name:ident, $key:expr]) => {{
+    (false [$tcx:expr, $name:ident, $key:expr]) => {{ ($tcx.query_system.local_providers.$name)($tcx, $key) }};
+    (true [$tcx:expr, $name:ident, $key:expr]) => {{
         if let Some(key) = $key.as_local_key() {
             ($tcx.query_system.local_providers.$name)($tcx, key)
         } else {
             ($tcx.query_system.extern_providers.$name)($tcx, $key)
         }
     }};
-    ([$other:tt $($modifiers:tt)*][$($args:tt)*]) => {
-        call_provider!([$($modifiers)*][$($args)*])
-    };
-}
-
-/// Expands to one of two token trees, depending on whether the current query
-/// has the `cache_on_disk_if` modifier.
-macro_rules! if_cache_on_disk {
-    ([] $yes:tt $no:tt) => {
-        $no
-    };
-    // The `cache_on_disk_if` modifier generates a synthetic `(cache_on_disk)`,
-    // modifier, for use by this macro and similar macros.
-    ([(cache_on_disk) $($rest:tt)*] $yes:tt $no:tt) => {
-        $yes
-    };
-    ([$other:tt $($modifiers:tt)*] $yes:tt $no:tt) => {
-        if_cache_on_disk!([$($modifiers)*] $yes $no)
-    };
-}
-
-/// Conditionally expands to some token trees, if the current query has the
-/// `cache_on_disk_if` modifier.
-macro_rules! item_if_cache_on_disk {
-    ([] $($item:tt)*) => {};
-    ([(cache_on_disk) $($rest:tt)*] $($item:tt)*) => {
-        $($item)*
-    };
-    ([$other:tt $($modifiers:tt)*] $($item:tt)*) => {
-        item_if_cache_on_disk! { [$($modifiers)*] $($item)* }
-    };
 }
 
 /// The deferred part of a deferred query stack frame.
@@ -468,7 +380,18 @@ macro_rules! define_queries {
     (
         $(
             $(#[$attr:meta])*
-            [$($modifiers:tt)*] fn $name:ident($K:ty) -> $V:ty,
+            [
+                is_anon: $is_anon:tt,
+                is_eval_always: $is_eval_always:tt,
+                is_depth_limit: $is_depth_limit:tt,
+                is_feedable: $is_feedable:tt,
+                no_hash: $no_hash:tt,
+                cache_on_disk: $cache_on_disk:tt,
+                arena_cache: $arena_cache:tt,
+                separate_provide_extern: $separate_provide_extern:tt,
+                return_result_from_ensure_ok: $return_result_from_ensure_ok:tt,
+                cycle_error_handling: $cycle_error_handling:ident
+            ] fn $name:ident($K:ty) -> $V:ty,
         )*
     ) => {
 
@@ -542,7 +465,7 @@ macro_rules! define_queries {
                     let _guard = tracing::span!(tracing::Level::TRACE, stringify!($name), ?key).entered();
 
                     // Call the actual provider function for this query.
-                    let provided_value = call_provider!([$($modifiers)*][tcx, $name, key]);
+                    let provided_value = call_provider!($separate_provide_extern [tcx, $name, key]);
 
                     rustc_middle::ty::print::with_reduced_queries!({
                         tracing::trace!(?provided_value);
@@ -559,15 +482,15 @@ macro_rules! define_queries {
             {
                 QueryVTable {
                     name: stringify!($name),
-                    anon: is_anon!([$($modifiers)*]),
-                    eval_always: is_eval_always!([$($modifiers)*]),
-                    depth_limit: is_depth_limit!([$($modifiers)*]),
-                    feedable: is_feedable!([$($modifiers)*]),
+                    anon: $is_anon,
+                    eval_always: $is_eval_always,
+                    depth_limit: $is_depth_limit,
+                    feedable: $is_feedable,
                     dep_kind: dep_graph::DepKind::$name,
-                    cycle_error_handling: cycle_error_handling!([$($modifiers)*]),
+                    cycle_error_handling: rustc_middle::query::CycleErrorHandling::$cycle_error_handling,
                     state: Default::default(),
                     cache: Default::default(),
-                    will_cache_on_disk_for_key_fn: if_cache_on_disk!([$($modifiers)*] {
+                    will_cache_on_disk_for_key_fn: if_tt!($cache_on_disk {
                         Some(::rustc_middle::queries::_cache_on_disk_if_fns::$name)
                     } {
                         None
@@ -578,7 +501,7 @@ macro_rules! define_queries {
                         let _ = tcx.$name(key);
                     },
                     invoke_provider_fn: self::invoke_provider_fn::__rust_begin_short_backtrace,
-                    try_load_from_disk_fn: if_cache_on_disk!([$($modifiers)*] {
+                    try_load_from_disk_fn: if_tt!($cache_on_disk {
                         Some(|tcx, key, prev_index, index| {
                             // Check the `cache_on_disk_if` condition for this key.
                             if !::rustc_middle::queries::_cache_on_disk_if_fns::$name(tcx, key) {
@@ -594,7 +517,7 @@ macro_rules! define_queries {
                     } {
                         None
                     }),
-                    is_loadable_from_disk_fn: if_cache_on_disk!([$($modifiers)*] {
+                    is_loadable_from_disk_fn: if_tt!($cache_on_disk {
                         Some(|tcx, key, index| -> bool {
                             ::rustc_middle::queries::_cache_on_disk_if_fns::$name(tcx, key) &&
                                 $crate::plumbing::loadable_from_disk(tcx, index)
@@ -606,7 +529,7 @@ macro_rules! define_queries {
                         let result: queries::$name::Value<'tcx> = Value::from_cycle_error(tcx, cycle, guar);
                         erase::erase_val(result)
                     },
-                    hash_result: hash_result!([$($modifiers)*][queries::$name::Value<'tcx>]),
+                    hash_result: hash_result!($no_hash [queries::$name::Value<'tcx>]),
                     format_value: |value| format!("{:?}", erase::restore_val::<queries::$name::Value<'tcx>>(*value)),
                     description_fn: $crate::queries::_description_fns::$name,
                     execute_query_fn: if incremental {
@@ -675,7 +598,7 @@ macro_rules! define_queries {
                 )
             }
 
-            item_if_cache_on_disk! { [$($modifiers)*]
+            item_if_tt! { $cache_on_disk
                 pub(crate) fn encode_query_results<'tcx>(
                     tcx: TyCtxt<'tcx>,
                     encoder: &mut CacheEncoder<'_, 'tcx>,
@@ -736,7 +659,7 @@ macro_rules! define_queries {
             >
         ] = &[
             $(
-                if_cache_on_disk!([$($modifiers)*] {
+                if_tt!($cache_on_disk {
                     Some(query_impl::$name::encode_query_results)
                 } {
                     None
@@ -758,8 +681,8 @@ macro_rules! define_queries {
                 pub(crate) fn $name<'tcx>() -> DepKindVTable<'tcx> {
                     use $crate::query_impl::$name::VTableGetter;
                     make_dep_kind_vtable_for_query::<VTableGetter>(
-                        is_anon!([$($modifiers)*]),
-                        is_eval_always!([$($modifiers)*]),
+                        $is_anon,
+                        $is_eval_always,
                     )
                 }
             )*
