@@ -63,7 +63,8 @@ use rustc_target::json::ToJson;
 use rustc_target::spec::{Target, TargetTuple};
 use tracing::trace;
 
-mod alloc;
+#[cfg(feature = "jemalloc")]
+use tikv_jemalloc_sys as _;
 
 #[allow(unused_macros)]
 macro do_not_use_print($($t:tt)*) {
