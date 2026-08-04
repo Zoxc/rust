@@ -1034,6 +1034,9 @@ impl Config {
                 target.ar = target_ar.map(PathBuf::from);
                 target.ranlib = target_ranlib.map(PathBuf::from);
                 target.linker = target_linker.map(PathBuf::from);
+                if target_crt_static.is_some() && triple.contains("msvc") {
+                    panic!("`crt-static` cannot be overridden on MSVC target '{triple}'");
+                }
                 target.crt_static = target_crt_static;
                 target.default_linker = target_default_linker;
                 target.default_linker_linux_override = default_linker_linux_override;

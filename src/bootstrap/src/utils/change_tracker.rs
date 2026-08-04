@@ -671,4 +671,9 @@ pub const CONFIG_CHANGE_HISTORY: &[ChangeInfo] = &[
         severity: ChangeSeverity::Warning,
         summary: "The `override-allocator` option has been renamed: The global setting is now `build.allocator` and the per-target setting is `target.<target>.allocator`. It can now be set to 'system' to explicitly request the system allocator.",
     },
+    ChangeInfo {
+        change_id: 0,
+        severity: ChangeSeverity::Warning,
+        summary: "`target.<target>.crt-static` can no longer be specified for MSVC targets.",
+    },
 ];

@@ -11,7 +11,7 @@ use crate::core::config::{CompressDebuginfo, SplitDebuginfo};
 use crate::utils::build_stamp;
 use crate::utils::helpers::{self, LldThreads, check_cfg_arg, linker_flags};
 use crate::{
-    BootstrapCommand, CLang, Compiler, Config, DryRun, EXTRA_CHECK_CFGS, GitRepo, Mode,
+    BootstrapCommand, CLang, Compiler, Config, CrtMode, DryRun, EXTRA_CHECK_CFGS, GitRepo, Mode,
     RemapScheme, TargetSelection, command, prepare_behaviour_dump_dir, t,
 };
 
@@ -1086,17 +1086,12 @@ impl Builder<'_> {
             Mode::ToolBootstrap | Mode::ToolRustcPrivate | Mode::ToolStd | Mode::ToolTarget => {}
         }
 
-        if let Some(x) = self.crt_static(target) {
-            if x {
-                rustflags.arg("-Ctarget-feature=+crt-static");
-            } else {
-                rustflags.arg("-Ctarget-feature=-crt-static");
-            }
+        if let Some(feature) = self.crt_static(target, mode.crt_mode()).target_feature() {
+            rustflags.arg(feature);
         }
 
-        if let Some(x) = self.crt_static(compiler.host) {
-            let sign = if x { "+" } else { "-" };
-            hostflags.arg(format!("-Ctarget-feature={sign}crt-static"));
+        if let Some(feature) = self.crt_static(compiler.host, CrtMode::Regular).target_feature() {
+            hostflags.arg(feature);
         }
 
         // `rustc` needs to know the remapping scheme, in order to know how to reverse it (unremap)

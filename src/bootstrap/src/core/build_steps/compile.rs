@@ -37,8 +37,8 @@ use crate::utils::helpers::{
     exe, get_clang_cl_resource_dir, is_debug_info, is_dylib, symlink_dir, t, up_to_date,
 };
 use crate::{
-    CLang, CodegenBackendKind, Compiler, DependencyType, FileType, GitRepo, LLVM_TOOLS, Mode,
-    debug, exit, trace,
+    CLang, CodegenBackendKind, Compiler, CrtMode, DependencyType, FileType, GitRepo, LLVM_TOOLS,
+    Mode, debug, exit, trace,
 };
 
 /// Build a standard library for the given `target` using the given `build_compiler`.
@@ -1888,7 +1888,7 @@ pub fn compiler_file(
         return PathBuf::new();
     }
     let mut cmd = command(compiler);
-    cmd.args(builder.cc_handled_cflags(target, c));
+    cmd.args(builder.cc_handled_cflags(target, c, CrtMode::Regular));
     cmd.args(builder.cc_unhandled_cflags(target, GitRepo::Rustc, c));
     cmd.arg(format!("-print-file-name={file}"));
     let out = cmd.run_capture_stdout(builder).stdout();

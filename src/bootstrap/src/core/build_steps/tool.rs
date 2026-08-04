@@ -1641,7 +1641,7 @@ impl Builder<'_> {
         if compiler.host.is_msvc() {
             let curpaths = env::var_os("PATH").unwrap_or_default();
             let curpaths = env::split_paths(&curpaths).collect::<Vec<_>>();
-            for (k, v) in self.cc[&compiler.host].env() {
+            for (k, v) in self.cc[&compiler.host].tool_for_unspecified_crt().env() {
                 if k != "PATH" {
                     continue;
                 }

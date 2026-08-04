@@ -1125,6 +1125,9 @@
 # this target is a host for rustc, this will also affect the linkage of the
 # compiler itself. This is useful for building rustc on targets that normally
 # only use static libraries. If unset, the target's default linkage is used.
+#
+# Setting this is an error on an MSVC target, where the compiler is dynamically
+# linked to the CRT and the standard library is statically linked.
 #crt-static = <platform-specific> (bool)
 
 # The root location of the musl installation directory. The library directory

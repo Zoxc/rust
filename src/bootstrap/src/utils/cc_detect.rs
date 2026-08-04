@@ -27,9 +27,9 @@ use std::path::{Path, PathBuf};
 
 use crate::core::config::{CompressDebuginfo, TargetSelection};
 use crate::utils::exec::{BootstrapCommand, command};
-use crate::{Build, CLang, GitRepo};
+use crate::{Build, CLang, Crt, CrtMode, GitRepo};
 
-/// Creates and configures a new [`cc::Build`] instance for the given target.
+/// Creates and configures a new [`cc::Build`] instance for the given target, where C runtime linkage is not yet specified.
 fn new_cc_build(build: &Build, target: TargetSelection) -> cc::Build {
     let mut cfg = cc::Build::new();
     cfg.cargo_metadata(false)
@@ -48,17 +48,52 @@ fn new_cc_build(build: &Build, target: TargetSelection) -> cc::Build {
         CompressDebuginfo::Off => {}
     }
 
-    match build.crt_static(target) {
-        Some(a) => {
-            cfg.static_crt(a);
-        }
-        None => {
-            if target.is_msvc() {
-                cfg.static_crt(true);
-            }
+    cfg
+}
+
+pub struct CCompiler {
+    static_crt: cc::Tool,
+    dynamic_crt: cc::Tool,
+    unspecified_crt: cc::Tool,
+}
+
+impl CCompiler {
+    pub fn tool_for(&self, crt: Crt) -> &cc::Tool {
+        match crt {
+            Crt::Static => &self.static_crt,
+            Crt::Dynamic => &self.dynamic_crt,
+            Crt::Unspecified => &self.unspecified_crt,
         }
     }
-    cfg
+
+    /// Get a tool for use where the CRT choice doesn't matter
+    pub fn tool_for_unspecified_crt(&self) -> &cc::Tool {
+        // Any of the three; they differ in nothing else.
+        &self.unspecified_crt
+    }
+}
+
+/// Get a compiler for every possible CRT value
+fn get_compiler(cfg: &cc::Build) -> CCompiler {
+    let get = |crt| {
+        let mut cfg = cfg.clone();
+        match crt {
+            Crt::Static => {
+                cfg.static_crt(true);
+            }
+            Crt::Dynamic => {
+                cfg.static_crt(false);
+            }
+            Crt::Unspecified => {}
+        }
+        cfg.get_compiler()
+    };
+
+    CCompiler {
+        static_crt: get(Crt::Static),
+        dynamic_crt: get(Crt::Dynamic),
+        unspecified_crt: get(Crt::Unspecified),
+    }
 }
 
 /// Probes for C and C++ compilers and configures the corresponding entries in the [`Build`]
@@ -110,13 +145,13 @@ pub fn fill_target_compiler(build: &mut Build, target: TargetSelection) {
         cfg.compiler(cc);
     }
 
-    let compiler = cfg.get_compiler();
+    let compiler = get_compiler(&cfg);
     let ar = config
         .and_then(|c| c.ar.clone())
         .or_else(|| cfg.try_get_archiver().map(|c| PathBuf::from(c.get_program())).ok());
 
-    build.cc.insert(target, compiler.clone());
-    let mut cflags = build.cc_handled_cflags(target, CLang::C);
+    build.cc.insert(target, compiler);
+    let mut cflags = build.cc_handled_cflags(target, CLang::C, CrtMode::Regular);
     cflags.extend(build.cc_unhandled_cflags(target, GitRepo::Rustc, CLang::C));
 
     // If we use llvm-libunwind, we will need a C++ compiler as well for all targets
@@ -136,17 +171,18 @@ pub fn fill_target_compiler(build: &mut Build, target: TargetSelection) {
 
     // for VxWorks, record CXX compiler which will be used in lib.rs:linker()
     if cxx_configured || target.contains("vxworks") {
-        let compiler = cfg.get_compiler();
-        build.cxx.insert(target, compiler);
+        build.cxx.insert(target, get_compiler(&cfg));
     }
 
     build.do_if_verbose(|| println!("CC_{} = {:?}", target.triple, build.cc(target)));
-    build.do_if_verbose(|| println!("CFLAGS_{} = {cflags:?}", target.triple));
+    build.do_if_verbose(|| println!("CFLAGS_{} (CrtMode::Regular) = {cflags:?}", target.triple));
     if let Ok(cxx) = build.cxx(target) {
-        let mut cxxflags = build.cc_handled_cflags(target, CLang::Cxx);
+        let mut cxxflags = build.cc_handled_cflags(target, CLang::Cxx, CrtMode::Regular);
         cxxflags.extend(build.cc_unhandled_cflags(target, GitRepo::Rustc, CLang::Cxx));
         build.do_if_verbose(|| println!("CXX_{} = {cxx:?}", target.triple));
-        build.do_if_verbose(|| println!("CXXFLAGS_{} = {cxxflags:?}", target.triple));
+        build.do_if_verbose(|| {
+            println!("CXXFLAGS_{} (CrtMode::Regular) = {cxxflags:?}", target.triple)
+        });
     }
     if let Some(ar) = ar {
         build.do_if_verbose(|| println!("AR_{} = {ar:?}", target.triple));

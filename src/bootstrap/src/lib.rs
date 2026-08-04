@@ -35,6 +35,7 @@ use utils::exec::ExecutionContext;
 use crate::core::builder;
 use crate::core::builder::Kind;
 use crate::core::config::{BootstrapOverrideLld, DryRun, LlvmLibunwind, TargetSelection, flags};
+use crate::utils::cc_detect::CCompiler;
 use crate::utils::exec::{BootstrapCommand, command};
 use crate::utils::helpers::{self, dir_is_empty, exe, libdir, set_file_times, split_debuginfo};
 
@@ -248,8 +249,8 @@ pub struct Build {
 
     // Runtime state filled in later on
     // C/C++ compilers and archiver for all targets
-    cc: HashMap<TargetSelection, cc::Tool>,
-    cxx: HashMap<TargetSelection, cc::Tool>,
+    cc: HashMap<TargetSelection, CCompiler>,
+    cxx: HashMap<TargetSelection, CCompiler>,
     ar: HashMap<TargetSelection, PathBuf>,
     ranlib: HashMap<TargetSelection, PathBuf>,
     wasi_sdk_path: Option<PathBuf>,
@@ -347,6 +348,15 @@ pub enum Mode {
 }
 
 impl Mode {
+    /// Returns how this mode will link to the C runtime.
+    /// This is used to ensure a unified CRT is used.
+    pub fn crt_mode(&self) -> CrtMode {
+        match self {
+            Mode::Rustc | Mode::Codegen | Mode::ToolRustcPrivate => CrtMode::Compiler,
+            Mode::Std | Mode::ToolBootstrap | Mode::ToolStd | Mode::ToolTarget => CrtMode::Regular,
+        }
+    }
+
     pub fn must_support_dlopen(&self) -> bool {
         match self {
             Mode::Std | Mode::Codegen => true,
@@ -373,6 +383,36 @@ pub enum RemapScheme {
 pub enum CLang {
     C,
     Cxx,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CrtMode {
+    /// The CRT linkage will match rustc_driver and LLVM.
+    Compiler,
+    /// The CRT linkage will match the default for the target.
+    Regular,
+}
+
+/// How the C runtime is linked
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Crt {
+    Static,
+    Dynamic,
+    Unspecified,
+}
+
+impl Crt {
+    fn from_static(static_crt: bool) -> Crt {
+        if static_crt { Crt::Static } else { Crt::Dynamic }
+    }
+
+    fn target_feature(self) -> Option<&'static str> {
+        match self {
+            Crt::Static => Some("-Ctarget-feature=+crt-static"),
+            Crt::Dynamic => Some("-Ctarget-feature=-crt-static"),
+            Crt::Unspecified => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1260,29 +1300,35 @@ impl Build {
         if self.config.dry_run() {
             return PathBuf::new();
         }
-        self.cc[&target].path().into()
+        self.cc[&target].tool_for_unspecified_crt().path().into()
     }
 
-    /// Returns the internal `cc::Tool` for the C compiler.
-    fn cc_tool(&self, target: TargetSelection) -> Tool {
-        self.cc[&target].clone()
+    /// Returns the internal `cc::Tool` for the C compiler, for use where the CRT choice doesn't matter.
+    fn cc_tool_for_unspecified_crt(&self, target: TargetSelection) -> Tool {
+        self.cc[&target].tool_for_unspecified_crt().clone()
     }
 
-    /// Returns the internal `cc::Tool` for the C++ compiler.
-    fn cxx_tool(&self, target: TargetSelection) -> Tool {
-        self.cxx[&target].clone()
+    /// Returns the internal `cc::Tool` for the C++ compiler, for use where the CRT choice doesn't matter.
+    fn cxx_tool_for_unspecified_crt(&self, target: TargetSelection) -> Tool {
+        self.cxx[&target].tool_for_unspecified_crt().clone()
     }
 
     /// Returns C flags that `cc-rs` thinks should be enabled for the
-    /// specified target by default.
-    fn cc_handled_cflags(&self, target: TargetSelection, c: CLang) -> Vec<String> {
+    /// specified target by default using the CRT linkage expected by `CrtMode`.
+    fn cc_handled_cflags(
+        &self,
+        target: TargetSelection,
+        c: CLang,
+        crt_mode: CrtMode,
+    ) -> Vec<String> {
         if self.config.dry_run() {
             return Vec::new();
         }
-        let base = match c {
-            CLang::C => self.cc[&target].clone(),
-            CLang::Cxx => self.cxx[&target].clone(),
+        let compiler = match c {
+            CLang::C => &self.cc[&target],
+            CLang::Cxx => &self.cxx[&target],
         };
+        let base = compiler.tool_for(self.crt_static(target, crt_mode));
 
         // Filter out -O and /O (the optimization flags) that we picked up
         // from cc-rs, that's up to the caller to figure out.
@@ -1318,7 +1364,7 @@ impl Build {
 
         if let Some(map_to) = self.debuginfo_map_to(which, RemapScheme::NonCompiler) {
             let map = format!("{}={}", self.src.display(), map_to);
-            let cc = self.cc_tool(target);
+            let cc = self.cc_tool_for_unspecified_crt(target);
             if cc.is_like_clang() || cc.is_like_gnu() {
                 base.push(format!("-fdebug-prefix-map={map}"));
             } else if cc.is_like_clang_cl() {
@@ -1351,7 +1397,7 @@ impl Build {
             return Ok(PathBuf::new());
         }
         match self.cxx.get(&target) {
-            Some(p) => Ok(p.path().into()),
+            Some(p) => Ok(p.tool_for_unspecified_crt().path().into()),
             None => Err(format!("target `{target}` is not configured as a host, only as a target")),
         }
     }
@@ -1367,7 +1413,7 @@ impl Build {
         } else if target.contains("vxworks") {
             // need to use CXX compiler as linker to resolve the exception functions
             // that are only existed in CXX libraries
-            Some(self.cxx[&target].path().into())
+            Some(self.cxx[&target].tool_for_unspecified_crt().path().into())
         } else if !self.config.is_host_target(target)
             && helpers::use_host_linker(target)
             && !target.is_msvc()
@@ -1394,11 +1440,16 @@ impl Build {
     }
 
     /// Returns if this target should statically link the C runtime, if specified
-    fn crt_static(&self, target: TargetSelection) -> Option<bool> {
-        if target.contains("pc-windows-msvc") {
-            Some(true)
-        } else {
-            self.config.target_config.get(&target).and_then(|t| t.crt_static)
+    fn crt_static(&self, target: TargetSelection, crt_mode: CrtMode) -> Crt {
+        if target.is_msvc() {
+            // For MSVC targets we don't allow this to be specified.
+            // Compiler always link dynamically, the rest statically.
+            return Crt::from_static(crt_mode != CrtMode::Compiler);
+        }
+
+        match self.config.target_config.get(&target).and_then(|t| t.crt_static) {
+            Some(static_crt) => Crt::from_static(static_crt),
+            None => Crt::Unspecified,
         }
     }
 

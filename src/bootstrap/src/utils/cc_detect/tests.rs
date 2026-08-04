@@ -122,9 +122,9 @@ fn test_find_target_with_config() {
     build.config.target_config.insert(target.clone(), target_config);
     fill_target_compiler(&mut build, target.clone());
     let cc_tool = build.cc.get(&target).unwrap();
-    assert_eq!(cc_tool.path(), &PathBuf::from("dummy-cc"));
+    assert_eq!(cc_tool.tool_for_unspecified_crt().path(), &PathBuf::from("dummy-cc"));
     let cxx_tool = build.cxx.get(&target).unwrap();
-    assert_eq!(cxx_tool.path(), &PathBuf::from("dummy-cxx"));
+    assert_eq!(cxx_tool.tool_for_unspecified_crt().path(), &PathBuf::from("dummy-cxx"));
     let ar = build.ar.get(&target).unwrap();
     assert_eq!(ar, &PathBuf::from("dummy-ar"));
     let ranlib = build.ranlib.get(&target).unwrap();

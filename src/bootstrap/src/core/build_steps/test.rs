@@ -44,7 +44,7 @@ use crate::utils::helpers::{
     up_to_date,
 };
 use crate::utils::render_tests::{add_flags_and_try_run_tests, try_run_tests};
-use crate::{CLang, CodegenBackendKind, GitRepo, Mode, PathSet, TestTarget, envify, exit};
+use crate::{CLang, CodegenBackendKind, CrtMode, GitRepo, Mode, PathSet, TestTarget, envify, exit};
 
 mod compiletest;
 pub mod failed_tests;
@@ -2715,9 +2715,9 @@ Please disable assertions with `rust.debug-assertions = false`.
         // Only pass correct values for these flags for the `run-make` suite as it
         // requires that a C++ compiler was configured which isn't always the case.
         if !builder.config.dry_run() && mode == CompiletestMode::RunMake {
-            let mut cflags = builder.cc_handled_cflags(target, CLang::C);
+            let mut cflags = builder.cc_handled_cflags(target, CLang::C, CrtMode::Regular);
             cflags.extend(builder.cc_unhandled_cflags(target, GitRepo::Rustc, CLang::C));
-            let mut cxxflags = builder.cc_handled_cflags(target, CLang::Cxx);
+            let mut cxxflags = builder.cc_handled_cflags(target, CLang::Cxx, CrtMode::Regular);
             cxxflags.extend(builder.cc_unhandled_cflags(target, GitRepo::Rustc, CLang::Cxx));
             cmd.arg("--cc")
                 .arg(builder.cc(target))
@@ -2760,7 +2760,7 @@ Please disable assertions with `rust.debug-assertions = false`.
             // Note that if we encounter `PATH` we make sure to append to our own `PATH`
             // rather than stomp over it.
             if !builder.config.dry_run() && target.is_msvc() {
-                for (k, v) in builder.cc[&target].env() {
+                for (k, v) in builder.cc[&target].tool_for_unspecified_crt().env() {
                     if k != "PATH" {
                         cmd.env(k, v);
                     }
@@ -2777,7 +2777,12 @@ Please disable assertions with `rust.debug-assertions = false`.
             // address sanitizer enabled (e.g., ntdll.dll).
             cmd.env("ASAN_WIN_CONTINUE_ON_INTERCEPTION_FAILURE", "1");
             // Add the address sanitizer runtime to the PATH - it is located next to cl.exe.
-            let asan_runtime_path = builder.cc[&target].path().parent().unwrap().to_path_buf();
+            let asan_runtime_path = builder.cc[&target]
+                .tool_for_unspecified_crt()
+                .path()
+                .parent()
+                .unwrap()
+                .to_path_buf();
             let old_path = cmd
                 .get_envs()
                 .find_map(|(k, v)| (k == "PATH").then_some(v))

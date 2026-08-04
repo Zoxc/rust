@@ -290,7 +290,9 @@ fn build_gcc(metadata: &Meta, builder: &Builder<'_>, target_pair: GccTargetPair)
     // Target on which libgccjit.so will be executed. Here we will generate a dylib with
     // instructions for that target.
     let host = target_pair.host;
-    if builder.build.cc_tool(host).is_like_clang() || builder.build.cxx_tool(host).is_like_clang() {
+    if builder.build.cc_tool_for_unspecified_crt(host).is_like_clang()
+        || builder.build.cxx_tool_for_unspecified_crt(host).is_like_clang()
+    {
         panic!(
             "Attempting to build GCC using Clang, which is known to misbehave. Please use GCC as the host C/C++ compiler. "
         );

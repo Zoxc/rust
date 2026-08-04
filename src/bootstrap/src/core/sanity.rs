@@ -336,7 +336,7 @@ than building it.
                 != CompilerBuiltins::BuildRustOnly
                 || build.config.rust_std_features.contains("compiler-builtins-c"))
         {
-            let cc_tool = build.cc_tool(*target);
+            let cc_tool = build.cc_tool_for_unspecified_crt(*target);
             if !cc_tool.is_like_clang() && !cc_tool.path().ends_with("emcc") {
                 // emcc works as well
                 panic!(
@@ -411,7 +411,7 @@ $ pacman -R cmake && pacman -S mingw-w64-x86_64-cmake
 
         // aarch64-unknown-linux-pauthtest must use clang
         if !skip_tools_checks && target.is_pauthtest() {
-            let cc_tool = build.cc_tool(*target);
+            let cc_tool = build.cc_tool_for_unspecified_crt(*target);
             let linker_path = build
                 .linker(*target)
                 .unwrap_or_else(|| panic!("{} requires an explicit clang linker", target.triple));
